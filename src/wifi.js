@@ -13,7 +13,7 @@ function band(mbps) {
 function toDoc(r) {
   return {
     space_id: r.space, zone: r.zone, floor: r.floor, download_mbps: r.mbps, latency_ms: r.ms,
-    at: new Date(r.at).toISOString(), label: r.standIn ? 'stand-in' : 'live',
+    at: new Date(r.at).toISOString(), label: r.standIn ? 'stand_in' : 'live',
   };
 }
 
@@ -28,9 +28,17 @@ function record(db, reading) {
   return reading;
 }
 
+// What the numbers are made of, for the Live / Stand-in label on screen: all stand-in, all live, or mixed.
+function labelOf(kinds) {
+  const k = new Set(kinds);
+  if (!k.size) return null;
+  if (k.size > 1) return 'mixed';
+  return k.has('stand_in') ? 'stand_in' : 'live';
+}
+
 const stat = (rs) => {
   const mbps = median(rs.map((r) => r.mbps));
-  return { mbps, ms: median(rs.map((r) => r.ms)), count: rs.length, last: Math.max(...rs.map((r) => r.at || 0)) || null, band: band(mbps) };
+  return { mbps, ms: median(rs.map((r) => r.ms)), count: rs.length, last: Math.max(...rs.map((r) => r.at || 0)) || null, band: band(mbps), label: labelOf(rs.map((r) => (r.standIn ? 'stand_in' : 'live'))) };
 };
 
 // Memory summary: { [room]: { mbps, ms, count, last, band, zones: { [zone]: {...same} } } }
@@ -54,6 +62,7 @@ async function esSummary() {
     mbps: { percentiles: { field: 'download_mbps', percents: [50] } },
     ms: { percentiles: { field: 'latency_ms', percents: [50] } },
     last: { max: { field: 'at' } },
+    labels: { terms: { field: 'label', size: 5 } },
   };
   const r = await client().search({
     index: INDEX.wifi_readings, size: 0,
@@ -61,7 +70,9 @@ async function esSummary() {
   });
   const one = (b) => {
     const mbps = b.mbps.values['50.0'] ?? null;
-    return { mbps: mbps == null ? null : Math.round(mbps), ms: b.ms.values['50.0'] == null ? null : Math.round(b.ms.values['50.0']), count: b.doc_count, last: b.last.value || null, band: band(mbps) };
+    // 'real' counts as live for the on-screen label
+    const label = labelOf(b.labels.buckets.map((l) => (l.key === 'stand_in' ? 'stand_in' : 'live')));
+    return { mbps: mbps == null ? null : Math.round(mbps), ms: b.ms.values['50.0'] == null ? null : Math.round(b.ms.values['50.0']), count: b.doc_count, last: b.last.value || null, band: band(mbps), label };
   };
   return Object.fromEntries(r.aggregations.rooms.buckets.map((b) => [b.key, {
     ...one(b),
@@ -84,11 +95,11 @@ function refresh() {
 function roomStats(db, id) {
   refresh();
   const fromEs = cache.rooms?.[id];
-  if (fromEs) return { mbps: fromEs.mbps, ms: fromEs.ms, count: fromEs.count, band: fromEs.band, source: 'elasticsearch' };
+  if (fromEs) return { mbps: fromEs.mbps, ms: fromEs.ms, count: fromEs.count, band: fromEs.band, source: 'elasticsearch', label: fromEs.label };
   const rs = db.wifi.filter((w) => w.space === id);
   if (!rs.length) return null;
   const s = stat(rs);
-  return { mbps: s.mbps, ms: s.ms, count: s.count, band: s.band, source: 'memory' };
+  return { mbps: s.mbps, ms: s.ms, count: s.count, band: s.band, source: 'memory', label: s.label };
 }
 
 // Per-zone figures for one room (heatmap). Elasticsearch when it has the room, memory otherwise.
@@ -107,4 +118,4 @@ async function summary(db) {
   return { source: 'memory', rooms: summarize(db.wifi) };
 }
 
-module.exports = { band, record, summarize, summary, roomStats, zoneStats, toDoc, hasEs };
+module.exports = { band, labelOf, record, summarize, summary, roomStats, zoneStats, toDoc, hasEs };

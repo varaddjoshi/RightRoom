@@ -5,15 +5,18 @@
 //   node scripts/stage-heat.js [BASE_URL]          through the API (works anywhere; staff login from DEMO_PASSWORD)
 //   node scripts/stage-heat.js [BASE_URL] --es     Wi-Fi readings bulk-indexed straight into Elasticsearch
 //   node scripts/stage-heat.js [BASE_URL] --es --reset   delete earlier stand-in readings in Elasticsearch first
+//   any BASE_URL other than localhost also needs --live, so nobody stages fake data on the public demo by accident
 //
 // Rooms always come from BASE_URL's /api/floors, so it works with the demo rooms locally and the real rooms on the
-// cluster. Zone check-ins always go through the API (the engine owns the count); --es only changes Wi-Fi.
+// cluster. Zone check-ins are heatmap-only stand-ins: they colour the heatmap but never take seats. --es only
+// changes Wi-Fi.
 // Over the API there is no delete: POST /api/sim/reset (organiser) or scripts/demo.sh starts fresh.
 require('dotenv').config({ quiet: true });
 
 const args = process.argv.slice(2);
 const BASE = (args.find((a) => /^https?:/.test(a)) || 'http://localhost:3000').replace(/\/$/, '');
-const USE_ES = args.includes('--es'), RESET = args.includes('--reset');
+const USE_ES = args.includes('--es'), RESET = args.includes('--reset'), LIVE = args.includes('--live');
+const isLocal = (u) => ['localhost', '127.0.0.1', '[::1]', '::1'].includes(new URL(u).hostname);
 const PASSWORD = process.env.DEMO_PASSWORD || 'rightroom-demo';
 const ZONES = ['front-left', 'front-centre', 'front-right', 'middle-left', 'middle-centre', 'middle-right', 'back-left', 'back-centre', 'back-right'];
 
@@ -44,6 +47,7 @@ function readingsFor(room, busiest) {
 }
 
 async function main() {
+  if (!isLocal(BASE) && !LIVE) throw new Error(`${BASE} is not local. Add --live to stage stand-in heatmap data there on purpose.`);
   const login = await call(null, 'POST', '/api/login', { handle: 'dana', password: PASSWORD });
   const cookie = login.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
   const floors = await (await call(cookie, 'GET', '/api/floors')).json();
@@ -66,7 +70,7 @@ async function main() {
   if (USE_ES) {
     const { es, INDEX } = require('../src/es');
     const { toDoc } = require('../src/wifi');
-    if (RESET) await es().deleteByQuery({ index: INDEX.wifi_readings, query: { term: { label: 'stand-in' } }, refresh: true, conflicts: 'proceed' });
+    if (RESET) await es().deleteByQuery({ index: INDEX.wifi_readings, query: { term: { label: 'stand_in' } }, refresh: true, conflicts: 'proceed' });
     const ops = readings.flatMap((r) => [{ index: { _index: INDEX.wifi_readings } }, toDoc({ ...r, at: Date.now(), standIn: true })]);
     const res = await es().bulk({ operations: ops, refresh: true });
     if (res.errors) throw new Error('Some Wi-Fi readings failed to index.');

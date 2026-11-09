@@ -11,19 +11,28 @@ function crowdBand(density) {
   return density >= 0.85 ? 'packed' : density >= 0.4 ? 'busy' : 'quiet';
 }
 
+// Heatmap-only stand-ins (scripts/stage-heat.js) live in db.heatStandIns, never in db.checkins, so they colour
+// the heatmap without taking seats: the engine's taken() only reads db.checkins.
+const standIns = (db) => (db.heatStandIns ??= new Map());
+
+// Per zone: how many people, and how many of them are stand-ins (for the Live / Stand-in label).
 function memoryCrowd(db, id) {
-  const counts = Object.fromEntries(ZONES.map((z) => [z, 0]));
-  for (const c of (db.checkins.get(id) || new Map()).values()) if (c.zone in counts) counts[c.zone]++;
+  const counts = Object.fromEntries(ZONES.map((z) => [z, { count: 0, standIn: 0 }]));
+  const people = [...(db.checkins.get(id) || new Map()).values(), ...(standIns(db).get(id) || new Map()).values()];
+  for (const c of people) if (c.zone in counts) { counts[c.zone].count++; if (c.standIn) counts[c.zone].standIn++; }
   return counts;
 }
+
+const crowdLabel = (c) => (!c.count ? null : c.standIn === c.count ? 'stand_in' : c.standIn ? 'mixed' : 'live');
 
 async function esCrowd() {
   const { es: client, INDEX } = es();
   const r = await client().search({
     index: INDEX.checkins, size: 0,
-    aggs: { rooms: { terms: { field: 'space_id', size: 500 }, aggs: { zones: { terms: { field: 'zone', size: 20 } } } } },
+    aggs: { rooms: { terms: { field: 'space_id', size: 500 }, aggs: { zones: { terms: { field: 'zone', size: 20 }, aggs: { labels: { terms: { field: 'label', size: 5 } } } } } } },
   });
-  return Object.fromEntries(r.aggregations.rooms.buckets.map((b) => [b.key, Object.fromEntries(b.zones.buckets.map((z) => [z.key, z.doc_count]))]));
+  const zone = (z) => ({ count: z.doc_count, standIn: z.labels.buckets.find((l) => l.key === 'stand_in')?.doc_count || 0 });
+  return Object.fromEntries(r.aggregations.rooms.buckets.map((b) => [b.key, Object.fromEntries(b.zones.buckets.map((z) => [z.key, zone(z)]))]));
 }
 
 // shortcut: cached for 10 s and refreshed in the background so /api/floors stays synchronous.
@@ -40,21 +49,24 @@ function refresh() {
 function heat(db, sp) {
   refresh();
   const fromEs = cache.rooms?.[sp.id];
-  const counts = fromEs ? { ...memoryCrowd({ checkins: new Map() }, sp.id), ...fromEs } : memoryCrowd(db, sp.id);
+  const counts = fromEs ? { ...memoryCrowd({ checkins: new Map(), heatStandIns: new Map() }, sp.id), ...fromEs } : memoryCrowd(db, sp.id);
   const zoneCap = Math.max(1, sp.capacity / ZONES.length); // shortcut: zones share seats equally until zones define seats
   const w = wifi.zoneStats(db, sp.id);
   const zones = ZONES.map((zone) => {
-    const count = counts[zone] || 0;
-    const density = Math.min(1, Math.round((count / zoneCap) * 100) / 100);
+    const c = counts[zone] || { count: 0, standIn: 0 };
+    const density = Math.min(1, Math.round((c.count / zoneCap) * 100) / 100);
     const z = w.zones[zone];
     return {
       zone,
-      crowd: { count, density, band: crowdBand(density) },
-      wifi: z ? { mbps: z.mbps, ms: z.ms, count: z.count, band: z.band } : null,
+      crowd: { count: c.count, density, band: crowdBand(density), label: crowdLabel(c) },
+      wifi: z ? { mbps: z.mbps, ms: z.ms, count: z.count, band: z.band, label: z.label } : null,
     };
   });
   const source = fromEs || w.source === 'elasticsearch' ? 'elasticsearch' : 'memory';
-  return { room: sp.id, source, zones, updatedAt: new Date(fromEs ? cache.at : Date.now()).toISOString() };
+  // Room label: every number underneath is stand-in, every one live, or a mix (null when there's no data at all).
+  const labels = new Set(zones.flatMap((z) => [z.crowd.label, z.wifi?.label]).filter(Boolean));
+  const label = !labels.size ? null : labels.size > 1 || labels.has('mixed') ? 'mixed' : [...labels][0];
+  return { room: sp.id, source, label, zones, updatedAt: new Date(fromEs ? cache.at : Date.now()).toISOString() };
 }
 
 // Compact summary for floor tiles: the busiest zone and the weakest Wi-Fi zone (null when there's no data).
@@ -75,13 +87,14 @@ const docId = (room, handle) => crypto.createHmac('sha256', secret).update(`${ro
 
 async function mirror(db) {
   const { es: client, INDEX } = es();
-  for (const [room, m] of db.checkins) {
+  for (const room of new Set([...db.checkins.keys(), ...standIns(db).keys()])) {
+    const m = new Map([...(db.checkins.get(room) || []), ...(standIns(db).get(room) || [])]);
     const sig = [...m].map(([h, c]) => `${h}:${c.zone}`).sort().join('|');
     if (seen.get(room) === sig) continue;
     await client().deleteByQuery({ index: INDEX.checkins, query: { term: { space_id: room } }, refresh: true, conflicts: 'proceed' });
     const ops = [...m].flatMap(([h, c]) => [
       { index: { _index: INDEX.checkins, _id: docId(room, h) } },
-      { space_id: room, zone: c.zone, at: new Date(c.at || Date.now()).toISOString(), label: c.standIn ? 'stand-in' : 'live' },
+      { space_id: room, zone: c.zone, at: new Date(c.at || Date.now()).toISOString(), label: c.standIn ? 'stand_in' : 'live' },
     ]);
     if (ops.length) await client().bulk({ operations: ops, refresh: true });
     seen.set(room, sig);
@@ -99,4 +112,4 @@ function withHeat(db, engine, floors) {
   return floors.map((f) => ({ ...f, rooms: f.rooms.map((r) => ({ ...r, wifiStats: wifi.roomStats(db, r.id), heat: tileSummary(heat(db, engine.space(r.id))) })) }));
 }
 
-module.exports = { withHeat, heat, tileSummary, crowdBand, memoryCrowd, startMirror, mirror };
+module.exports = { withHeat, heat, tileSummary, crowdBand, memoryCrowd, standIns, startMirror, mirror };

@@ -2,10 +2,10 @@
 // POST /api/sim/zone-checkins and /api/sim/wifi: staff-only staging for scripts/stage-heat.js, labelled stand-in.
 const express = require('express');
 const { ZONES } = require('../mock/seed');
-const { heat } = require('../heat');
+const { heat, standIns, memoryCrowd } = require('../heat');
 const wifi = require('../wifi');
 
-function heatRouter({ engine, store, requireRole }) {
+function heatRouter({ store, requireRole }) {
   const r = express.Router();
   const room = (id, res) => {
     const sp = store.db.spaces.get(String(id ?? ''));
@@ -24,10 +24,14 @@ function heatRouter({ engine, store, requireRole }) {
     if (!sp) return;
     const zone = req.body?.zone, n = num(req.body?.n ?? 5, 1, 300);
     if (!ZONES.includes(zone) || n == null) return res.status(400).json({ error: 'Give a known zone and n between 1 and 300.' });
-    const m = store.db.checkins.get(sp.id) || new Map();
-    store.db.checkins.set(sp.id, m);
-    for (let i = 0; i < n; i++) m.set(`stand-in-zone-${++store.db.seq}`, { zone, at: Date.now(), standIn: true });
-    res.json(engine.update(sp));
+    // Heatmap only: kept out of db.checkins so the engine never counts these as taken seats.
+    const all = standIns(store.db);
+    const m = all.get(sp.id) || new Map();
+    all.set(sp.id, m);
+    const space = Math.max(0, Math.ceil(sp.capacity / ZONES.length) - memoryCrowd(store.db, sp.id)[zone].count); // cap at the zone's seats
+    const add = Math.min(n, space);
+    for (let i = 0; i < add; i++) m.set(`stand-in-zone-${++store.db.seq}`, { zone, at: Date.now(), standIn: true });
+    res.json({ added: add, heat: heat(store.db, sp) });
   });
 
   r.post('/sim/wifi', requireRole('staff'), (req, res) => {

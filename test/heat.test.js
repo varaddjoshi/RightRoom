@@ -40,8 +40,8 @@ test('density is check-ins per zone over capacity / 9, capped at 1', () => {
   for (let i = 0; i < 20; i++) m.set(`p${i}`, { zone: 'middle-centre' });
   const h = heat({ checkins: new Map([['h', m]]), wifi: [] }, sp);
   const z = Object.fromEntries(h.zones.map((x) => [x.zone, x.crowd]));
-  assert.deepEqual(z['front-left'], { count: 2, density: 0.2, band: 'quiet' });
-  assert.deepEqual(z['middle-centre'], { count: 20, density: 1, band: 'packed' });
+  assert.deepEqual(z['front-left'], { count: 2, density: 0.2, band: 'quiet', label: 'live' });
+  assert.deepEqual(z['middle-centre'], { count: 20, density: 1, band: 'packed', label: 'live' });
   assert.equal(h.zones.length, 9);
 });
 
@@ -51,7 +51,7 @@ test('GET /api/heat returns all 9 zones with crowd and wifi (or null), never an 
   assert.ok(['memory', 'elasticsearch'].includes(h.source));
   assert.equal(h.zones.length, 9);
   for (const z of h.zones) {
-    assert.deepEqual(Object.keys(z.crowd).sort(), ['band', 'count', 'density']);
+    assert.deepEqual(Object.keys(z.crowd).sort(), ['band', 'count', 'density', 'label']);
     assert.ok(z.wifi === null || ['mbps', 'ms', 'count', 'band'].every((k) => k in z.wifi));
   }
   assert.ok(h.zones.some((z) => z.wifi), 'stand-in readings give 204 Wi-Fi zones');
@@ -63,7 +63,7 @@ test('/api/floors tiles get wifiStats and a heat summary next to the old fields'
   const floors = await get('/api/floors');
   const r204 = floors.flatMap((f) => f.rooms).find((r) => r.id === '204');
   assert.ok(typeof r204.wifi === 'number' || r204.wifi === null, 'old wifi number kept');
-  assert.deepEqual(Object.keys(r204.wifiStats).sort(), ['band', 'count', 'mbps', 'ms', 'source']);
+  assert.deepEqual(Object.keys(r204.wifiStats).sort(), ['band', 'count', 'label', 'mbps', 'ms', 'source']);
   assert.ok('busiest' in r204.heat && 'weakestWifi' in r204.heat);
   const w = await get('/api/wifi');
   assert.ok(['band', 'count', 'mbps', 'readings', 'zones'].every((k) => k in w.rooms['204']));
@@ -91,6 +91,36 @@ test('scripts/stage-heat.js gives every room crowd and Wi-Fi data', async () => 
     const back = h.zones.filter((z) => z.zone.startsWith('back')).reduce((s, z) => s + z.crowd.count, 0);
     assert.ok(front >= back, `room ${r.id}: front ${front} >= back ${back}`);
   }
+});
+
+test('labels: stand_in, live or mixed, written as the P1 mapping value', () => {
+  assert.equal(wifi.toDoc({ space: 'x', zone: 'front-left', mbps: 9, ms: 9, at: 1, standIn: true }).label, 'stand_in');
+  assert.equal(wifi.toDoc({ space: 'x', zone: 'front-left', mbps: 9, ms: 9, at: 1 }).label, 'live');
+  const s = wifi.summarize([{ space: 'x', zone: 'back-left', mbps: 5, ms: 1, standIn: true }, { space: 'x', zone: 'front-left', mbps: 40, ms: 1 }]).x;
+  assert.deepEqual([s.label, s.zones['back-left'].label, s.zones['front-left'].label], ['mixed', 'stand_in', 'live']);
+  const sp = { id: 'l', capacity: 90 };
+  const db = { checkins: new Map([['l', new Map([['p', { zone: 'front-left' }]])]]), heatStandIns: new Map([['l', new Map([['s1', { zone: 'front-left', standIn: true }], ['s2', { zone: 'back-left', standIn: true }]])]]), wifi: [] };
+  const h = heat(db, sp);
+  const z = Object.fromEntries(h.zones.map((x) => [x.zone, x.crowd.label]));
+  assert.deepEqual([z['front-left'], z['back-left'], z['middle-left']], ['mixed', 'stand_in', null]);
+  assert.equal(h.label, 'mixed');
+});
+
+test('staged heatmap check-ins never take seats, and are capped at the zone', async () => {
+  const leo = await login('leo');
+  const before = await get('/api/spaces/210', leo);
+  const r = await fetch(`${base}/api/sim/zone-checkins`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: leo }, body: JSON.stringify({ space: '210', zone: 'back-right', n: 300 }) });
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.ok(body.added <= Math.ceil(40 / 9), `capped at the zone, added ${body.added}`);
+  const after = await get('/api/spaces/210', leo);
+  assert.deepEqual([after.taken, after.free, after.status], [before.taken, before.free, before.status]);
+  assert.equal(body.heat.zones.find((x) => x.zone === 'back-right').crowd.label !== 'live', true);
+});
+
+test('scripts/stage-heat.js refuses a remote URL without --live', async () => {
+  const err = await new Promise((ok) => execFile(process.execPath, [path.join(__dirname, '../scripts/stage-heat.js'), 'https://example.com'], (e, so, se) => ok(e ? se : '')));
+  assert.match(err, /not local\. Add --live/);
 });
 
 test('Elasticsearch summary and mirror', { skip: !process.env.ELASTICSEARCH_URL && 'needs ELASTICSEARCH_URL' }, async () => {

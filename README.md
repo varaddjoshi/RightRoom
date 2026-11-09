@@ -129,11 +129,11 @@ Readings people share from the in-room page are kept in memory and, when `ELASTI
 
 ```
 node scripts/stage-heat.js http://localhost:3000            # locally, through the API
-node scripts/stage-heat.js https://pantheon.cnh.radarhq.io  # on the cluster (DEMO_PASSWORD for dana)
-node scripts/stage-heat.js https://pantheon.cnh.radarhq.io --es --reset   # Wi-Fi straight into Elasticsearch, replacing earlier stand-ins
+node scripts/stage-heat.js https://pantheon.cnh.radarhq.io --live  # on the cluster, on purpose (DEMO_PASSWORD for dana)
+node scripts/stage-heat.js https://pantheon.cnh.radarhq.io --live --es --reset   # Wi-Fi straight into Elasticsearch, replacing earlier stand-ins
 ```
 
-Rooms come from `/api/floors`, so the same command works for the demo rooms locally and the real KubeCon rooms on the cluster. See `GET /api/heat?room=<id>`.
+Rooms come from `/api/floors`, so the same command works for the demo rooms locally and the real KubeCon rooms on the cluster. Any URL other than localhost needs `--live`, because it adds stand-in data to a shared server. The staged zone check-ins only colour the heatmap: they are kept apart from real check-ins and never take seats, so free seats, status and queues are unchanged. Everything staged is labelled `stand_in`, and `/api/heat`, `/api/wifi` and `wifiStats` on `/api/floors` carry a `label` (`live`, `stand_in` or `mixed`) next to `source` (the backend), so screens can mark the numbers Live or Stand-in. See `GET /api/heat?room=<id>`.
 
 ## Demo data
 
