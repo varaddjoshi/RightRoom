@@ -1,0 +1,315 @@
+/* RightRoom design system: wayfinding signs.
+   Dark signage panels, signal-yellow actions, status always in words plus a shape.
+   One theme on purpose: it reads like the venue's own signs on phones and the big screen. */
+
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap");
+
+:root {
+  color-scheme: dark;
+
+  /* Colour. Every text pair meets WCAG AA; status fills take --rr-on-status text. */
+  --rr-bg: #121518;        /* page ground */
+  --rr-panel: #1d2226;     /* sign panels, cards */
+  --rr-panel-2: #272d32;   /* raised rows, inputs */
+  --rr-line: #737e88;      /* outlines and dividers, 3:1 or more on every surface */
+  --rr-ink: #f3f5f6;       /* main text */
+  --rr-muted: #a7b0b8;     /* secondary text, 6:1 on panel-2 */
+  --rr-signal: #ffcc00;    /* primary action, focus ring */
+  --rr-on-signal: #121518; /* text on signal yellow */
+  --rr-free: #6cc4ff;      /* Seats free: blue, so it never relies on red vs green */
+  --rr-filling: #ffb020;   /* Filling */
+  --rr-full: #ff5468;      /* Full */
+  --rr-on-status: #121518; /* text on any status fill */
+  --rr-access: #c3a6ff;    /* accessibility seats and step-free routes */
+
+  /* Type */
+  --rr-font-sign: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --rr-font-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --rr-font-code: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --rr-t-xs: 0.8125rem;  /* 13px labels */
+  --rr-t-sm: 0.9375rem;  /* 15px reasons, meta */
+  --rr-t-md: 1.0625rem;  /* 17px body */
+  --rr-t-lg: 1.375rem;   /* 22px button text, row titles */
+  --rr-t-xl: 1.875rem;   /* 30px screen titles */
+  --rr-t-2xl: 2.75rem;   /* 44px positions, codes */
+  --rr-t-3xl: 4.5rem;    /* 72px live counts */
+
+  /* Space, radius, sizes */
+  --rr-s1: 4px; --rr-s2: 8px; --rr-s3: 12px; --rr-s4: 16px;
+  --rr-s5: 24px; --rr-s6: 32px; --rr-s7: 48px;
+  --rr-r1: 2px;  /* signs, chips */
+  --rr-r2: 6px;  /* buttons, panels */
+  --rr-tap: 64px;     /* every attendee button is at least this tall */
+  --rr-tap-xl: 96px;  /* staff counter buttons */
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--rr-bg);
+  color: var(--rr-ink);
+  font: 400 var(--rr-t-md)/1.5 var(--rr-font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible { outline: 3px solid var(--rr-signal); outline-offset: 3px; }
+
+/* Screen frame: one column, phone first */
+.rr-screen {
+  max-width: 480px;
+  margin: 0 auto;
+  padding-block: var(--rr-s5);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: var(--rr-s5);
+}
+
+/* Eyebrow label: ROOM 204 · FLOOR 2 */
+.rr-eyebrow {
+  font: 700 var(--rr-t-xs)/1.2 var(--rr-font-sign);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rr-muted);
+}
+
+/* Sign: the header panel of every screen */
+.rr-sign {
+  background: var(--rr-panel);
+  border-top: 6px solid var(--rr-signal);
+  border-radius: var(--rr-r1);
+  padding: var(--rr-s4);
+  display: grid;
+  gap: var(--rr-s2);
+}
+.rr-sign h1, .rr-title {
+  margin: 0;
+  font: 700 var(--rr-t-xl)/1.1 var(--rr-font-sign);
+  text-wrap: balance;
+}
+
+/* Buttons: full width, at least 64px, label plus arrow */
+.rr-btn {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rr-s3);
+  width: 100%;
+  min-height: var(--rr-tap);
+  padding: var(--rr-s3) var(--rr-s5);
+  border: 2px solid transparent;
+  border-radius: var(--rr-r2);
+  font: 700 var(--rr-t-lg)/1.1 var(--rr-font-sign);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  background: var(--rr-signal);
+  color: var(--rr-on-signal);
+  transition: transform 80ms ease-out, filter 120ms;
+}
+.rr-btn::after { content: "\2192"; font-size: 1.2em; }
+.rr-btn:hover { filter: brightness(1.06); }
+.rr-btn:active { transform: translateY(2px); }
+.rr-btn[disabled], .rr-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; transform: none; }
+.rr-btn--ghost { background: transparent; color: var(--rr-ink); border-color: var(--rr-line); }
+.rr-btn--ghost:hover { border-color: var(--rr-ink); filter: none; }
+.rr-btn--full { background: var(--rr-full); color: var(--rr-on-status); }
+.rr-btn--plain::after { content: none; }
+.rr-btn-stack { display: grid; gap: var(--rr-s3); }
+
+/* Status chip: shape + word + colour, never colour alone */
+.rr-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rr-s2);
+  padding: var(--rr-s1) var(--rr-s3);
+  border-radius: var(--rr-r1);
+  font: 800 var(--rr-t-sm)/1.4 var(--rr-font-sign);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rr-on-status);
+}
+.rr-status[data-status="free"] { background: var(--rr-free); }
+.rr-status[data-status="free"]::before { content: "\25CF"; }    /* ● */
+.rr-status[data-status="filling"] { background: var(--rr-filling); }
+.rr-status[data-status="filling"]::before { content: "\25B2"; } /* ▲ */
+.rr-status[data-status="full"] { background: var(--rr-full); }
+.rr-status[data-status="full"]::before { content: "\25A0"; }    /* ■ */
+
+/* Live count: 47 / 50 */
+.rr-count {
+  display: flex;
+  align-items: baseline;
+  gap: var(--rr-s2);
+  font: 800 var(--rr-t-3xl)/1 var(--rr-font-sign);
+  font-variant-numeric: tabular-nums;
+}
+.rr-count small { font-size: var(--rr-t-xl); color: var(--rr-muted); font-weight: 600; }
+
+/* Data honesty label: Live, Real, Stand-in */
+.rr-label {
+  display: inline-block;
+  padding: 0 var(--rr-s2);
+  border: 1px solid var(--rr-line);
+  border-radius: var(--rr-r1);
+  font: 600 var(--rr-t-xs)/1.6 var(--rr-font-code);
+  color: var(--rr-muted);
+}
+.rr-label[data-kind="live"] { color: var(--rr-free); border-color: var(--rr-free); }
+
+/* Queue position: #12 plus the reason */
+.rr-position { display: grid; gap: var(--rr-s1); }
+.rr-position strong {
+  font: 800 var(--rr-t-2xl)/1 var(--rr-font-sign);
+  font-variant-numeric: tabular-nums;
+}
+.rr-position p { margin: 0; color: var(--rr-muted); font-size: var(--rr-t-sm); }
+
+/* Redirect route row */
+.rr-route {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--rr-s3);
+  padding: var(--rr-s4);
+  background: var(--rr-panel-2);
+  border-radius: var(--rr-r2);
+}
+.rr-route__arrow { font: 800 var(--rr-t-2xl)/1 var(--rr-font-sign); color: var(--rr-signal); }
+.rr-route__to { font: 700 var(--rr-t-lg)/1.15 var(--rr-font-sign); text-transform: uppercase; }
+.rr-route__meta { color: var(--rr-muted); font-size: var(--rr-t-sm); }
+.rr-route__time {
+  font: 800 var(--rr-t-xl)/1 var(--rr-font-sign);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.rr-route__time small { display: block; font-size: var(--rr-t-xs); color: var(--rr-muted); letter-spacing: 0.1em; }
+
+/* Access tag: step-free, near captions, accessible seat */
+.rr-access {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rr-s1);
+  font: 700 var(--rr-t-xs)/1.4 var(--rr-font-sign);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rr-access);
+}
+
+/* "Why this?" disclosure, built on <details> */
+.rr-why { border-top: 1px solid var(--rr-line); padding-top: var(--rr-s3); }
+.rr-why summary {
+  cursor: pointer;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  font: 700 var(--rr-t-md)/1.2 var(--rr-font-sign);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rr-signal);
+}
+.rr-why ul { margin: 0; padding-left: var(--rr-s5); display: grid; gap: var(--rr-s2); color: var(--rr-muted); }
+.rr-why .rr-rejected { text-decoration: line-through; text-decoration-color: var(--rr-line); }
+
+/* Seat offer: zone, countdown, claim */
+.rr-offer {
+  background: var(--rr-panel);
+  border: 3px solid var(--rr-signal);
+  border-radius: var(--rr-r2);
+  padding: var(--rr-s5) var(--rr-s4);
+  display: grid;
+  gap: var(--rr-s4);
+}
+.rr-offer__timer {
+  height: 10px;
+  background: var(--rr-panel-2);
+  border-radius: var(--rr-r1);
+  overflow: hidden;
+}
+.rr-offer__timer > span {
+  display: block;
+  height: 100%;
+  width: var(--rr-left, 100%);
+  background: var(--rr-signal);
+  transition: width 1s linear;
+}
+.rr-code {
+  font: 600 var(--rr-t-2xl)/1 var(--rr-font-code);
+  letter-spacing: 0.2em;
+}
+
+/* Zone grid: 3 x 3, every cell a labelled button */
+.rr-zones {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--rr-s2);
+}
+.rr-zones button {
+  min-height: var(--rr-tap);
+  border: 2px solid var(--rr-line);
+  border-radius: var(--rr-r1);
+  background: var(--rr-panel-2);
+  color: var(--rr-ink);
+  font: 600 var(--rr-t-sm)/1.2 var(--rr-font-sign);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.rr-zones button[aria-pressed="true"] { background: var(--rr-signal); color: var(--rr-on-signal); border-color: var(--rr-signal); }
+.rr-zones button[data-access]::after { content: " \267F"; color: var(--rr-access); }
+.rr-zones button[aria-pressed="true"][data-access]::after { color: var(--rr-on-signal); }
+.rr-zones-front { grid-column: 1 / -1; text-align: center; font: 700 var(--rr-t-xs)/1 var(--rr-font-sign); letter-spacing: 0.3em; color: var(--rr-muted); }
+
+/* Staff counter: huge +/- around the true total */
+.rr-counter {
+  display: grid;
+  grid-template-columns: var(--rr-tap-xl) 1fr var(--rr-tap-xl);
+  align-items: center;
+  gap: var(--rr-s3);
+  text-align: center;
+}
+.rr-counter button {
+  height: var(--rr-tap-xl);
+  border: 0;
+  border-radius: var(--rr-r2);
+  font: 800 var(--rr-t-2xl)/1 var(--rr-font-sign);
+  cursor: pointer;
+  background: var(--rr-panel-2);
+  color: var(--rr-ink);
+}
+.rr-counter button:last-child { background: var(--rr-signal); color: var(--rr-on-signal); }
+
+/* Announcement strip */
+.rr-announce {
+  display: grid;
+  gap: var(--rr-s1);
+  padding: var(--rr-s3) var(--rr-s4);
+  background: var(--rr-panel);
+  border-radius: var(--rr-r1);
+}
+.rr-announce[data-urgency="urgent"] { background: var(--rr-signal); color: var(--rr-on-signal); }
+.rr-announce[data-urgency="urgent"] .rr-eyebrow { color: var(--rr-on-signal); }
+
+/* Panel for grouped content */
+.rr-panel {
+  background: var(--rr-panel);
+  border-radius: var(--rr-r2);
+  padding: var(--rr-s4);
+  display: grid;
+  gap: var(--rr-s3);
+}
+
+/* Screen-reader-only text */
+.rr-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-btn, .rr-offer__timer > span { transition: none; }
+}
