@@ -1,5 +1,6 @@
-// Stand-in data for forecast, Wi-Fi, topics, interests and metrics. Rooms and sessions match the
-// screen map and the Phase 1 seed; join on room id. Every record is labelled source: "stand-in".
+// Stand-in data for forecast, Wi-Fi, topics, interests and metrics. Rooms match the screen map and
+// src/mock/seed.js; Wi-Fi readings and comments use the same record shapes as db().wifi and
+// db().comments ({space, zone, mbps, ms, at} and {id, space, text, at, hidden}). Every record is labelled stand-in.
 const { prng } = require('./history');
 
 const S = 'stand-in';
@@ -25,13 +26,13 @@ for (const s of SESSIONS) {
     for (let i = 0; i < n; i++) {
       const weak = s.room === '204' && zone === 'back-left'; // the dead spot from the scenarios
       const mbps = weak ? 3 + Math.round(rand() * 2) : Math.round(BASE[s.room] * (0.7 + rand() * 0.6));
-      WIFI.push({ room: s.room, floor: s.floor, zone, mbps, ms: weak ? 180 + Math.round(rand() * 80) : 25 + Math.round(rand() * 40), at: `2026-11-09T${10 + (i % 3)}:${String(5 + i * 11).padStart(2, '0')}:00Z`, source: S });
+      WIFI.push({ space: s.room, zone, mbps, ms: weak ? 180 + Math.round(rand() * 80) : 25 + Math.round(rand() * 40), at: Date.parse(`2026-11-09T${10 + (i % 3)}:${String(5 + i * 11).padStart(2, '0')}:00Z`), standIn: true, source: S });
     }
   }
 }
 
 // Comments: no handle kept (decision 12).
-const C = (room, texts) => texts.map(text => ({ room, text, source: S }));
+const C = (space, texts) => texts.map((text, i) => ({ space, text, at: Date.parse('2026-11-09T11:50:00Z') + i * 60000, hidden: false, standIn: true, source: S }));
 const COMMENTS = [
   ...C('204', [
     'Slides too small to read from the back rows.',
@@ -108,12 +109,12 @@ const COMMENTS = [
 ];
 
 // Interests: 200 stand-in users. Tag counts are exact so S1 shows the numbers in the scenarios.
-const COUNTS = { observability: 52, kubernetes: 44, ebpf: 37, security: 21, rust: 12, platform: 9, helm: 3, wasm: 2 };
+const COUNTS = { observability: 52, kubernetes: 44, ebpf: 37, security: 21, rust: 12, 'platform-eng': 9, helm: 3, wasm: 2 };
 const USERS = Array.from({ length: 200 }, (_, i) => ({ handle: `stand-in-${i + 1}`, interests: [], source: S }));
 Object.entries(COUNTS).forEach(([tag, n], k) => {
   for (let m = 0; m < n; m++) USERS[(k * 37 + m * 7) % 200].interests.push(tag); // 7 and 200 are coprime, so no repeats
 });
-const TAG_LABELS = { observability: 'Observability', kubernetes: 'Kubernetes', ebpf: 'eBPF', security: 'Security', rust: 'Rust', platform: 'Platform eng', helm: 'Helm', wasm: 'Wasm' };
+const TAG_LABELS = { observability: 'Observability', kubernetes: 'Kubernetes', ebpf: 'eBPF', security: 'Security', rust: 'Rust', 'platform-eng': 'Platform eng', helm: 'Helm', wasm: 'Wasm' };
 
 // Event log behind the proof numbers: 23 redirects (17 followed within 15 min), 14 Full prompts (1 overridden).
 const LOG = [
@@ -140,4 +141,12 @@ const SOLO = [
   { handle: 'coral-seal', interests: ['helm', 'platform'], lookingFor: 'Platform team chat', source: S },
 ];
 
-module.exports = { ZONES, SESSIONS, WIFI, COMMENTS, USERS, TAG_LABELS, LOG, TABLES, ALERTS, SOLO };
+// Append the stand-in readings and comments to a Phase 1 store: seedInto(store.db).
+// Call it again after store.reset(), which rebuilds the db empty.
+function seedInto(db) {
+  for (const w of WIFI) db.wifi.push({ ...w });
+  for (const c of COMMENTS) db.comments.push({ ...c, id: ++db.seq });
+  return db;
+}
+
+module.exports = { ZONES, SESSIONS, WIFI, COMMENTS, USERS, TAG_LABELS, LOG, TABLES, ALERTS, SOLO, seedInto };

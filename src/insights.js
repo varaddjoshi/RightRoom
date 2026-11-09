@@ -7,10 +7,11 @@ function median(xs) {
   return s.length ? (s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2) : null;
 }
 
+// readings: db().wifi records {space, zone, mbps, ms}
 function wifiMedians(readings) {
   const rooms = {};
   for (const r of readings) {
-    const room = (rooms[r.room] ??= { all: [], zones: {} });
+    const room = (rooms[r.space] ??= { all: [], zones: {} });
     room.all.push(r);
     (room.zones[r.zone] ??= []).push(r);
   }
@@ -45,11 +46,12 @@ function metrics(log) {
   };
 }
 
-// Topics for a room id or a session title, scored against every comment.
+// Topics for a room id or a session title. comments: db().comments records {space, text, hidden}.
 function topicsFor(key, comments, sessions) {
   const s = sessions.find(x => x.room === key || x.title === key);
   if (!s) return null;
-  return { room: s.room, title: s.title, topics: topTerms(comments.filter(c => c.room === s.room).map(c => c.text), comments.map(c => c.text)) };
+  const visible = comments.filter(c => !c.hidden);
+  return { room: s.room, title: s.title, topics: topTerms(visible.filter(c => c.space === s.room).map(c => c.text), visible.map(c => c.text)) };
 }
 
 module.exports = { wifiMedians, interestCounts, metrics, topicsFor, median };

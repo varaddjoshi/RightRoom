@@ -37,9 +37,9 @@ test('interest groups under 5 are hidden', () => {
 
 test('wifi medians on a tiny fixture', () => {
   const m = wifiMedians([
-    { room: 'x', zone: 'a', mbps: 10, ms: 30 },
-    { room: 'x', zone: 'a', mbps: 20, ms: 50 },
-    { room: 'x', zone: 'b', mbps: 40, ms: 10 },
+    { space: 'x', zone: 'a', mbps: 10, ms: 30 },
+    { space: 'x', zone: 'a', mbps: 20, ms: 50 },
+    { space: 'x', zone: 'b', mbps: 40, ms: 10 },
   ]);
   assert.strictEqual(m.x.mbps, 20);
   assert.strictEqual(m.x.zones.a.mbps, 15);
@@ -62,26 +62,38 @@ test('metrics match the event log', () => {
   assert.strictEqual(m.overridden, 1);
 });
 
-test('router validates input and labels responses', async () => {
+test('seedInto appends Phase 1 shaped records with ids', () => {
+  const db = seed.seedInto({ wifi: [], comments: [], seq: 7 });
+  assert.strictEqual(db.wifi.length, seed.WIFI.length);
+  assert.ok(db.wifi.every(w => typeof w.space === 'string' && typeof w.at === 'number' && seed.ZONES.includes(w.zone)));
+  assert.strictEqual(db.comments[0].id, 8);
+  assert.ok(db.comments.every(c => c.space && c.text && typeof c.at === 'number' && c.hidden === false));
+  db.wifi[0].mbps = -1;
+  assert.notStrictEqual(seed.WIFI[0].mbps, -1, 'seed records are copied, not shared');
+});
+
+test('topics skip hidden comments', () => {
+  const comments = seed.COMMENTS.map(c => ({ ...c, hidden: c.space === '204' && /slides too small/i.test(c.text) }));
+  const t = topicsFor('204', comments, seed.SESSIONS).topics.map(x => x.term);
+  assert.ok(!t.includes('slides too small'), t.join(', '));
+});
+
+test('router serves labelled reads over an injected db', async () => {
+  const db = seed.seedInto({ wifi: [], comments: [], seq: 0 });
   const app = express();
-  app.use('/api', makeRouter());
+  app.use('/api', makeRouter({ db: () => db }));
   const server = app.listen(0);
   const base = `http://127.0.0.1:${server.address().port}/api`;
-  const post = (path, body) => fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   try {
-    assert.strictEqual((await post('/wifi', { room: '999', zone: 'back-left', mbps: 5, ms: 40 })).status, 400);
-    assert.strictEqual((await post('/wifi', { room: '204', zone: 'roof', mbps: 5, ms: 40 })).status, 400);
-    assert.strictEqual((await post('/wifi', { room: '204', zone: 'back-left', mbps: '5', ms: 40 })).status, 400);
-    assert.strictEqual((await post('/wifi', { room: '204', zone: 'back-left', mbps: 5, ms: 40 })).status, 201);
-    assert.strictEqual((await post('/comments', { room: '204', text: 'x'.repeat(281) })).status, 400);
-    assert.strictEqual((await post('/comments', { room: '204', text: '  ' })).status, 400);
-    assert.strictEqual((await post('/comments', { room: '204', text: 'Great talk' })).status, 201);
     assert.strictEqual((await fetch(base + '/sessions/999/topics')).status, 404);
     for (const p of ['/forecast', '/forecast/backtest', '/wifi', '/sessions/204/topics', '/insights/interests', '/metrics', '/tables', '/alerts', '/team-finder']) {
       const res = await fetch(base + p);
       assert.strictEqual(res.status, 200, p);
       assert.strictEqual((await res.json()).source, 'stand-in', p);
     }
+    db.wifi.push({ space: '204', zone: 'back-left', mbps: 9, ms: 40, at: Date.now() }); // a live reading from Phase 1's POST
+    assert.strictEqual((await (await fetch(base + '/wifi')).json()).source, 'mixed');
+    assert.strictEqual((await fetch(base + '/wifi', { method: 'POST' })).status, 404, 'writes belong to Phase 1');
   } finally {
     server.close();
   }

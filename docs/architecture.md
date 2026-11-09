@@ -105,8 +105,8 @@ Freeze this first so P2 and P3 can build in parallel. P3 can mock any endpoint b
 | `GET /api/sessions` | Anyone | A4 | Sessions with room status and Wi-Fi median |
 | `GET /api/floors` | Anyone (staff and organiser get extra fields) | A4 map view, S2 floor map, S1 venue board, D1 | Rooms grouped by floor: id, title, capacity, taken, status, access note; staff and organiser also get staff on door and queue length |
 | `GET /api/forecast`, `GET /api/forecast/backtest` | Anyone | A4, S1 | Fill forecast per session (expected fill, chance it fills, likely minute, risk, the 3 past talks it is based on); leave-one-out backtest. Stand-in, mounted at /api once Phase 1 lands |
-| `GET /api/wifi`, `POST /api/wifi` | Anyone; attendee posts `{room, zone, mbps, ms}` | A4, A6, S1 | Wi-Fi medians by room and zone. Stand-in plus live readings, mounted at /api once Phase 1 lands |
-| `GET /api/sessions/:room/topics`, `POST /api/comments` | Anyone; attendee posts `{room, text}` (280 characters max, no handle kept) | A4, A6, S1 | Top comment topics for a session or room. Mounted at /api once Phase 1 lands |
+| `GET /api/wifi` | Anyone | A4, A6, S1 | Wi-Fi medians by room and zone over `db().wifi` (stand-in plus readings posted to `POST /api/spaces/:id/wifi`). Mounted at /api once Phase 1 lands |
+| `GET /api/sessions/:room/topics` | Anyone | A4, A6, S1 | Top 1 to 3 word topics over `db().comments` (comments are posted to `POST /api/spaces/:id/comments`; hidden ones skipped). Mounted at /api once Phase 1 lands |
 | `GET /api/insights/interests` | Organiser | S1 | Interest counts, groups under 5 hidden. Stand-in, mounted at /api once Phase 1 lands |
 | `GET /api/metrics` | Anyone | S1, demo | Redirect success rate and staff override rate. Stand-in, mounted at /api once Phase 1 lands |
 | `GET /api/tables`, `GET /api/alerts`, `GET /api/team-finder` | Anyone | Extras | Stand-in data for tables, saved-need alerts and the team finder. Mounted at /api once Phase 1 lands |
@@ -127,7 +127,7 @@ Live events on `/api/stream`: `status` (space, taken, capacity, status), `positi
 
 ## Mock insights
 
-Forecast, Wi-Fi, topics, interests and metrics run on stand-in data until the Elasticsearch versions land, and every response carries `source: "stand-in"` (or `"live"` for readings and comments posted during the event) so screens can label them.
+Forecast, Wi-Fi, topics, interests and metrics run on stand-in data until the Elasticsearch versions land. Every response carries `source`: `"stand-in"`, or `"mixed"` once real Wi-Fi readings or comments have been posted, so screens can label them. `seedInto(store.db)` in `src/mock/insights-seed.js` appends the stand-in readings and comments to Phase 1's `db().wifi` and `db().comments` using the same record shapes; call it again after `store.reset()`.
 
 - Forecast (`src/forecast.js`): for a session, find the 5 most similar past talks in `src/mock/history.js` (shared tags, morning or afternoon slot, room size, next to a keynote or not), then report the weighted fill, the chance it fills, the likely minute it fills and a risk band. The 3 closest talks are returned as the reason. The backtest predicts each of the 40 past talks from the other 39.
 - Topics (`src/topics.js`) score 1 to 3 word phrases in a session's comments against all comments, the way `significant_text` does.
