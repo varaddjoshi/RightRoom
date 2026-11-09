@@ -11,7 +11,10 @@ const list = (v, d) => (v || d).split(',').map((s) => s.trim()).filter(Boolean);
 const ORGANISERS = list(process.env.ORGANISERS, 'dana');
 const STAFF = list(process.env.STAFF, 'leo');
 const HANDLE = /^[a-z0-9][a-z0-9-]{2,23}$/;
-const NEEDS = ['step-free', 'captions'];
+// Access preferences, never a diagnosis (decision 3). Ids are stored, so never rename one; labels live in public/me.html.
+const NEEDS = ['step-free', 'wheelchair', 'aisle', 'captions', 'hearing-loop', 'sign-language', 'front', 'quiet', 'service-animal', 'extra-time'];
+// Only these needs make someone eligible for a room's accessible seats (accessZones, src/engine.js fill).
+const SEAT_NEEDS = ['step-free', 'wheelchair'];
 const DEMO = ['dana', 'leo', 'sam'];
 
 const roleFor = (h) => (ORGANISERS.includes(h) ? 'organiser' : STAFF.includes(h) ? 'staff' : 'attendee');
@@ -21,7 +24,7 @@ function hash(password, salt = crypto.randomBytes(16).toString('hex')) {
 }
 
 function addUser(db, handle, password, extra = {}) {
-  db.users.set(handle, { handle, role: roleFor(handle), interests: [], needs: [], ...hash(password), ...extra });
+  db.users.set(handle, { handle, role: roleFor(handle), interests: [], needs: [], starred: [], ...hash(password), ...extra });
   return db.users.get(handle);
 }
 
@@ -43,6 +46,22 @@ function signup(db, handle, password) {
   return addUser(db, handle, String(password));
 }
 
+// Decision 12: deleting an account drops the user and every place they hold: queue entries, offers and check-ins.
+// Returns the ids of the spaces whose count changed, so the caller can run engine.update on them.
+function deleteUser(db, handle) {
+  const touched = new Set();
+  for (const [sid, m] of db.checkins) { const c = m.get(handle); if (c) { m.delete(handle); db.spaces.get(sid)?.freeZones.push(c.zone); touched.add(sid); } }
+  for (const o of db.offers.values()) {
+    if (o.handle !== handle || !['offered', 'claimed'].includes(o.status)) continue;
+    o.status = 'expired';
+    db.spaces.get(o.space)?.freeZones.push(o.zone);
+    touched.add(o.space);
+  }
+  for (const q of db.queue) if (q.handle === handle && !['left', 'ended', 'expired'].includes(q.status)) { q.status = 'left'; touched.add(q.space); }
+  db.users.delete(handle);
+  return [...touched];
+}
+
 function login(db, handle, password) {
   const u = db.users.get(String(handle || '').toLowerCase());
   const ok = u && u.hash && crypto.timingSafeEqual(Buffer.from(hash(String(password || ''), u.salt).hash, 'hex'), Buffer.from(u.hash, 'hex'));
@@ -52,7 +71,7 @@ function login(db, handle, password) {
 
 function guest(db) {
   const handle = `guest-${crypto.randomBytes(3).toString('hex')}`;
-  db.users.set(handle, { handle, role: 'guest', interests: [], needs: [] });
+  db.users.set(handle, { handle, role: 'guest', interests: [], needs: [], starred: [] });
   return db.users.get(handle);
 }
 
@@ -103,8 +122,8 @@ function requireRole(...roles) {
   };
 }
 
-function publicUser(u) { return u && { handle: u.handle, role: u.role, interests: u.interests, needs: u.needs }; }
+function publicUser(u) { return u && { handle: u.handle, role: u.role, interests: u.interests, needs: u.needs, starred: u.starred || [] }; }
 
 function bad(message, status = 400) { return Object.assign(new Error(message), { status }); }
 
-module.exports = { signup, login, guest, setSession, clearSession, middleware, requireRole, publicUser, ensureDemoUsers, NEEDS, verify, sign, setSecret, hmac };
+module.exports = { signup, login, guest, setSession, clearSession, middleware, requireRole, publicUser, ensureDemoUsers, NEEDS, SEAT_NEEDS, deleteUser, RESERVED: [...ORGANISERS, ...STAFF, ...DEMO], verify, sign, setSecret, hmac };

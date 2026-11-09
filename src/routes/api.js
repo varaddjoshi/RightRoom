@@ -45,12 +45,28 @@ function api({ store, engine }) {
   r.get('/me', h((req) => ({ ...auth.publicUser(signedIn(req)), venue: engine.myVenue(req.user.handle) })));
   r.put('/me', h((req) => {
     const u = signedIn(req);
-    const interests = req.body?.interests ?? u.interests;
+    // Free tags typed on /me arrive normalised by the page; normalise again here so "Platform Eng" still works.
+    const norm = (t) => (typeof t === 'string' ? t.trim().toLowerCase().replace(/[\s_]+/g, '-') : t);
+    const interests = Array.isArray(req.body?.interests) ? [...new Set(req.body.interests.map(norm))] : req.body?.interests ?? u.interests;
     const needs = req.body?.needs ?? u.needs;
-    if (!Array.isArray(interests) || interests.length > 12 || interests.some((t) => typeof t !== 'string' || !/^[a-z0-9-]{2,24}$/.test(t))) fail('Interests must be up to 12 short tags.');
+    const starred = req.body?.starred ?? u.starred ?? [];
+    if (!Array.isArray(interests) || interests.length > 12 || interests.some((t) => typeof t !== 'string' || !/^[a-z0-9-]{2,24}$/.test(t))) fail('Interests must be up to 12 short tags of 2 to 24 letters, numbers or hyphens.');
+    // Decision 2: schedule tags plus up to 3 free tags.
+    const scheduleTags = new Set([...db().spaces.values()].flatMap((s) => s.tags || []));
+    if (interests.filter((t) => !scheduleTags.has(t)).length > 3) fail('Add up to 3 interests of your own; the rest come from the schedule.');
     if (!Array.isArray(needs) || needs.some((n) => !auth.NEEDS.includes(n))) fail(`Needs can only be: ${auth.NEEDS.join(', ')}.`);
-    Object.assign(u, { interests, needs });
+    const talk = (id) => typeof id === 'string' && db().spaces.get(id)?.type === 'room' && !db().spaces.get(id).test;
+    if (!Array.isArray(starred) || starred.length > 50 || !starred.every(talk)) fail('Starred must be up to 50 talks from the schedule.');
+    Object.assign(u, { interests, needs: [...new Set(needs)], starred: [...new Set(starred)] });
     return auth.publicUser(u);
+  }));
+  // Decision 12: delete my account, free every place I hold, sign out. Allowlisted and demo accounts are shared, so they stay.
+  r.delete('/me', h((req, res) => {
+    const u = signedIn(req);
+    if (auth.RESERVED.includes(u.handle)) fail('This is a shared demo or staff account, so it cannot be deleted.', 409);
+    for (const id of auth.deleteUser(db(), u.handle)) engine.update(engine.space(id));
+    auth.clearSession(res);
+    return { deleted: true };
   }));
 
   // Venue (A3)
