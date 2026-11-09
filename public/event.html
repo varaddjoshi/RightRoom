@@ -28,10 +28,6 @@
   const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   let me = null;
 
-  // Stand-in schedule for the next two slots. shortcut: the mock API has no session times or "next" talks;
-  // replace with real start times from the schedule data (P1) when /api/sessions carries them.
-  const NEXT = { 204: 'eBPF for observability', 210: 'OpenTelemetry in production', 220: 'Platform teams that scale', 118: 'Rust operators', 101: 'Keynote: the cloud native decade', 305: 'SBOMs that people read', 310: 'Helm charts, done right' };
-  const LATER = { 204: 'Kernel tracing lab', 210: 'SLOs without tears', 220: 'Lightning talks II', 118: 'WASM at the edge', 101: 'Closing panel', 305: 'Sigstore hands-on', 310: 'GitOps with Argo CD' };
   const slot = (mins) => { const d = new Date(); d.setMinutes(Math.floor(d.getMinutes() / 30) * 30 + mins, 0, 0); return d; };
 
   function registration(entry, venue) {
@@ -55,20 +51,25 @@
     const what = m.checkedIn ? `You're in · ${RR.zoneName(m.checkedIn.zone)}` : m.claimed ? `Seat claimed · code ${m.claimed.code}` : m.queue?.status === 'offered' ? 'A seat is waiting for you' : m.queue?.status === 'waiting' ? `In the queue · #${m.queue.position}` : '';
     if (!what) return '';
     const urgent = m.queue?.status === 'offered' || m.claimed;
-    return `<div class="rr-panel seat"><div><span class="rr-eyebrow">Room ${RR.esc(r.id)} · ${RR.esc(r.title)}</span><div><b>${RR.esc(what)}</b></div></div><a class="rr-btn${urgent ? '' : ' rr-btn--ghost'}" href="/r/${enc(r.id)}">${urgent ? 'Open' : 'View'}</a></div>`;
+    return `<div class="rr-panel seat"><div><span class="rr-eyebrow">${RR.esc(RR.roomName(r))} · ${RR.esc(r.title)}</span><div><b>${RR.esc(what)}</b></div></div><a class="rr-btn${urgent ? '' : ' rr-btn--ghost'}" href="/r/${enc(r.id)}">${urgent ? 'Open' : 'View'}</a></div>`;
   }
 
+  // Now / Up next / Later today. "Now" is live; later slots use each room's `next` session (title, startsAt) when
+  // the schedule data has it. shortcut: the in-memory demo has no session times, so those slots stay empty there.
   function upcoming(rooms, risk) {
     const mine = new Set([...(me?.interests || [])]);
     const forYou = (r) => (r.tags || []).some((t) => mine.has(t));
-    const row = (r, title, live) => `<a class="talk" href="/r/${enc(r.id)}"><div><b>${RR.esc(title)}</b>
-        <span>Room ${RR.esc(r.id)} · Floor ${Number(r.floor)}${live ? ` · ${r.free} seats free` : ''}${forYou(r) ? ' · <span class="star">For you</span>' : ''}</span>
+    const name = (r) => RR.esc(RR.roomName(r));
+    const row = (r, s, live) => `<a class="talk" href="/r/${enc(r.id)}"><div><b>${RR.esc(s.title)}</b>
+        <span>${name(r)} · Floor ${RR.esc(r.floor)}${s.startsAt ? ` · ${time(s.startsAt)}` : ''}${live ? ` · ${Number(r.free)} seats free` : ''}${forYou(r) ? ' · <span class="star">For you</span>' : ''}</span>
         ${live && risk[r.id] === 'high' && r.status !== 'full' ? '<span class="risk">Likely to fill soon</span>' : ''}</div>${live ? RR.status(r.status) : ''}</a>`;
     const order = (list) => [...list].sort((a, b) => forYou(b) - forYou(a) || (b.free > 0) - (a.free > 0) || a.floor - b.floor);
-    const now = slot(0), next = slot(60), later = slot(120);
-    return `<div class="slot"><h2>Happening now <small>${time(now)} ${RR.label('live')}</small></h2>${order(rooms).map((r) => row(r, r.title, true)).join('')}</div>
-      <div class="slot"><h2>Up next <small>${time(next)} ${RR.label('stand-in')}</small></h2>${order(rooms).filter((r) => NEXT[r.id]).map((r) => row(r, NEXT[r.id], false)).join('')}</div>
-      <details class="rr-more"><summary>Later today · ${time(later)}</summary><div>${order(rooms).filter((r) => LATER[r.id]).map((r) => row(r, LATER[r.id], false)).join('')}<p class="note">Times for later sessions are stand-ins until the real schedule is loaded.</p></div></details>`;
+    const nexts = order(rooms).flatMap((r) => (r.next ? [[r, r.next]] : []));
+    const soon = nexts.filter(([, s]) => !s.startsAt || new Date(s.startsAt) <= slot(90));
+    const later = nexts.filter((x) => !soon.includes(x));
+    return `<div class="slot"><h2>Happening now <small>${time(slot(0))} ${RR.label('live')}</small></h2>${order(rooms).map((r) => row(r, r, true)).join('') || '<p class="note">Nothing is running right now.</p>'}</div>
+      <div class="slot"><h2>Up next</h2>${soon.map(([r, s]) => row(r, s, false)).join('') || '<p class="note">The next sessions show here once the day\'s schedule is loaded.</p>'}</div>
+      ${later.length ? `<details class="rr-more"><summary>Later today · ${later.length}</summary><div>${later.map(([r, s]) => row(r, s, false)).join('')}</div></details>` : ''}`;
   }
 
   async function render() {

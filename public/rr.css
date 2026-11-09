@@ -403,7 +403,9 @@ a.talk:hover { border-color: var(--rr-line); }
 .tile:hover { border-color: var(--rr-line); }
 .tile.needs { border-color: var(--rr-signal-edge); box-shadow: inset 0 0 0 1px var(--rr-signal-edge), var(--rr-shadow); }
 .tile-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px; }
-.tile-n { font: 800 var(--rr-t-xl)/1 var(--rr-font-sign); letter-spacing: -0.01em; }
+.tile-n { font: 800 var(--rr-t-lg)/1.1 var(--rr-font-sign); letter-spacing: -0.01em; overflow-wrap: anywhere; }
+/* Long real titles ("Hall E (Keynote)", long talk names) wrap to two lines at most. */
+.tile-t, .talk b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .tile .rr-status { padding: 2px 8px 2px 6px; font-size: 0.75rem; }
 .tile-t { font: 600 var(--rr-t-sm)/1.25 var(--rr-font-body); }
 .tile-m { color: var(--rr-muted); font-size: var(--rr-t-xs); }
@@ -418,3 +420,5 @@ a.talk:hover { border-color: var(--rr-line); }
 .slot > h2 { margin: 0; display: flex; align-items: baseline; gap: var(--rr-s2); font: 800 var(--rr-t-lg)/1.2 var(--rr-font-sign); }
 .slot > h2 small { font-size: var(--rr-t-sm); font-weight: 600; color: var(--rr-muted); }
 .star { color: var(--rr-accent-ink); font-weight: 700; }
+
+@media print { .rr-nav, .rr-toast { display: none !important; } body { padding-top: 0 !important; } }

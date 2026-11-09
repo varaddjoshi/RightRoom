@@ -22,6 +22,9 @@
   .wall .rr-route__time { font-size: clamp(1.875rem, 4vw, 5rem); }
   .wall .rr-label { font-size: clamp(0.8125rem, 1.1vw, 1.25rem); }
   .wall .rr-route__time small { font-size: clamp(0.8125rem, 1vw, 1.25rem); }
+  .wall .rr-route__arrow { width: clamp(40px, 4vw, 96px); height: clamp(40px, 4vw, 96px); }
+  .wall .rr-route__arrow::before { width: 45%; height: 45%; }
+  .wall .rr-status::before { width: 0.6em; height: 0.6em; }
   .foot { color: var(--rr-muted); font-size: clamp(0.8125rem, 1.2vw, 1.5rem); }
 </style>
 </head>
@@ -42,16 +45,16 @@
   async function refresh() {
     try {
       const [v, floors] = await Promise.all([RR.api(`/spaces/${encodeURIComponent(room)}`), RR.api(`/floors?from=${encodeURIComponent(room)}`)]);
-      document.title = `Room ${v.id} · RightRoom`;
-      $('eyebrow').textContent = `Room ${v.id} · Floor ${v.floor} · now`;
+      document.title = `${RR.roomName(v)} · RightRoom`;
+      $('eyebrow').textContent = `${RR.roomName(v)} · Floor ${v.floor} · now`;
       $('title').textContent = v.title;
       $('count').innerHTML = `${v.taken}<small>/ ${v.capacity}</small>`;
       $('count').setAttribute('aria-label', `${v.taken} of ${v.capacity} seats taken`);
-      $('st').innerHTML = RR.status(v.status) + ' ' + RR.label('live') + (v.standIn ? ` <span class="rr-label">INCLUDES ${Number(v.standIn)} STAND-IN</span>` : '');
+      $('st').innerHTML = RR.status(v.status) + ' ' + RR.label('live') + (v.standIn ? ` <span class="rr-label">includes ${Number(v.standIn)} stand-in</span>` : '');
       // When full, point people at the nearest room with free seats (walking minutes from this room).
       const alt = floors.flatMap((f) => f.rooms).filter((r) => r.id !== v.id && r.free > 0).sort((a, b) => a.walk - b.walk || b.free - a.free)[0];
       $('next').innerHTML = v.status === 'full' && alt
-        ? `<div class="rr-route"><span class="rr-route__arrow" aria-hidden="true">&#9654;</span><div><div class="rr-route__to">Room ${RR.esc(alt.id)} has seats</div><div class="rr-route__meta">${RR.esc(alt.title)} · ${alt.free} free</div><span class="rr-access">${alt.stepFree ? '&#9855; ' : ''}${RR.esc(alt.access)}</span></div><div class="rr-route__time">${Number(alt.walk)}<small>MIN</small></div></div>`
+        ? `<div class="rr-route"><span class="rr-route__arrow" aria-hidden="true">&#9654;</span><div><div class="rr-route__to">${RR.esc(RR.roomName(alt.id))} has seats</div><div class="rr-route__meta">${RR.esc(alt.title)} · ${alt.free} free</div><span class="rr-access">${alt.stepFree ? '&#9855; ' : ''}${RR.esc(alt.access)}</span></div><div class="rr-route__time">${Number(alt.walk)}<small>MIN</small></div></div>`
         : v.status === 'full' ? '<p class="note">Every room is full right now. Join the queue at the door.</p>' : `<p class="rr-route__to">${v.free} seats free</p>`;
     } catch (e) { $('next').innerHTML = `<p class="note">${RR.esc(e.message)}</p>`; }
   }

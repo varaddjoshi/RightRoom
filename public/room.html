@@ -67,7 +67,7 @@
 
   // ---- At the door -------------------------------------------------------------------------------
   function offerView(o) {
-    return `<div class="rr-offer"><span class="rr-eyebrow" role="alert">A seat is yours · Room ${RR.esc(id)}</span>
+    return `<div class="rr-offer"><span class="rr-eyebrow" role="alert">A seat is yours · ${RR.esc(RR.roomName(id))}</span>
       <h2 class="rr-title m0">${RR.esc(RR.zoneName(o.zone))}${o.accessible ? ' <span class="rr-access">&#9855; Accessible seat</span>' : ''}</h2>
       <div class="rr-offer__timer" aria-hidden="true"><span id="bar"></span></div>
       <p class="m0"><strong id="secs">${Number(o.secondsLeft)}</strong> seconds to claim it. After that it goes to the next person.</p>
@@ -94,18 +94,18 @@
     if (!r?.suggestion) return '<div class="rr-panel"><p class="m0">No other room has free seats right now. You can wait for this one.</p></div>';
     const s = r.suggestion;
     return `<a class="rr-route" href="/r/${enc(s.room)}"><span class="rr-route__arrow" aria-hidden="true"></span>
-        <div><div class="rr-route__to">Room ${RR.esc(s.room)}</div><div class="rr-route__meta">${RR.esc(s.title)} · ${Number(s.free)} seats free</div>${s.stepFree ? `<span class="rr-access">&#9855; ${RR.esc(s.access)}</span>` : `<span class="rr-route__meta">${RR.esc(s.access)}</span>`}</div>
+        <div><div class="rr-route__to">${RR.esc(RR.roomName(s.room))}</div><div class="rr-route__meta">${RR.esc(s.title)} · ${Number(s.free)} seats free</div>${s.stepFree ? `<span class="rr-access">&#9855; ${RR.esc(s.access)}</span>` : `<span class="rr-route__meta">${RR.esc(s.access)}</span>`}</div>
         <div class="rr-route__time">${Number(s.minutes)}<small>min walk</small></div></a>
       <details class="rr-why"><summary>Why this room?</summary><ul>
         ${r.reasons.map((x) => `<li>${RR.esc(x)}</li>`).join('')}
-        ${r.rejected.map((x) => `<li class="rr-rejected">Room ${RR.esc(x.room)}: ${RR.esc(x.reason)}.</li>`).join('')}
+        ${r.rejected.map((x) => `<li class="rr-rejected">${RR.esc(RR.roomName(x.room))}: ${RR.esc(x.reason)}.</li>`).join('')}
       </ul></details>`;
   }
 
   async function render() {
     try {
       const r = await RR.api(`/spaces/${enc(id)}`);
-      const where = id === 'venue' ? 'Venue entrance' : `Room ${r.id} · Floor ${r.floor}`;
+      const where = id === 'venue' ? 'Venue entrance' : `${RR.roomName(r)} · Floor ${r.floor}`;
       $('eyebrow').textContent = where;
       RR.here(where);
       $('title').textContent = r.title;
@@ -142,7 +142,7 @@
         body.querySelectorAll('[data-zone]').forEach((b) => b.addEventListener('click', () => act(() => RR.api(`/spaces/${enc(id)}/checkin`, { method: 'POST', body: { zone: b.dataset.zone } }))));
         $('wy')?.addEventListener('click', () => { RR.remember('rr-wifi', 'yes'); runWifi(zone); render(); });
         $('wn')?.addEventListener('click', () => { RR.remember('rr-wifi', 'no'); render(); });
-        $('leave').addEventListener('click', () => RR.undo(`Leaving Room ${id}. Your seat goes to the next person.`, () => act(async () => { await RR.api(`/spaces/${enc(id)}/leave`, { method: 'POST', body: {} }); left = true; })));
+        $('leave').addEventListener('click', () => RR.undo(`Leaving ${RR.roomName(id)}. Your seat goes to the next person.`, () => act(async () => { await RR.api(`/spaces/${enc(id)}/leave`, { method: 'POST', body: {} }); left = true; })));
         runWifi(zone);
       } else if (wasIn || left) {
         // Checked out: by "I'm leaving", by checking in somewhere else, or because the session ended.
@@ -165,7 +165,7 @@
         redirect ??= await RR.api(`/spaces/${enc(id)}/redirect`).catch(() => null);
         const s = redirect?.suggestion, d = redirect?.somethingDifferent;
         body.innerHTML = `<p class="m0"><b>This room is full.</b> ${s ? 'The closest match with free seats:' : ''}</p>${redirectView(redirect)}
-          ${s ? `<a class="rr-btn" href="/r/${enc(s.room)}">Go to Room ${RR.esc(s.room)}</a>` : ''}
+          ${s ? `<a class="rr-btn" href="/r/${enc(s.room)}">Go to ${RR.esc(RR.roomName(s.room))}</a>` : ''}
           <button class="rr-btn ${s ? 'rr-btn--ghost' : ''}" type="button" id="joinq">Wait for a seat here</button>
           ${d || redirect?.overflow ? `<p class="note">${d ? `Or something different: <a href="/r/${enc(d.room)}">${RR.esc(d.title)}</a>. ` : ''}${redirect?.overflow ? `Overflow: ${RR.esc(redirect.overflow.title)}.` : ''}</p>` : ''}`;
         $('joinq').addEventListener('click', () => act(() => RR.api(`/spaces/${enc(id)}/queue`, { method: 'POST', body: {} })));

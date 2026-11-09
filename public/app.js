@@ -49,6 +49,8 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
   const status = (st, word) => `<span class="rr-status" data-status="${esc(st)}">${esc(word || WORD[st] || st)}</span>`;
   const count = (n, cap) => `<div class="rr-count" aria-label="${Number(n)} of ${Number(cap)} seats taken">${Number(n)}<small>/ ${Number(cap)}</small></div>`;
   const label = (kind) => `<span class="rr-label"${kind === 'live' ? ' data-kind="live"' : ''}>${esc(String(kind).replace(/^./, (c) => c.toUpperCase()))}</span>`;
+  // Real venues have names ("255 BC"); the demo rooms only have numbers.
+  const roomName = (r) => (r && (r.name || r.displayName)) || (/^\d+$/.test(String(r?.id ?? r)) ? `Room ${r?.id ?? r}` : String(r?.id ?? r));
   const zoneName = (z) => (z ? z.replace('-', ' ').replace(/^./, (c) => c.toUpperCase()) : 'Any seat');
 
   // Announcements (GET /api/announcements, SSE 'announcement'): shown inside the floor views, not on a separate tab.
@@ -111,12 +113,12 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
     el.innerHTML = `<div class="fl-board">${top}${floors.map((f) => {
       const seats = f.rooms.reduce((s, r) => s + r.free, 0);
       const mine = forFloor(opts.notices, f.floor);
-      const here = f.rooms.some((r) => r.id === opts.here) ? `<span class="here">You are here · Floor ${Number(f.floor)}</span>` : '';
-      const head = `<div class="fl-h"><b>Floor ${Number(f.floor)}</b>${here}${list ? '' : badge(mine, f.floor, `Floor ${Number(f.floor)}`)}<span>${f.rooms.length} rooms · ${seats} seats free</span></div>${list ? mine.map(notice).join('') : ''}`;
+      const here = f.rooms.some((r) => r.id === opts.here) ? `<span class="here">You are here · Floor ${esc(f.floor)}</span>` : '';
+      const head = `<div class="fl-h"><b>Floor ${esc(f.floor)}</b>${here}${list ? '' : badge(mine, f.floor, `Floor ${f.floor}`)}<span>${f.rooms.length} rooms · ${seats} seats free</span></div>${list ? mine.map(notice).join('') : ''}`;
       const body = list
-        ? f.rooms.map((r) => `<div class="talk${needs(r) ? ' alert' : ''}"><div><b>Room ${esc(r.id)} · ${esc(r.title)}</b><span>${r.taken} of ${r.capacity} · ${access(r)}</span>${extra(r).replace(/tile-m|tile-x/g, '')}</div>${status(r.status)}</div>`).join('')
+        ? f.rooms.map((r) => `<div class="talk${needs(r) ? ' alert' : ''}"><div><b>${esc(roomName(r))} · ${esc(r.title)}</b><span>${r.taken} of ${r.capacity} · ${access(r)}</span>${extra(r).replace(/tile-m|tile-x/g, '')}</div>${status(r.status)}</div>`).join('')
         : `<div class="fl-rooms">${f.rooms.map((r, i) => `<button type="button" class="tile${needs(r) ? ' needs' : ''}" data-room="${esc(r.id)}" data-status="${esc(r.status)}" style="--cap:${Number(r.capacity)};--i:${Math.min(i, 4)}">
-            <span class="tile-top"><span class="tile-n">${esc(r.id)}</span>${status(r.status)}</span>
+            <span class="tile-top"><span class="tile-n">${esc(r.name || r.displayName || r.id)}</span>${status(r.status)}</span>
             <span class="tile-t">${esc(r.title)}</span>
             <span class="meter" aria-hidden="true"><i style="width:${Math.min(100, Math.round((r.taken / r.capacity) * 100))}%"></i></span>
             <span class="tile-m">${r.taken} of ${r.capacity}</span><span class="tile-m">${access(r)}</span>${extra(r)}</button>`).join('')}</div>`;
@@ -193,10 +195,10 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
   async function nav() {
     if (document.body.classList.contains('rr-nonav') || document.querySelector('.rr-nav')) return;
     const me = await whoami();
-    const room = recall('rr-room'), door = recall('rr-door') || '204';
+    const room = recall('rr-room'), door = recall('rr-door');
     const tabs = !me ? [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['me', 'Sign in', `/login?next=${encodeURIComponent(location.pathname)}`]]
-      : me.role === 'organiser' ? [['board', 'Board', '/staff/setup'], ['door', 'Door', `/staff/room/${door}`], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']]
-      : me.role === 'staff' ? [['door', 'Door', `/staff/room/${door}`], ['map', 'Schedule', '/sessions'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']]
+      : me.role === 'organiser' ? [['board', 'Board', '/staff/setup'], ['door', 'Door', door ? `/staff/room/${door}` : '/staff/setup'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']]
+      : me.role === 'staff' ? [['door', 'Door', door ? `/staff/room/${door}` : '/sessions'], ['map', 'Schedule', '/sessions'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']]
       : [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['seat', 'My seat', room ? `/r/${room}` : '/sessions'], ['me', 'Me', '/me']];
     const path = location.pathname;
     const on = (href) => { const p = href.split('?')[0]; return p === path || (p.startsWith('/r/') && path.startsWith('/r/')) || (p.startsWith('/staff/room/') && path.startsWith('/staff/room/')); };
@@ -224,5 +226,5 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', nav); else nav();
 
-  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami };
+  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, roomName };
 })();

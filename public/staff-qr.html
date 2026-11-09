@@ -13,7 +13,7 @@
   /* QR needs dark modules on a light ground to scan, whatever the page theme. */
   .code img { width: 100%; max-width: 220px; aspect-ratio: 1; background: #fff; border-radius: var(--rr-r1); }
   .code figcaption { display: grid; gap: 2px; }
-  .code b { font: 700 var(--rr-t-lg)/1.1 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.04em; }
+  .code b { font: 700 var(--rr-t-lg)/1.2 var(--rr-font-sign); }
   .code span { color: var(--rr-muted); font-size: var(--rr-t-sm); }
   .slides .code img { max-width: 280px; }
   @media print {
@@ -34,12 +34,10 @@
   <p class="note no-print">One card per space. Put "I'm at the door" outside, "I'm in the room" inside on the wall or screen, and keep "Staff only" for door staff. Print with your browser (Cmd or Ctrl + P): each space gets its own page. Codes point at the server's <code>PUBLIC_URL</code> when it is set, otherwise at <b id="base"></b>.</p>
   <p class="note" id="err" role="alert" hidden></p>
 
-  <section class="rr-panel card slides" aria-labelledby="h-slides">
-    <h2 class="rr-eyebrow" id="h-slides">Demo slides · Room 204</h2>
-    <div class="codes">
-      <figure class="code"><img src="/qr/204.svg?kind=in" alt="QR code: I'm in the room, Room 204"><figcaption><b>Audience: I'm in the room</b><span>Scan to count yourself in</span></figcaption></figure>
-      <figure class="code"><img src="/qr/204.svg?kind=door" alt="QR code: I'm at the door, Room 204"><figcaption><b>Judges: I'm at the door</b><span>Room 204 · eBPF deep dive</span></figcaption></figure>
-    </div>
+  <section class="rr-panel card slides" aria-labelledby="h-slides" id="slides" hidden>
+    <h2 class="rr-eyebrow" id="h-slides">Demo slides</h2>
+    <div class="fld no-print"><label for="slide-room">Room for the demo slides</label><select id="slide-room"></select></div>
+    <div class="codes" id="slide-codes"></div>
   </section>
 
   <div class="cards" id="cards"></div>
@@ -59,8 +57,24 @@
   const STAFF = ['staff', 'Staff only', 'Open the door console'];
   try {
     const floors = await RR.api('/floors');
-    const rooms = floors.flatMap((f) => f.rooms.map((r) => card(r.id, `Room ${r.id} · Floor ${f.floor} · ${r.title}`, [DOOR, IN, STAFF])));
+    const rooms = floors.flatMap((f) => f.rooms.map((r) => card(r.id, `${RR.roomName(r)} · Floor ${f.floor} · ${r.title}`, [DOOR, IN, STAFF])));
     document.getElementById('cards').innerHTML = card('venue', 'Venue entrance', [DOOR, STAFF]) + rooms.join('');
+    // Demo slides: defaults to the room most likely to fill (from the forecast), any room can be picked.
+    const all = floors.flatMap((f) => f.rooms);
+    const fc = await RR.api('/forecast').catch(() => ({ sessions: [] }));
+    const pick = fc.sessions?.find((s) => s.risk === 'high' && all.some((r) => r.id === s.room))?.room || all[0]?.id;
+    const sel = document.getElementById('slide-room');
+    sel.innerHTML = all.map((r) => `<option value="${RR.esc(r.id)}"${r.id === pick ? ' selected' : ''}>${RR.esc(RR.roomName(r))} · ${RR.esc(r.title)}</option>`).join('');
+    const slides = () => {
+      const r = all.find((x) => x.id === sel.value);
+      if (!r) return;
+      const id = encodeURIComponent(r.id), name = RR.esc(RR.roomName(r));
+      document.getElementById('h-slides').textContent = `Demo slides · ${RR.roomName(r)}`;
+      document.getElementById('slide-codes').innerHTML = `<figure class="code"><img src="/qr/${id}.svg?kind=in" alt="QR code: I'm in the room, ${name}"><figcaption><b>Audience: I'm in the room</b><span>Scan to count yourself in</span></figcaption></figure>
+        <figure class="code"><img src="/qr/${id}.svg?kind=door" alt="QR code: I'm at the door, ${name}"><figcaption><b>Judges: I'm at the door</b><span>${name} · ${RR.esc(r.title)}</span></figcaption></figure>`;
+    };
+    sel.addEventListener('change', slides);
+    if (all.length) { slides(); document.getElementById('slides').hidden = false; }
   } catch (e) { RR.showError(document.getElementById('err'), e); }
 })();
 </script>

@@ -6,7 +6,6 @@
 <title>Simulator · RightRoom</title>
 <link rel="stylesheet" href="/rr.css">
 <style>
-  .fld select { width: 100%; min-height: 52px; padding: 0 var(--rr-s3); background: var(--rr-panel-2); color: var(--rr-ink); border: 2px solid var(--rr-line); border-radius: var(--rr-r2); font: 400 var(--rr-t-md)/1 var(--rr-font-body); }
   .log { display: grid; gap: var(--rr-s2); }
   .log p { margin: 0; padding: var(--rr-s2) var(--rr-s3); background: var(--rr-panel-2); border-radius: var(--rr-r1); font-size: var(--rr-t-sm); overflow-wrap: anywhere; }
   .err { color: var(--rr-full); margin: 0; }
@@ -15,7 +14,7 @@
 <body>
 <main class="rr-screen rr-screen--wide">
   <header class="rr-sign"><span class="rr-eyebrow">Demo only</span><h1>Simulator</h1></header>
-  <p class="note">Adds stand-in people so the demo works without a crowd. Everything it adds is labelled <span class="rr-label">STAND-IN</span>.</p>
+  <p class="note">Adds stand-in people so the demo works without a crowd. Everything it adds is labelled <span class="rr-label">Stand-in</span>.</p>
 
   <section class="rr-panel" aria-labelledby="h-room">
     <h2 class="rr-eyebrow" id="h-room">Room</h2>
@@ -57,16 +56,16 @@
   async function refresh() {
     const rooms = await RR.api('/sessions');
     const sel = $('room').value;
-    $('room').innerHTML = rooms.map((r) => `<option value="${RR.esc(r.id)}">Room ${RR.esc(r.id)} · ${RR.esc(r.title)}</option>`).join('');
+    $('room').innerHTML = rooms.map((r) => `<option value="${RR.esc(r.id)}">${RR.esc(RR.roomName(r.id))} · ${RR.esc(r.title)}</option>`).join('');
     if (sel) $('room').value = sel;
     const r = rooms.find((x) => x.id === $('room').value) || rooms[0];
-    $('now').innerHTML = `${RR.status(r.status)} <span>${r.taken} of ${r.capacity}</span> ${RR.label('live')}${r.standIn ? ` <span class="rr-label">${Number(r.standIn)} STAND-IN</span>` : ''}`;
+    $('now').innerHTML = `${RR.status(r.status)} <span>${r.taken} of ${r.capacity}</span> ${RR.label('live')}${r.standIn ? ` <span class="rr-label">${Number(r.standIn)} stand-in</span>` : ''}`;
   }
 
   const ACTS = {
-    checkins: async (space, n) => { const v = await RR.api('/sim/checkins', { method: 'POST', body: { space, n } }); return `Added ${n} check-ins to Room ${RR.esc(space)}. Now ${v.taken} of ${v.capacity}, ${RR.esc(RR.WORD[v.status])}.`; },
-    queue: async (space, n) => { const v = await RR.api('/sim/queue', { method: 'POST', body: { space, n } }); return `Added ${n} people to Room ${RR.esc(space)}'s queue. ${v.queue.length} waiting or holding offers.`; },
-    end: async (space) => { await RR.api('/sim/end-session', { method: 'POST', body: { space } }); return `Ended the session in Room ${RR.esc(space)}. Everyone was checked out.`; },
+    checkins: async (space, n) => { const v = await RR.api('/sim/checkins', { method: 'POST', body: { space, n } }); return `Added ${n} check-ins to ${RR.esc(RR.roomName(space))}. Now ${v.taken} of ${v.capacity}, ${RR.esc(RR.WORD[v.status])}.`; },
+    queue: async (space, n) => { const v = await RR.api('/sim/queue', { method: 'POST', body: { space, n } }); return `Added ${n} people to ${RR.esc(RR.roomName(space))}'s queue. ${v.queue.length} waiting or holding offers.`; },
+    end: async (space) => { await RR.api('/sim/end-session', { method: 'POST', body: { space } }); return `Ended the session in ${RR.esc(RR.roomName(space))}. Everyone was checked out.`; },
     rush: async () => {
       const r = await RR.api('/sim/rush', { method: 'POST' });
       const ok = r.winners === r.seats;
