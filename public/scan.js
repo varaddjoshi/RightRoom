@@ -15,6 +15,8 @@
   const $ = (id) => document.getElementById(id);
   const say = (msg) => { $('status').textContent = msg; };
   let stream = null, timer = null, detector = null;
+  // What to do with an accepted path: /scan navigates; the room page's overlay checks in without leaving.
+  let onPath = (path) => { location.href = path; };
 
   function show(state) {
     document.querySelectorAll('[data-state]').forEach((el) => { el.hidden = !el.dataset.state.split(' ').includes(state); });
@@ -26,7 +28,7 @@
     stop();
     if (navigator.vibrate) navigator.vibrate(60);
     say('Opening…');
-    location.href = path;
+    onPath(path);
     return true;
   }
 
@@ -95,14 +97,22 @@
     try { await track.applyConstraints({ advanced: [{ torch: on }] }); $('torch').setAttribute('aria-pressed', on); } catch { say('The torch is not available.'); }
   }
 
-  window.RRScan = { open, stop, acceptCode };
-
-  document.addEventListener('DOMContentLoaded', () => {
-    $('close').addEventListener('click', () => { stop(); history.length > 1 ? history.back() : (location.href = '/'); });
+  // Hooks up the scanner markup (ids video, status, torch, retry, paste, link) on the current page.
+  function wire(handler) {
+    if (handler) onPath = handler;
     $('retry').addEventListener('click', open);
     $('torch').addEventListener('click', torch);
     $('paste').addEventListener('submit', (e) => { e.preventDefault(); go($('link').value); });
     window.addEventListener('pagehide', stop);
+  }
+
+  window.RRScan = { open, stop, acceptCode, wire };
+
+  // The standalone /scan page; other pages call RRScan.wire(handler) and RRScan.open() themselves.
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!document.querySelector('main.scan')) return;
+    wire();
+    $('close').addEventListener('click', () => { stop(); history.length > 1 ? history.back() : (location.href = '/'); });
     open();
   });
 })();
