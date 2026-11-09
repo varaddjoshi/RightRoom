@@ -1,5 +1,5 @@
 {
-  "_note": "Stand-in data for the demo. Session times are minutes relative to when the seed runs, so a session is always on and its door window (10 min before to 20 min after start) is still open. Rerun the seed shortly before a demo. Every document is labelled stand_in.",
+  "_note": "Stand-in data for the demo. Session times are minutes relative to when the seed runs, so a session is always on. No time limits are set (decisions 31, 32): add a \"policy\" to the venue or a session to try them. Every document is labelled stand_in.",
   "event": { "id": "cnh-2026", "name": "Cloud Native Hackathon 2026" },
   "venue": {
     "id": "venue",

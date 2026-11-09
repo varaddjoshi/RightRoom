@@ -45,6 +45,17 @@ const base = { event_id: keyword, label: keyword, created_at: date, updated_at: 
 // Access needs are preferences, never a diagnosis: "step_free", "captions", "front_row", "access_seat".
 const needs = keyword;
 
+// Organiser time limits (decisions 31, 32, 35, see src/policy.js). Unset fields mean no limit.
+const policy = {
+  properties: {
+    door_opens_before_min: int,
+    door_closes_after_min: int,
+    claim_min: int,
+    claim_access_min: int,
+    add_walk_time: bool,
+  },
+};
+
 const semanticField = SEMANTIC
   ? { type: 'semantic_text', ...(process.env.ES_INFERENCE_ID ? { inference_id: process.env.ES_INFERENCE_ID } : {}) }
   : text;
@@ -70,6 +81,7 @@ const MAPPINGS = {
     step_free: bool,
     captions: bool,
     overflow_space_id: keyword,
+    policy, // on the venue: the event-wide default
     stream_url: notIndexed,
     zones: {
       type: 'nested',
@@ -129,10 +141,7 @@ const MAPPINGS = {
     room_id: keyword,
     start: date,
     end: date,
-    // Door window (decision 32): check-ins, offers and claims only happen between these two times.
-    // Default 10 min before start to 20 min after; the organiser or the room's staff can move either.
-    door_open_at: date,
-    door_close_at: date,
+    policy, // per-session override of the event default; organisers only
     // Title + abstract + tags, embedded by Elasticsearch, used by the redirect query.
     topic: semanticField,
   },
