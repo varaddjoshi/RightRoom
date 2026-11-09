@@ -1,0 +1,169 @@
+# RightRoom architecture and division of labour
+
+Nov 9, 2026. Draft for the team. It uses the recommended answers to D1 to D15 and the auth decision (username and password with roles); anything Hitesh changes in #general wins over this page. Screen IDs (A1, S2, ...) are from `docs/journey-map.md`.
+
+## Shape of the system
+
+One Node process serves everything: the pages, the JSON API, a live update stream and a background sweeper. Elasticsearch holds all state. OpenTelemetry sends server traces to Dash0, and a browser RUM snippet sends page timings there too.
+
+```mermaid
+flowchart LR
+  subgraph Phones and screens
+    A[Attendee pages A1-A7]
+    S[Staff console S1, S2]
+    D[Big screen D1, simulator D2]
+  end
+  subgraph Node app: Express
+    P[Static pages /public]
+    API[JSON API /api]
+    SSE[Live stream /api/stream]
+    AUTH[Auth and roles]
+    ENG[Allocation engine]
+    RED[Redirect query]
+    SW[Sweeper every 2s]
+  end
+  ES[(Elasticsearch)]
+  DASH[Dash0]
+  A & S & D --> P
+  A & S & D --> API
+  SSE -- status, offers, announcements --> A & S & D
+  API --> AUTH --> ENG
+  API --> RED
+  ENG --> ES
+  RED --> ES
+  SW --> ENG
+  ENG -- events --> SSE
+  API -. traces .-> DASH
+  A -. RUM .-> DASH
+```
+
+Why this shape:
+
+- No frontend build step. Pages are plain HTML, one shared CSS file (the design system tokens) and small scripts. Every teammate can edit a page without a toolchain.
+- One process means the live stream can be an in-memory list of open connections. Shortcut: this breaks with more than one instance; run exactly one replica for the demo.
+- Elasticsearch is the only store, so there is one place to look when a number is wrong.
+
+## Stack
+
+Already in `package.json`: Express 5, `@elastic/elasticsearch`, `@opentelemetry/auto-instrumentations-node`, `dotenv`. Nothing else is needed for the Musts. Password hashing uses Node's built-in `crypto.scrypt`; sessions use a signed cookie via Node's `crypto.createHmac`.
+
+Known fix before anything else (P4): `dotenv` is never loaded and the `DASH0_*` variables are never mapped to the `OTEL_EXPORTER_OTLP_*` names the auto-instrumentation reads, so no traces reach Dash0 today.
+
+## Code layout
+
+| Path | Holds | Owner |
+|---|---|---|
+| `server.js` | Loads `.env`, mounts routes, starts the sweeper | P2 |
+| `src/es.js` | Elasticsearch client, index names, mappings, `ensureIndexes()` | P1 |
+| `src/engine.js` | Room status rule, queue, offers, claim, pass-on, release, check-in | P2 |
+| `src/redirect.js` | The one redirect query and its "Why this?" reasons | P1 |
+| `src/auth.js` | Sign-up, login, guest handle, role check middleware | P2 |
+| `src/stream.js` | Server-sent events: subscribe by space, publish events | P2 |
+| `src/routes/*.js` | Thin HTTP handlers that call the engine | P2 |
+| `public/*.html`, `public/app.js` | Screens A1 to A7, S1, S2, D1, D2 | P3 |
+| `public/rr.css` | Design system tokens and components | P3 |
+| `public/rum.js` | Dash0 browser monitoring snippet | P4 |
+| `scripts/seed.js` | Event, spaces, sessions with embeddings, stand-in queue | P1 |
+| `scripts/loadtest.js` | 50 people try for 5 seats; asserts exactly 5 winners | P2 |
+| `.github/workflows/ci.yml`, `.gitar/review/` | Lint, load test, Gitar rules | P4 |
+
+## Data (Elasticsearch indexes)
+
+Every document carries `event_id` (one event today).
+
+| Index | Key fields | Written by |
+|---|---|---|
+| `spaces` | type (venue, room), floor, capacity, `taken`, `status`, rule text, priorities, accessibility seats, zones, walking times, topic embedding | Organiser setup, engine |
+| `queue` | space, handle, position, arrival time, needs (step-free, captions), status, reason text, device ID, admission expiry (venue) | Engine |
+| `offers` | space, handle, zone, `held_until`, status (Offered, Claimed, Expired, Passed on), claim code | Engine, sweeper |
+| `checkins` | space, handle, zone, time; deleted when the session ends | Engine |
+| `sessions` | title, abstract, embedding, room, start, end, tags | Seed script |
+| `announcements` | text, floor, urgency, time | Organiser |
+| `users` | handle, password hash and salt, role, interest tags, needs | Auth |
+| `wifi_readings` (Extra) | room, zone, download Mbps, latency ms, time | A6 |
+
+## The rules that must never break
+
+These are where the hackathon is won or lost. P2 owns them and the load test proves them.
+
+1. A seat is never given twice. Making an offer reserves the seat first: one scripted update on the `spaces` document adds 1 to `taken` only while `taken < capacity` (a single-document update, so concurrent requests can't both pass). Claiming then changes only the `offers` document, with `if_seq_no` and `if_primary_term`, from Offered to Claimed, and only if `held_until` is still in the future. Writes use `refresh: wait_for`. A failed claim leaves the person in the queue.
+2. Offers expire. The sweeper runs every 2 seconds, marks offers past `held_until` as Expired, and hands the reserved seat to the next person in queue order (accessibility fit first for accessibility seats) without releasing it in between. With nobody left in the queue it subtracts 1 from `taken`.
+3. Redirects never send more people than there are free seats. The redirect query only returns rooms where `capacity - taken - open offers` covers everyone being redirected there at that moment; the engine reserves those places as offers.
+4. Room status follows the journey-map rule: Seats free under 80 percent, Filling from 80 percent, Full at capacity (from the staff counter or from check-ins), pushed straight away. Staff have a "not full" override.
+5. Interests never decide who gets a seat. They only rank redirect suggestions.
+
+## API contract
+
+Freeze this first so P2 and P3 can build in parallel. P3 can mock any endpoint by returning the example JSON until P2's version lands.
+
+| Method and path | Who | Used on | Returns |
+|---|---|---|---|
+| `POST /api/signup`, `POST /api/login`, `POST /api/logout` | Anyone | A1 | `{handle, role}` and a cookie |
+| `POST /api/guest` | Anyone from a room QR | A5, A6 | Guest handle and cookie |
+| `GET /api/me`, `PUT /api/me` | Signed in | A2 | Handle, interests, needs |
+| `GET /api/event`, `POST /api/event/register` | Attendee | A3 | Venue status and my queue entry with position and reason |
+| `GET /api/sessions` | Anyone | A4 | Sessions with room status and Wi-Fi median |
+| `GET /api/spaces/:id` | Anyone | A5, D1 | Capacity, taken, status, zone fill, rule |
+| `POST /api/spaces/:id/queue` | Attendee or guest | A5 | My position and reason |
+| `GET /api/spaces/:id/redirect` | Attendee or guest | A5 | Suggestion, reasons, rejected options with reasons, something different, overflow |
+| `POST /api/offers/:id/claim` | The offered handle | A5 | Claimed with zone and code, or why not |
+| `POST /api/spaces/:id/checkin` | Attendee or guest | A6 | Checked in, zone |
+| `POST /api/staff/spaces/:id/count` | Staff | S2 | New total after `{delta}` |
+| `POST /api/staff/spaces/:id/override` | Staff | S2 | Status after "full" or "not full" |
+| `POST /api/staff/spaces/:id/release` | Staff | S2 | Offers created for `{n, zone}` |
+| `PUT /api/staff/spaces/:id` | Organiser | S1 | Updated capacity, rule, priorities |
+| `GET /api/announcements`, `POST /api/announcements` | Anyone, organiser | A7, S1 | Announcements |
+| `GET /api/stream?space=:id` | Anyone | All live screens | Server-sent events |
+| `POST /api/sim/checkins` | Demo | D2 | Stand-in check-ins added |
+
+Live events on `/api/stream`: `status` (space, taken, capacity, status), `position` (handle, position, reason), `offer` (offer ID, zone, seconds left), `offer_passed`, `announcement`. Each event carries the server timestamp so the browser can report delivery time to Dash0 for SLO 1.
+
+## Proof (Dash0)
+
+| What | How |
+|---|---|
+| Traces end to end | Auto-instrumentation on the server; the RUM snippet on every page links browser spans to server spans |
+| SLO 1: updates reach phones within 10 seconds | Server stamps each event; the page records receipt time as a RUM timing; SLO on the gap |
+| SLO 2: anyone turned away is offered a seat within 30 seconds, accessibility seats never lost | Span from "Full at door" to "offer or redirect shown"; counter for accessibility seats given to people without that need (must stay 0) |
+| Redirect success rate | Redirected people who check in to the suggested room within 15 minutes, over all redirects |
+| Staff override rate | "Not full" overrides over Full events |
+| Load test | `scripts/loadtest.js` in CI and live in the demo: 50 claims for 5 seats, exactly 5 winners |
+| Agent0 finding | From the real check-in rush during the demo |
+
+Every number on screen is labelled Live, Real or Stand-in.
+
+## Division of labour
+
+Owner names are a proposal until Hitesh confirms D1 in #general.
+
+| Part | Proposed owner | Builds | Done when |
+|---|---|---|---|
+| P1 Elasticsearch and data | Varad | `src/es.js` mappings, `scripts/seed.js` with real sessions and embeddings, `src/redirect.js`, staff aggregations | Seed runs on a clean cluster; redirect returns a room with reasons for a full room |
+| P2 Backend | Raj | `src/engine.js`, `src/auth.js`, `src/stream.js`, routes, sweeper, `scripts/loadtest.js` | Load test passes; an offer passes on after 60 seconds; status pushes to a phone |
+| P3 Frontend, accessibility, design system | Hitesh | `public/rr.css` design system, all screens, axe and VoiceOver passes | The hero path works on a phone with VoiceOver; axe clean |
+| P4 Infra, observability, demo | Revanth | Fix Dash0 env mapping, public URL, RUM, both SLOs, Agent0, CI and Gitar, QR codes, README with AI disclosure, recorded backup | A judge's request shows end to end in Dash0; both SLOs on a dashboard |
+
+Hand-offs that block someone else:
+
+| From | To | What | Needed by |
+|---|---|---|---|
+| P1 | P2 | Index names and mappings in `src/es.js` | 1:45 |
+| P2 | P3 | API contract above agreed as-is, plus example JSON per endpoint | 1:45 |
+| P4 | Everyone | Public URL and first trace in Dash0 | 2:00 |
+| P3 | Everyone | `public/rr.css` tokens and the big-button components | 2:15 |
+| P1 | P2 | Redirect query callable from the engine | 3:00 |
+
+## Timeline to submission
+
+| Time | Goal | Done when |
+|---|---|---|
+| 1:30 to 2:00 | Contract frozen, indexes created, public URL, traces flowing | A request shows in Dash0 |
+| 2:00 to 3:00 | Queue, offer, claim, pass-on, check-in, room status live | A released seat is claimed on a phone; a room flips to Full |
+| 3:00 to 3:45 | Redirect with "Why this?", venue registration, staff console | A full room redirects with reasons |
+| 3:45 to 4:30 | Load test, both SLOs, RUM, axe and VoiceOver pass | 50 to 5 passes; SLOs on screen |
+| 4:30 to 5:00 | Demo runs twice on phones, recorded backup, README | Two clean runs |
+| 5:00 to 5:15 | Submit | Submitted |
+
+Extras start only after the 3:45 checkpoint passes, in this order: zone map with Wi-Fi, then venue-door scan.
+
+If a Must is at risk at a checkpoint, whoever is on an Extra joins that Must's owner.
