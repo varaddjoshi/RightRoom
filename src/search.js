@@ -106,7 +106,7 @@ async function search(engine, user, p) {
   }
   if (!list) list = memorySearch(rooms, p.q);
 
-  const now = Date.now();
+  const now = require('./clock').nowMs(); // same clock as esSearch() (DEMO_CLOCK)
   const interests = user?.interests || [];
   // shortcut: in-memory rooms carry no session times, so they count as running now; real times come from Elasticsearch.
   const isSoon = (x) => !x.startsAt || (Date.parse(x.startsAt) <= now + SOON_MS && (!x.endsAt || Date.parse(x.endsAt) >= now));
@@ -126,7 +126,7 @@ async function search(engine, user, p) {
     const { r } = x;
     const why = [...x.why];
     if (p.stepFree) why.push('step-free');
-    if (p.free) why.push(`${r.free} seats free now`);
+    if (p.free) why.push(r.live === false ? `${r.free} seats free (stand-in, not live)` : `${r.free} seats free now`);
     if (p.status) why.push(`status is ${r.status}`);
     if (p.mine) why.push('matches your interests');
     if (p.soon) why.push(x.startsAt ? 'starts within 30 minutes or is on now' : 'on now');
@@ -137,7 +137,9 @@ async function search(engine, user, p) {
     };
     if ('staffOn' in r) Object.assign(out, { staffOn: r.staffOn, queue: r.queue });
     else if (staffView) Object.assign(out, { staffOn: null, queue: null }); // staff, but no live state for this room
-    if (r.live === false) { out.live = false; out.why.push('no live seat state in this demo yet'); }
+    // Counts not from the engine are the seeded rr_spaces numbers: label them so they never read as live.
+    if (r.live === false) { out.live = false; out.countLabel = 'stand_in'; out.why.push('seat count is stand-in, not live'); }
+    else out.countLabel = 'live';
     return out;
   });
   return { source, query: p, results, took: Date.now() - t0 };
