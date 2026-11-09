@@ -7,18 +7,20 @@ RightRoom runs on our Cloud Native Hackathon cluster, set up from [skyhook-io/cn
 | Cluster (Radar Cloud, org Cloud Native Hackathon) | `pantheon` |
 | Namespace | `team-pantheon` |
 | Public URL | https://pantheon.cnh.radarhq.io (version check: `/health`) |
-| Argo CD Application | `app` in `team-pantheon`, tracking `main`, path `deploy/` |
+| Argo CD Application | `app` in `team-pantheon`, tracking branch `deployed`, path `deploy/` |
 | Image | `ghcr.io/varaddjoshi/rightroom:<7-char commit>` |
 | Credentials | Secret `app-credentials` in `team-pantheon`, created by hand, never in git |
 
 ## How a change ships
 
 1. Open a PR. Gitar reviews it. Nobody pushes to `main`.
-2. Merge it. The `build-and-deploy` Action builds the image, tags it with the merged commit, and its bot commits `deploy: <sha> [skip ci]` to `main` with the new tag in `deploy/kustomization.yaml`. Changes to Markdown only don't build.
-3. Argo CD syncs `deploy/` into `team-pantheon`. An agent with Radar can sync immediately (the `ship` skill).
+2. Merge it. The `build-and-deploy` Action builds the image and tags it with the merged commit. It then force-pushes `main` plus one bot commit, `deploy: <sha> [skip ci]`, which sets that tag in `deploy/kustomization.yaml`, to branch **`deployed`**. Merges that change only Markdown don't build.
+3. Argo CD syncs `deploy/` from `deployed` into `team-pantheon`. An agent with Radar can sync immediately (the `ship` skill).
 4. It's live when `curl -s https://pantheon.cnh.radarhq.io/health` shows the merged commit as `version`.
 
-After a merge, `git pull --rebase` on `main` picks up the bot's commit. Rebase open branches on it.
+`main` only ever changes through PRs; the bot writes only to `deployed`. Never push to `deployed` by hand: the next build replaces it.
+
+**Rollback:** in GitHub > **Actions**, open the last good `build-and-deploy` run and click **Re-run all jobs**. It rebuilds that commit and moves `deployed` back to it. The next merge rolls forward again, so if the fix isn't ready by then, also merge a PR that reverts the bad commit. Say so in SwarmChat `#general` first.
 
 ## Everyone, once
 
@@ -28,7 +30,7 @@ After a merge, `git pull --rebase` on `main` picks up the bot's commit. Rebase o
 
 ## First deploy, once, after the PR that added this file is merged
 
-1. **Build.** Wait for the `build-and-deploy` run on `main` to go green (repo **Actions** tab).
+1. **Build.** Wait for the `build-and-deploy` run on `main` to go green (repo **Actions** tab). It creates branch `deployed`.
 2. **Make the image public.** The repo owner (Varad) opens the repo's **Packages** > `rightroom` > **Package settings** > **Change visibility** > **Public**. The cluster can't pull a private image. It may already say Public.
 3. **Create the credentials Secret.** The person who holds the Elasticsearch and Dash0 keys does this. Don't paste keys into an agent chat or SwarmChat. Pick one:
    - In Radar Cloud: the cluster > **Resources** > **Secrets** > **+**. Set `name: app-credentials` and `namespace: team-pantheon`, put one line per key from your `.env` under `stringData` (for example `ELASTICSEARCH_URL: ...`), and click **Apply**.

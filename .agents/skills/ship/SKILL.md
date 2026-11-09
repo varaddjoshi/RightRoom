@@ -5,7 +5,7 @@ description: Deploy a change to this team's cluster at the hackathon and confirm
 
 # Ship a change and prove it's live
 
-Deploys are GitOps: a PR is merged to `main` (this team never pushes to `main` directly), the GitHub Action builds the image and commits the new tag, and Argo CD (inside the team's cluster) syncs the namespace. A merge is not a deploy. You're done only when the new version answers at the team URL.
+Deploys are GitOps: a PR is merged to `main` (this team never pushes to `main` directly), the GitHub Action builds the image and force-pushes `main` plus one commit with the new tag to branch `deployed`, and Argo CD (inside the team's cluster) syncs the namespace from `deployed`. A merge is not a deploy. You're done only when the new version answers at the team URL.
 
 The team name is in `deploy/kustomization.yaml` (`namespace: team-<team>`). Radar Cloud lists the team's cluster as `<team>`. The namespace is `team-<team>`, the Argo CD Application is `app` in that namespace, and the URL is `https://<team>.cnh.radarhq.io`.
 
@@ -24,15 +24,15 @@ Skip this if `get_resource` (kind `Application`, group `argoproj.io`, name `app`
 
 Commit on a branch, push the branch, open a PR, and post it in SwarmChat `#general`. Merging is the person's or the team's call, after Gitar's review. Once it is merged, run `git fetch origin` and note the merged commit on `main`: its full SHA (`git rev-parse origin/main`) and its seven-character image tag (`git rev-parse --short=7 origin/main`). The image is tagged with that commit, not with your branch commit.
 
-The Action skips pushes changing only Markdown and/or `deploy/kustomization.yaml`. Markdown-only changes need no deployment. For an intentional kustomization-only change, skip step 2, retain the existing image tag as the expected app version, and verify the configuration change after sync. Every other push, including other files under `deploy/`, triggers a build.
+The Action skips merges that change only Markdown, and those need no deployment. Every other merge, including changes under `deploy/`, builds an image and moves `deployed`.
 
-## 2. Wait for the build, then pull its deploy commit
+## 2. Wait for the build and its deploy commit
 
-With the GitHub CLI: `gh run list --workflow build-and-deploy --commit <full-sha>`, then `gh run watch <id> --exit-status` for that commit’s run. Do not use the latest run without matching its commit. If the run is not listed yet, retry briefly within the five-minute deadline; absence is not success. If the run is cancelled or superseded, report that this commit was not built. Verify a newer commit only if it contains the intended change and the person has authorized deploying it; otherwise report the blocker. Without the CLI, use the same deadline while checking `git fetch origin` until `origin/main` has a commit `deploy: <sha> [skip ci]`.
+With the GitHub CLI: `gh run list --workflow build-and-deploy --commit <full-sha>`, then `gh run watch <id> --exit-status` for that commit’s run. Do not use the latest run without matching its commit. If the run is not listed yet, retry briefly within the five-minute deadline; absence is not success. If the run is cancelled or superseded, report that this commit was not built. Verify a newer commit only if it contains the intended change and the person has authorized deploying it; otherwise report the blocker. Without the CLI, use the same deadline while checking `git fetch origin` until `git log -1 origin/deployed` is `deploy: <tag> [skip ci]` and `git rev-parse origin/deployed^` is the merged commit.
 
 If the run failed, read `gh run view <id> --log-failed`, fix it in a new PR, and wait again once that is merged. A broken `main` goes to SwarmChat `#general` right away.
 
-**Then pull, after every green run.** On `main`, run `git pull --rebase` so your copy has the bot's `deploy: <sha> [skip ci]` commit, and rebase open branches on it, so their PRs don't conflict on `deploy/kustomization.yaml`.
+There's nothing to pull afterwards: the bot writes only to `deployed`, never to `main`. Don't check out, edit or push `deployed`: every build replaces it.
 
 ## 3. Sync
 
@@ -41,18 +41,18 @@ Argo CD polls git every few minutes. Don't wait for it: call `manage_gitops` wit
 The starter's Application has no `syncOptions` and needs none. If an Application has options (such as `ServerSideApply=true` for large CRDs or `CreateNamespace=true`), read the live Application immediately before syncing and pass its complete current list as `sync_options`. Do not use a cached list or pass only one added option. This preserves the options on Radar v1.19.0, which does not inherit them; Radar’s current sync implementation inherits them when omitted, but an explicit list replaces them for that sync.
 
 Then `get_resource` on the Application and check both of these:
-- `status.sync.revision` equals `git rev-parse origin/main` (after `git fetch`);
+- `status.sync.revision` equals `git rev-parse origin/deployed` (after `git fetch`), the bot's commit, not the merged one;
 - `status.sync.status` is `Synced` and `status.health.status` is `Healthy`, or `Progressing` while pods start.
 
 Right after the first sync, the Application can read `OutOfSync` for a moment: a sync started from Radar doesn't prune, so the starter's old `app-code` ConfigMap stays until Argo CD's own automatic sync removes it, seconds later. That's expected. Do step 4, then check the Application again: it goes `Synced` on its own.
 
 ## 4. Wait for the rollout
 
-First read the live Deployment or Rollout with `get_resource` and confirm its app container image matches the expected image/tag from the remote `deploy/kustomization.yaml`. A healthy old workload does not prove this push deployed.
+First read the live Deployment or Rollout with `get_resource` and confirm its app container image matches the expected image/tag from `deploy/kustomization.yaml` on `origin/deployed` (`git show origin/deployed:deploy/kustomization.yaml`). A healthy old workload does not prove this merge deployed.
 
 Call `wait_for` with `kind: deployment` (or `rollout` if `deploy/` uses `rollout.yaml`) and `name: app`. Each call waits at most 45 seconds, so repeat it until it reports done, for up to about 5 minutes. New pods running the new image also prove the image is public.
 
-If the new pods show `ImagePullBackOff` or `ErrImagePull`, check the image without credentials, with `newName` (minus `ghcr.io/`) and `newTag` from `deploy/kustomization.yaml` (it uses shell variables, so Claude Code asks the person to approve it: say why first):
+If the new pods show `ImagePullBackOff` or `ErrImagePull`, check the image without credentials, with `newName` (minus `ghcr.io/`) and `newTag` from `deploy/kustomization.yaml` on `origin/deployed` (it uses shell variables, so Claude Code asks the person to approve it: say why first):
 ```bash
 repo=<owner>/<repo>; tag=<tag>
 token=$(curl -s "https://ghcr.io/token?scope=repository:$repo:pull" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
@@ -64,7 +64,7 @@ A Rollout pauses at 25% on purpose. For that flow, use the `canary-release` skil
 
 ## 5. Verify from outside
 
-`curl -s https://<team>.cnh.radarhq.io/health`. RightRoom answers `{"status":"ok","service":"rightroom","version":"<sha>"}`, and `version` must match the built SHA from step 1, or the unchanged image tag for a deliberately skipped build. For a configuration-only change, also verify the intended configuration took effect. If you replaced the app, request something your change made visible.
+`curl -s https://<team>.cnh.radarhq.io/health`. RightRoom answers `{"status":"ok","service":"rightroom","version":"<sha>"}`, and `version` must match the seven-character tag of the merged commit from step 1. For a change under `deploy/`, also verify the intended configuration took effect. If you replaced the app, request something your change made visible.
 
 If anything here is red (a failed sync, pods not ready, the old version still serving, a 404 or 503 from the URL), switch to the `debug-failure` skill. Don't push guesses.
 
@@ -72,5 +72,5 @@ If anything here is red (a failed sync, pods not ready, the old version still se
 
 - Don't call a Radar tool without `cluster`.
 - Don't apply Argo CD-owned app manifests with `apply_resource` or `patch_resource`. Argo CD's self-heal reverts them within seconds.
-- Don't edit `newName` or `newTag` in `deploy/kustomization.yaml`; the Action owns them.
+- Don't edit `newName` or `newTag` in `deploy/kustomization.yaml`, and don't touch branch `deployed`; the Action owns both.
 - Don't push to `main`, and don't report "deployed" after the merge. Report what step 5 showed, in SwarmChat too.

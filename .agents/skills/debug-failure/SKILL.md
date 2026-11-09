@@ -14,7 +14,7 @@ The namespace is `team-<team>`, from `namespace:` in `deploy/kustomization.yaml`
 ## 1. Stop the damage first
 
 - **Canary crash-looping or failing its checks** (`deploy/` uses `rollout.yaml`): call `manage_rollout` with `action: abort`. A canary that is only paused at its step isn't broken: that's the person's release decision, so don't abort it; use the `canary-release` skill. The stable version takes all traffic back at once. The next pushed version starts a fresh canary.
-- **Plain Deployment broken after a push**: the rollback is a PR with `git revert <bad commit>`, merged (say so in SwarmChat `#general` first: `main` is shared). Don't use `manage_gitops` rollback: auto-sync puts `main` back.
+- **Plain Deployment broken after a merge**: say so in SwarmChat `#general` first, because `main` is shared. The fastest rollback is to re-run the last good `build-and-deploy` run (GitHub > Actions > that run > **Re-run all jobs**): it rebuilds that commit and moves branch `deployed` back to it, and the next merge rolls forward again. To keep the rollback, also merge a PR with `git revert <bad commit>`. Don't use `manage_gitops` rollback: auto-sync puts `deployed` back.
 
 Tell the person what you did before you go deeper.
 

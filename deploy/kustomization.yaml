@@ -1,6 +1,7 @@
-# Argo CD deploys this folder to your team's namespace. The GitHub Action
-# sets the image below on every push to main; don't edit newName or newTag
-# by hand.
+# Argo CD deploys this folder from branch `deployed`, not from main. On every
+# merge to main, the build-and-deploy Action builds the image and writes main plus
+# the new tag (newTag below) to `deployed`. On main the tag stays `latest`; don't
+# edit newName or newTag by hand.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: team-pantheon
@@ -10,5 +11,5 @@ resources:
   - httproute.yaml
 images:
   - name: app
-    newName: ghcr.io/OWNER/REPO
+    newName: ghcr.io/varaddjoshi/rightroom
     newTag: latest

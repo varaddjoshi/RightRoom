@@ -1,12 +1,13 @@
-# On every push to main: build the image, push it to GHCR, and point
-# deploy/kustomization.yaml at it. Argo CD sees that commit and deploys it.
+# On every merge to main: build the image, push it to GHCR, and write main plus
+# the new image tag to branch `deployed`, which Argo CD deploys. main itself only
+# changes through PRs: this workflow never pushes to it. Re-running an older green
+# run rebuilds that commit and moves `deployed` back to it (a rollback).
 name: build-and-deploy
 
 on:
   push:
     branches: [main]
     paths-ignore:
-      - deploy/kustomization.yaml
       - "**.md"
   workflow_dispatch:
 
@@ -14,14 +15,15 @@ permissions:
   contents: write
   packages: write
 
+# One run at a time. A newer merge replaces a run that is still waiting, so the
+# last merge is always the last to deploy.
 concurrency:
   group: build-and-deploy
   cancel-in-progress: false
 
 jobs:
   build:
-    # Only in your copy: the template repo itself keeps its placeholders.
-    if: github.repository != 'skyhook-io/cnh-starter'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -48,24 +50,15 @@ jobs:
             ${{ steps.meta.outputs.image }}:latest
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
-      - name: Point the manifests at the new image
+      - name: Point the deployed branch at the new image
         env:
           IMAGE: ${{ steps.meta.outputs.image }}
           TAG: ${{ steps.meta.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Set the image on top of the latest main, not on the commit this run
-          # built. A push that landed during the build (yours, or the previous
-          # run's deploy commit) then can't conflict; retry if one lands mid-push.
-          for attempt in 1 2 3 4 5; do
-            git fetch -q origin main
-            git reset -q --hard FETCH_HEAD
-            yq -i '(.images[] | select(.name == "app")) |= (.newName = strenv(IMAGE) | .newTag = strenv(TAG))' deploy/kustomization.yaml
-            if git diff --quiet; then exit 0; fi
-            git commit -qam "deploy: ${TAG} [skip ci]"
-            if git push -q origin HEAD:main; then exit 0; fi
-            sleep $((attempt * 3))
-          done
-          echo "Couldn't push the deploy commit after 5 tries." >&2
-          exit 1
+          yq -i '(.images[] | select(.name == "app")) |= (.newName = strenv(IMAGE) | .newTag = strenv(TAG))' deploy/kustomization.yaml
+          git commit -qam "deploy: ${TAG} [skip ci]"
+          # `deployed` is always the built main commit plus this one commit, so it is
+          # replaced, not merged. Only this workflow writes to it.
+          git push -qf origin HEAD:refs/heads/deployed

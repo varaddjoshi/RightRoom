@@ -158,18 +158,18 @@ whole reviewed values configuration.
 
 ## Confirm that your push is actually live
 
-The image tag is the first seven characters of the app commit that triggered
-`build-and-deploy`, not the later bot commit that updates the manifests.
+The image tag is the first seven characters of the merged `main` commit that
+triggered `build-and-deploy`, not the bot's commit on branch `deployed` that
+updates the manifests (RightRoom: Argo CD tracks `deployed`, never `main`).
 
 1. Save the pushed commit SHA. Check that commit's GitHub Actions run, for example
    `gh run list --workflow build-and-deploy --commit <FULL-SHA>`, then
    `gh run watch <RUN-ID> --exit-status`. If the build failed, inspect its logs before
    debugging Kubernetes. Retry briefly if the run is not registered yet, within the
    five-minute deadline; a missing/cancelled/superseded run does not prove a build.
-   Markdown-only changes need no deploy. A kustomization-only push also skips the
-   Action: retain the existing image tag and verify the intended configuration
-   after sync instead of expecting a new app version. Other manifest changes build.
-2. Read the resulting `deploy/kustomization.yaml` from the remote repository and
+   Markdown-only changes need no deploy. Every other merge, manifest changes
+   included, builds a new image.
+2. Read the resulting `deploy/kustomization.yaml` from branch `deployed` and
    confirm `newName`/`newTag` identify that build. A successful build for another
    commit is not the evidence you need.
 3. Read the Argo Application with `get_resource`. Refresh/sync through `manage_gitops`
