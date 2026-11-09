@@ -103,6 +103,7 @@ Freeze this first so P2 and P3 can build in parallel. P3 can mock any endpoint b
 | `GET /api/me`, `PUT /api/me` | Signed in | A2 | Handle, interests, needs |
 | `GET /api/event`, `POST /api/event/register` | Attendee | A3 | Venue status and my queue entry with position and reason |
 | `GET /api/sessions` | Anyone | A4 | Sessions with room status and Wi-Fi median |
+| `GET /api/floors` | Anyone (staff and organiser get extra fields) | A4 map view, S2 floor map, S1 venue board, D1 | Rooms grouped by floor: id, title, capacity, taken, status, access note; staff and organiser also get staff on door and queue length |
 | `GET /api/spaces/:id` | Anyone | A5, D1 | Capacity, taken, status, zone fill, rule |
 | `POST /api/spaces/:id/queue` | Attendee or guest | A5 | My position and reason |
 | `GET /api/spaces/:id/redirect` | Attendee or guest | A5 | Suggestion, reasons, rejected options with reasons, something different, overflow |
