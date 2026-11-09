@@ -243,7 +243,8 @@
           <section class="rr-panel" aria-labelledby="h-heat"><h2 class="rr-eyebrow" id="h-heat">Around the room</h2><div id="heat" data-layer="crowd"></div></section>
           ${await commentsBlock()}
           <button class="rr-btn rr-btn--ghost" type="button" id="leave">I'm leaving</button>`;
-        body.querySelectorAll('[data-zone]').forEach((b) => b.addEventListener('click', () => act(() => RR.api(`/spaces/${enc(id)}/checkin`, { method: 'POST', body: withKey({ zone: b.dataset.zone }) }))));
+        // Close the picker first: render() skips redraws while it's open, so the new seat would never show.
+        body.querySelectorAll('[data-zone]').forEach((b) => b.addEventListener('click', () => { $('adjust').open = false; act(async () => { await RR.api(`/spaces/${enc(id)}/checkin`, { method: 'POST', body: withKey({ zone: b.dataset.zone }) }); RR.toast(`Seat moved to ${RR.zoneName(b.dataset.zone)}`); }); }));
         $('wy')?.addEventListener('click', () => { RR.remember('rr-wifi', 'yes'); runWifi(zone); render(); });
         $('wn')?.addEventListener('click', () => { RR.remember('rr-wifi', 'no'); render(); });
         $('leave').addEventListener('click', () => RR.undo(`Leaving ${RR.roomName(id)}. Your seat goes to the next person.`, () => act(async () => { await RR.api(`/spaces/${enc(id)}/leave`, { method: 'POST', body: {} }); left = true; })));
