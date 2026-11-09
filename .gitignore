@@ -1,2 +1,11 @@
 node_modules
 .env
+
+# Never commit these either: the repo and its image are public.
+*kubeconfig*
+.env.*
+!.env.example
+*.pem
+*.key
+npm-debug.log*
+.DS_Store

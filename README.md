@@ -22,6 +22,10 @@ npm start
 
 Fill in `.env` with your real Elasticsearch and Dash0 values. Never commit `.env`.
 
+`npm start` preloads `src/telemetry-env.js`, which loads `.env` and maps `DASH0_OTLP_ENDPOINT` / `DASH0_TOKEN` to the
+`OTEL_EXPORTER_OTLP_*` variables the OpenTelemetry auto-instrumentation reads. Without them, traces are switched off
+instead of failing. Real environment variables (for example on the host) override `.env`.
+
 ### Running with the mock API
 
 The app currently runs on an in-memory mock of the API in `docs/architecture.md`, so every screen works without Elasticsearch. State resets on restart.
@@ -35,3 +39,7 @@ The app currently runs on an in-memory mock of the API in `docs/architecture.md`
 - Scope for the hackathon demo: one event day, about 20 sessions, 6 rooms.
 - Past talks come from public talk lists; attendance numbers are seeded, and the demo says so.
 - AI coding assistants were used and disclosed, per the hackathon rules.
+
+## Deploy
+
+RightRoom runs on our hackathon cluster `pantheon` at https://pantheon.cnh.radarhq.io. Merging a PR to `main` builds the image and Argo CD deploys it. One-time steps, credentials and limits: [docs/deploy.md](docs/deploy.md).

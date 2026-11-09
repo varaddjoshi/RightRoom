@@ -4,7 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "start": "node --require @opentelemetry/auto-instrumentations-node/register server.js",
+    "start": "node --require ./src/telemetry-env.js --require @opentelemetry/auto-instrumentations-node/register server.js",
     "test": "node --test"
   },
   "keywords": [],
