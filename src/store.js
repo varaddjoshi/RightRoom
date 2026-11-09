@@ -4,19 +4,27 @@
 // what tests, CI and a fresh clone want.
 //
 // With ELASTICSEARCH_URL the engine still works on the same in-memory state (one process, one replica, so two
-// requests can never race for a seat), and that state is saved to Elasticsearch as one document in index
-// <ES_INDEX_PREFIX>engine_state, within about a second of any change, and loaded back on start. A deploy or restart
-// then keeps queues, offers, check-ins, accounts and sign-ins.
+// requests can never race for a seat), and that state is saved to Elasticsearch as one document, within about a
+// second of any change, and loaded back on start. A deploy or restart then keeps queues, offers, check-ins, accounts
+// and sign-ins.
+//
+// Which index: STATE_INDEX if set. The cluster's Deployment sets STATE_INDEX=rr_engine_state, the demo's state.
+// Anywhere else the default is a per-user index, <ES_INDEX_PREFIX>engine_state_local_<user>, because the whole team
+// shares one Elasticsearch cluster: a laptop with the team's .env must never restore and then overwrite the demo.
 //
 // shortcut: this does not write P1's per-entity indexes (rr_spaces, rr_queue, ...) yet; that waits on P1 and P2
 // agreeing which room ids the demo uses.
 const crypto = require('node:crypto');
+const os = require('node:os');
 const store = require('./mock/store'); // the engine reads store.db; store.reset() re-seeds ("Reset demo")
+const { seedInto } = require('./mock/insights-seed');
 
 const SAVE_EVERY_MS = 1000;
 const FORMAT = 1; // bump when the shape of store.db changes, so an old save is ignored instead of misread
 const EVENT_ID = process.env.EVENT_ID || 'cnh-2026';
-const INDEX = `${process.env.ES_INDEX_PREFIX || 'rr_'}engine_state`;
+const PREFIX = process.env.ES_INDEX_PREFIX || 'rr_';
+const localUser = () => { try { return os.userInfo().username; } catch { return 'unknown'; } };
+const INDEX = (process.env.STATE_INDEX || `${PREFIX}engine_state_local_${localUser()}`).toLowerCase().replace(/[^a-z0-9_.-]/g, '_');
 
 // store.db holds Maps (spaces, offers, users, check-ins per room), which JSON can't carry on its own.
 const toJSON = (db) => JSON.stringify(db, (k, v) => (v instanceof Map ? { $map: [...v] } : v));
@@ -70,6 +78,8 @@ async function restore({ attempts = 5, log = console } = {}) {
         if (doc.found && doc._source.format === FORMAT) {
           store.db = fromJSON(doc._source.state);
           store.sessionSecret = doc._source.session_secret || null;
+          // A state saved before the insights stand-ins existed would leave the Wi-Fi and topics panels empty.
+          if (!store.db.wifi?.length && !store.db.comments?.length) seedInto(store.db);
           log.log(`[store] Restored state saved at ${doc._source.saved_at} from ${INDEX}/${EVENT_ID}.`);
         } else if (doc.found) {
           log.log(`[store] Saved state has format ${doc._source.format}, this build uses ${FORMAT}: starting from the seed.`);

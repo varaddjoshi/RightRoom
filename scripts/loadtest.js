@@ -7,7 +7,9 @@
 // and that the offer is pushed to them. It uses its own room (/api/sim/loadtest-room), never the real ones, and
 // removes it afterwards.
 //
-//   node scripts/loadtest.js [--url http://localhost:3000] [--people 50] [--seats 5] [--pass-on]
+//   node scripts/loadtest.js [--url http://localhost:3000] [--people 50] [--seats 5] [--pass-on] [--live]
+//
+// Any URL other than localhost needs --live (or RR_LOADTEST_LIVE=1), so nobody floods the public demo by accident.
 //
 // Signs in as a staff user: RR_USER (default dana) and RR_PASSWORD (default DEMO_PASSWORD, then "rightroom-demo").
 // Exit code 0 when every check passes, 1 otherwise.
@@ -15,13 +17,14 @@
 const ROOM = 'loadtest';
 
 function parseArgs(argv) {
-  const o = { url: process.env.RR_URL || 'http://localhost:3000', people: 50, seats: 5, passOn: false };
+  const o = { url: process.env.RR_URL || 'http://localhost:3000', people: 50, seats: 5, passOn: false, live: process.env.RR_LOADTEST_LIVE === '1' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--url') o.url = argv[++i];
     else if (a === '--people') o.people = Number(argv[++i]);
     else if (a === '--seats') o.seats = Number(argv[++i]);
     else if (a === '--pass-on') o.passOn = true;
+    else if (a === '--live') o.live = true;
     else if (a === '-h' || a === '--help') o.help = true;
     else throw new Error(`Unknown argument ${a}`);
   }
@@ -99,8 +102,11 @@ function pct(xs, p) {
   return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))];
 }
 
-async function run({ url, people = 50, seats = 5, passOn = false, user = process.env.RR_USER || 'dana', password = process.env.RR_PASSWORD || process.env.DEMO_PASSWORD || 'rightroom-demo', log = console.log } = {}) {
+const isLocal = (u) => ['localhost', '127.0.0.1', '[::1]', '::1'].includes(new URL(u).hostname);
+
+async function run({ url, people = 50, seats = 5, passOn = false, live = false, user = process.env.RR_USER || 'dana', password = process.env.RR_PASSWORD || process.env.DEMO_PASSWORD || 'rightroom-demo', log = console.log } = {}) {
   const base = url.replace(/\/+$/, '');
+  if (!isLocal(base) && !live) throw new Error(`${base} is not local. Add --live (or RR_LOADTEST_LIVE=1) to load test it on purpose.`);
   const timings = [];
   const checks = [];
   const check = (ok, what) => { checks.push({ ok: !!ok, what }); log(`${ok ? 'PASS' : 'FAIL'}  ${what}`); };
@@ -177,7 +183,7 @@ async function run({ url, people = 50, seats = 5, passOn = false, user = process
 if (require.main === module) {
   let opts;
   try { opts = parseArgs(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exit(2); }
-  if (opts.help) { console.log('node scripts/loadtest.js [--url URL] [--people 50] [--seats 5] [--pass-on]'); process.exit(0); }
+  if (opts.help) { console.log('node scripts/loadtest.js [--url URL] [--people 50] [--seats 5] [--pass-on] [--live]'); process.exit(0); }
   run(opts).then((r) => process.exit(r.ok ? 0 : 1), (e) => { console.error(`Load test could not run: ${e.message}`); process.exit(1); });
 }
 

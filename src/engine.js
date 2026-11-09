@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 const { ZONES } = require('./mock/seed');
 
 const OFFER_MS = 60_000;          // seat offer hold
-const SCAN_MS = 10 * 60_000;      // claimed seat must be scanned in within this
+const SCAN_MS = 5 * 60_000;       // claimed seat must be scanned in within this (journey-map decision 31)
 const SCAN_ACCESS_MS = 15 * 60_000; // longer for people with a stated access need
 const CONFIRM_MS = 30_000;        // staff answer window before Full goes out
 const ADMIT_MS = 30 * 60_000;     // venue admission expiry

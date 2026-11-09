@@ -43,6 +43,9 @@ spec:
               value: "8080"
             - name: TEAM_NAME
               value: "pantheon"
+            # The demo's saved state (src/store.js). Only the cluster uses this index; laptops get their own.
+            - name: STATE_INDEX
+              value: "rr_engine_state"
           resources:
             requests:
               cpu: 100m
