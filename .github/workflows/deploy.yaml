@@ -1,0 +1,64 @@
+# On every merge to main: build the image, push it to GHCR, and write main plus
+# the new image tag to branch `deployed`, which Argo CD deploys. main itself only
+# changes through PRs: this workflow never pushes to it. Re-running an older green
+# run rebuilds that commit and moves `deployed` back to it (a rollback).
+name: build-and-deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+# One run at a time. A newer merge replaces a run that is still waiting, so the
+# last merge is always the last to deploy.
+concurrency:
+  group: build-and-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Image name and tag
+        id: meta
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: APP_VERSION=${{ steps.meta.outputs.tag }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Point the deployed branch at the new image
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          yq -i '(.images[] | select(.name == "app")) |= (.newName = strenv(IMAGE) | .newTag = strenv(TAG))' deploy/kustomization.yaml
+          git commit -qam "deploy: ${TAG} [skip ci]"
+          # `deployed` is always the built main commit plus this one commit, so it is
+          # replaced, not merged. Only this workflow writes to it.
+          git push -qf origin HEAD:refs/heads/deployed

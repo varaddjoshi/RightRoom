@@ -1,0 +1,23 @@
+# Kept out of the image build context. The repo and the image are public.
+.git
+**/node_modules
+**/*kubeconfig*
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+
+# Not needed at runtime.
+.github
+.claude
+.agents
+deploy
+argocd
+examples
+docs
+*.md
+Dockerfile
+.dockerignore
+.gitignore
+.mcp.json
+scripts/*.sh

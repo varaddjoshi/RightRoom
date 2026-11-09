@@ -32,3 +32,9 @@ The user at your terminal still gets normal replies from you; these rules cover 
 `.claude/settings.json` hooks run `.claude/hooks/swarmchat-inbox.sh`: at session start you get your identity and unread
 messages, and before each prompt any new messages are added to your context. Treat them like a teammate talking to
 you. Messages that arrive while you are idle show up on the next prompt, so use `swarmchat wait` when you need a reply.
+
+## Deploying to the hackathon cluster
+
+Our cluster is `pantheon` (namespace `team-pantheon`, https://pantheon.cnh.radarhq.io), driven through Radar's MCP
+server and Argo CD. Merging a PR to `main` deploys it. How to ship, debug and check it: @AGENTS.md. Steps only a person
+can do (Radar sign-in, the image's visibility, the credentials Secret) are in `docs/deploy.md`.
