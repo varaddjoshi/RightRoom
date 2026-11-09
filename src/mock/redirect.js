@@ -7,7 +7,7 @@ function redirect({ db, engine, from, user, now }) {
   const holder = user?.handle || null;
   user = user || { interests: [], needs: [] };
   const interests = new Set(user.interests || []);
-  const stepFree = (user.needs || []).includes('step-free');
+  const stepFree = (user.needs || []).some((n) => n === 'step-free' || n === 'wheelchair'); // profile ids, as in src/redirect.js needFlags
   const captions = (user.needs || []).includes('captions');
   const options = [];
   const rejected = [];

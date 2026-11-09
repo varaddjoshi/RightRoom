@@ -87,3 +87,17 @@ test('"I\'m leaving" lowers the count and offers the seat to the queue', () => {
   assert.equal(engine.view(engine.space('204')).taken, 50);
   assert.ok([...db.offers.values()].some((x) => x.handle === 'ann' && x.status === 'offered' && x.id !== o2.id));
 });
+
+test('redirect reads profile need ids: step-free and wheelchair avoid stairs-only rooms, captions is preferred', () => {
+  const { needFlags } = require('../src/redirect');
+  assert.deepEqual(needFlags(['step-free']), { stepFree: true, accessSeat: false, captions: false });
+  assert.deepEqual(needFlags(['wheelchair', 'captions']), { stepFree: true, accessSeat: true, captions: true });
+  assert.deepEqual(needFlags(['step_free']), { stepFree: false, accessSeat: false, captions: false }); // old ids no longer match
+  for (const need of ['step-free', 'wheelchair']) {
+    const { engine } = setup();
+    engine.space('305').correction = -10; // stairs-only 305 now has seats
+    const r = engine.redirect('204', { handle: `w-${need}`, needs: [need], interests: ['security'] });
+    assert.notEqual(r.suggestion.room, '305', need);
+    assert.ok(r.rejected.some((x) => x.room === '305' && x.reason === 'Stairs only'), need);
+  }
+});
