@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Venue board · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<style>
+  .seg button { min-width: 64px; padding: 0 var(--rr-s3); }
+  /* Laptop-first: board on the left, setup and insights on the right; one column under 720px. */
+  .wrap { max-width: 1440px; margin: 0 auto; padding-block: var(--rr-s5); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: var(--rr-s5); }
+  .cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: var(--rr-s5); align-items: start; }
+  .side { display: grid; gap: var(--rr-s4); }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+  .fld select { width: 100%; min-height: 52px; padding: 0 var(--rr-s3); background: var(--rr-panel-2); color: var(--rr-ink); border: 2px solid var(--rr-line); border-radius: var(--rr-r2); font: 400 var(--rr-t-md)/1 var(--rr-font-body); }
+  .zchk { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--rr-s1); }
+  .zchk label { display: flex; align-items: center; gap: var(--rr-s1); min-height: 44px; font-size: var(--rr-t-sm); }
+  .zchk input { width: 20px; height: 20px; accent-color: var(--rr-signal); }
+  .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: var(--rr-s3); }
+  .fc { display: grid; gap: var(--rr-s1); border-top: 1px solid var(--rr-line); padding-top: var(--rr-s2); }
+  .fc summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: var(--rr-s2); cursor: pointer; }
+  .fc ul { margin: 0; padding-left: var(--rr-s5); color: var(--rr-muted); font-size: var(--rr-t-sm); }
+  .risk { padding: 2px var(--rr-s2); border-radius: var(--rr-r1); font: 800 var(--rr-t-xs)/1.4 var(--rr-font-sign); letter-spacing: 0.08em; text-transform: uppercase; color: var(--rr-on-status); }
+  .risk[data-r="high"] { background: var(--rr-full); } .risk[data-r="medium"] { background: var(--rr-filling); } .risk[data-r="low"] { background: var(--rr-free); }
+  .ok { color: var(--rr-free); margin: 0; } .err { color: var(--rr-full); margin: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="rr-sign">
+    <div class="head">
+      <div><span class="rr-eyebrow" id="who">Organiser</span><h1>Venue board</h1></div>
+      <div class="line" id="venue"></div>
+    </div>
+  </header>
+
+  <div class="cols">
+    <section class="rr-panel" aria-labelledby="h-board">
+      <div class="line" style="justify-content:space-between"><h2 class="rr-eyebrow" id="h-board">All rooms · tap a room to edit it</h2>
+        <div class="seg" role="group" aria-label="View"><button type="button" aria-pressed="true" data-mode="map">Map</button><button type="button" aria-pressed="false" data-mode="list">List</button></div></div>
+      <p class="board-sum" id="sum"></p>
+      <div class="board" id="board"></div>
+    </section>
+
+    <div class="side">
+      <form class="rr-panel" id="edit" aria-labelledby="h-edit">
+        <h2 class="rr-eyebrow" id="h-edit">Room setup</h2>
+        <div class="fld"><label for="room">Room</label><select id="room"></select></div>
+        <div class="fld"><label for="cap">Capacity (fire limit)</label><input id="cap" type="number" min="1" max="5000" inputmode="numeric" required></div>
+        <div class="fld"><label for="rule">Published rule</label><textarea id="rule" rows="2" maxlength="200" required></textarea></div>
+        <fieldset class="fld" style="border:0;padding:0;margin:0"><legend class="rr-eyebrow">Accessible seats</legend><div class="zchk" id="zones"></div></fieldset>
+        <p class="ok" id="edit-ok" role="status" hidden>Saved and published.</p>
+        <p class="err" id="edit-err" role="alert" hidden></p>
+        <button class="rr-btn" type="submit">Save and publish rule</button>
+        <a class="rr-btn rr-btn--ghost" id="door" href="#">Open this room's door console</a>
+      </form>
+
+      <form class="rr-panel" id="ann" aria-labelledby="h-ann">
+        <h2 class="rr-eyebrow" id="h-ann">New announcement</h2>
+        <div class="fld"><label for="ann-text">Message</label><textarea id="ann-text" rows="3" maxlength="280" required></textarea></div>
+        <div class="fld"><label for="ann-floor">Floor</label><select id="ann-floor"><option value="">All floors</option><option>1</option><option>2</option><option>3</option></select></div>
+        <div class="chips" role="group" aria-label="Urgency"><button type="button" aria-pressed="false" data-u="urgent">Urgent</button><button type="button" aria-pressed="true" data-u="info">Info</button></div>
+        <p class="ok" id="ann-ok" role="status" hidden>Posted.</p>
+        <p class="err" id="ann-err" role="alert" hidden></p>
+        <button class="rr-btn" type="submit">Post announcement</button>
+      </form>
+
+      <section class="rr-panel" aria-labelledby="h-fc">
+        <h2 class="rr-eyebrow" id="h-fc">Fill forecast <span class="rr-label">STAND-IN</span></h2>
+        <p class="note" id="bt"></p>
+        <div id="fc"><p class="note">Loading.</p></div>
+      </section>
+
+      <section class="rr-panel" aria-labelledby="h-met">
+        <h2 class="rr-eyebrow" id="h-met">How it's working <span class="rr-label">STAND-IN</span></h2>
+        <div id="met"><p class="note">Loading.</p></div>
+      </section>
+
+      <section class="rr-panel" aria-labelledby="h-int">
+        <h2 class="rr-eyebrow" id="h-int">What people want next time</h2>
+        <div id="int"><p class="note">Loading.</p></div>
+      </section>
+    </div>
+  </div>
+</div>
+<script src="/app.js"></script>
+<script>
+(async () => {
+  const $ = (id) => document.getElementById(id);
+  const me = await RR.requireLogin('organiser');
+  $('who').textContent = `Organiser · ${me.handle}`;
+  const ZONES = ['front-left', 'front-centre', 'front-right', 'middle-left', 'middle-centre', 'middle-right', 'back-left', 'back-centre', 'back-right'];
+  $('zones').innerHTML = ZONES.map((z) => `<label><input type="checkbox" value="${z}">${RR.zoneName(z)}</label>`).join('');
+  let mode = 'map', rooms = [], urgency = 'info';
+  const pct = (x) => (x == null ? 'n/a' : `${Math.round(x * 100)}%`);
+  // Insights endpoints may not be mounted yet; say so quietly instead of breaking the page.
+  const soft = async (path, el, render) => {
+    try { render(await RR.api(path)); } catch (e) { el.innerHTML = `<p class="note">${e.status === 404 ? 'Not available yet.' : RR.esc(e.message)}</p>`; }
+  };
+
+  function pick(id) {
+    const r = rooms.find((x) => x.id === id) || rooms[0];
+    if (!r) return;
+    $('room').value = r.id;
+    $('cap').value = r.capacity;
+    $('rule').value = r.rule || '';
+    $('zones').querySelectorAll('input').forEach((i) => { i.checked = (r.accessZones || []).includes(i.value); });
+    $('door').href = `/staff/room/${encodeURIComponent(r.id)}`;
+  }
+
+  async function refreshBoard() {
+    const [floors, ev, sessions] = await Promise.all([RR.api('/floors'), RR.api('/event'), RR.api('/sessions')]);
+    rooms = sessions;
+    const sel = $('room').value;
+    $('room').innerHTML = sessions.map((r) => `<option value="${RR.esc(r.id)}">Room ${RR.esc(r.id)} · ${RR.esc(r.title)}</option>`).join('');
+    if (sel) $('room').value = sel;
+    const v = ev.venue;
+    $('venue').innerHTML = `${RR.status(v.status)} <span>Venue ${v.taken} of ${v.capacity} in</span> ${RR.label('live')}`;
+    const all = floors.flatMap((f) => f.rooms);
+    const needs = all.filter((r) => r.queue > 0 && !r.staffOn).length;
+    $('sum').textContent = `${all.length} rooms · ${all.reduce((s, r) => s + r.free, 0)} seats free · ${all.filter((r) => r.staffOn).length} staffed · ${needs} need staff`;
+    RR.floorBoard($('board'), floors, { role: 'organiser', mode, onPick: pick });
+  }
+
+  $('room').addEventListener('change', () => pick($('room').value));
+  $('edit').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('edit-ok').hidden = $('edit-err').hidden = true;
+    try {
+      await RR.api(`/staff/spaces/${encodeURIComponent($('room').value)}`, { method: 'PUT', body: { capacity: Number($('cap').value), rule: $('rule').value, accessZones: [...$('zones').querySelectorAll('input:checked')].map((i) => i.value) } });
+      $('edit-ok').hidden = false;
+      await refreshBoard();
+    } catch (err) { RR.showError($('edit-err'), err); }
+  });
+  document.querySelectorAll('#ann .chips button').forEach((b) => b.addEventListener('click', () => {
+    urgency = b.dataset.u;
+    document.querySelectorAll('#ann .chips button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+  }));
+  $('ann').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('ann-ok').hidden = $('ann-err').hidden = true;
+    try {
+      await RR.api('/announcements', { method: 'POST', body: { text: $('ann-text').value, floor: $('ann-floor').value || null, urgency } });
+      $('ann-text').value = '';
+      $('ann-ok').hidden = false;
+    } catch (err) { RR.showError($('ann-err'), err); }
+  });
+  document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    refreshBoard();
+  }));
+
+  await refreshBoard();
+  pick(rooms[0]?.id);
+
+  RR.api('/forecast/backtest').then((b) => { $('bt').textContent = `Checked against ${b.talks} past talks: right ${pct(b.accuracy)} of the time, fill off by ${pct(b.meanAbsError)} on average.`; }).catch(() => {});
+  soft('/forecast', $('fc'), (f) => {
+    $('fc').innerHTML = f.sessions.map((s) => `<details class="fc"><summary><span>Room ${RR.esc(s.room)} · ${RR.esc(s.title)}</span><span class="risk" data-r="${RR.esc(s.risk)}">${RR.esc(s.risk)} risk</span></summary>
+      <p class="m0 small">Expected ${pct(s.expectedFill)} full · ${pct(s.probabilityFull)} chance it fills${s.likelyFullMinute != null ? ` · likely full ${Math.round(s.likelyFullMinute)} min in` : ''}</p>
+      <ul>${s.because.map((b) => `<li>${RR.esc(b.title)}: ${b.attendance} of ${b.capacity}${b.fullMinute != null ? `, full at ${Math.round(b.fullMinute)} min` : ', never full'}</li>`).join('')}</ul></details>`).join('');
+  });
+  soft('/metrics', $('met'), (m) => {
+    $('met').innerHTML = `<div class="q"><span>People who went where we sent them</span><span>${m.followed} of ${m.redirects} · ${pct(m.redirectSuccessRate)}</span></div>
+      <div class="q"><span>Full prompts staff overrode</span><span>${m.overridden} of ${m.fullPrompts} · ${pct(m.overrideRate)}</span></div>`;
+  });
+  // Live interests from accounts; fall back to the stand-in insights if none reach a group of 5.
+  try {
+    const live = await RR.api('/staff/interests');
+    let groups = live.map((g) => ({ label: g.tag, count: g.n })), kind = 'live', hidden = null;
+    if (!groups.length) {
+      try { const s = await RR.api('/insights/interests'); groups = s.groups; hidden = s.hiddenGroups; kind = 'stand-in'; } catch { /* not mounted yet */ }
+    }
+    const max = Math.max(1, ...groups.map((g) => g.count));
+    $('int').innerHTML = groups.length
+      ? groups.map((g) => `<div class="bar"><span>${RR.esc(g.label)}</span><i style="--w:${Math.round((g.count / max) * 100)}%"></i><b>${g.count}</b></div>`).join('') + `<p class="m0 note">${RR.label(kind)} Groups under 5 are hidden${hidden ? ` (${hidden} hidden)` : ''}.</p>`
+      : '<p class="note">No group has 5 or more people yet.</p>';
+  } catch (e) { RR.showError($('int'), e); }
+
+  RR.live('*', { status: () => refreshBoard().catch(() => {}) });
+})();
+</script>
+</body>
+</html>

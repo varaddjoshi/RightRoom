@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Schedule · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<style>
+  .nav { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
+  .nav a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--rr-s3); color: var(--rr-ink); text-decoration: none; border: 2px solid var(--rr-line); border-radius: var(--rr-r1); font: 700 var(--rr-t-sm)/1 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.06em; }
+  .nav a[aria-current] { border-color: var(--rr-signal); color: var(--rr-signal); }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: var(--rr-s2); }
+  .seg button { min-height: 48px; border: 2px solid var(--rr-line); border-radius: var(--rr-r2); background: var(--rr-panel-2); color: var(--rr-ink); font: 700 var(--rr-t-md)/1 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--rr-signal); border-color: var(--rr-signal); color: var(--rr-on-signal); }
+  a.talk { color: inherit; text-decoration: none; min-height: 64px; }
+  a.talk:hover { outline: 2px solid var(--rr-line); }
+  .talk .fc { color: var(--rr-filling); }
+</style>
+</head>
+<body>
+<main class="rr-screen" id="main">
+  <nav class="nav" aria-label="Pages"><a href="/event">Event</a><a href="/sessions" aria-current="page">Schedule</a><a href="/news">News</a><a href="/me">Me</a></nav>
+  <div class="rr-sign"><span class="rr-eyebrow" id="now">Now</span><h1>Schedule</h1></div>
+  <div class="seg" role="group" aria-label="View"><button type="button" data-mode="list" aria-pressed="true">List</button><button type="button" data-mode="map" aria-pressed="false">Map</button></div>
+  <div id="view" aria-live="polite"></div>
+  <p class="note" id="legend"></p>
+  <p class="rr-panel m0" id="err" role="alert" hidden></p>
+</main>
+<script src="/app.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  $('legend').innerHTML = `${RR.label('live')} room status · ${RR.label('crowd-sourced')} Wi-Fi · ${RR.label('stand-in')} forecast`;
+  $('now').textContent = `Now · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  let mode = 'list', here = null, forecast = null, topics = {};
+
+  const riskWord = { high: 'Likely to fill', medium: 'May fill', low: 'Unlikely to fill' };
+  function fcLine(id) {
+    if (forecast === false) return '<span>Forecast: not available yet</span>';
+    const f = forecast?.find((x) => x.room === id);
+    if (!f) return '';
+    const by = f.likelyFullMinute != null && f.risk !== 'low' ? `, around ${Math.round(f.likelyFullMinute)} min in` : '';
+    return `<span class="fc">${riskWord[f.risk] || f.risk}${by} · ${Math.round(f.expectedFill * 100)}% expected</span>`;
+  }
+
+  async function render() {
+    try {
+      if (mode === 'map') {
+        const floors = await RR.api(`/floors${here ? `?from=${encodeURIComponent(here)}` : ''}`);
+        RR.floorBoard($('view'), floors, { role: 'attendee', here, mode: 'map', onPick: (id) => { location.href = `/r/${encodeURIComponent(id)}`; } });
+        return;
+      }
+      const rooms = await RR.api('/sessions');
+      rooms.sort((a, b) => b.floor - a.floor || a.id.localeCompare(b.id));
+      $('view').innerHTML = `<div class="rr-btn-stack">${rooms.map((r) => `
+        <a class="talk" href="/r/${encodeURIComponent(r.id)}">
+          <div><b>${RR.esc(r.title)}</b>
+            <span>Room ${RR.esc(r.id)} · Floor ${Number(r.floor)}${r.id === here ? ' · you are here' : ''} · ${r.stepFree ? '&#9855; ' : ''}${RR.esc(r.access)}</span>
+            <span>${Number(r.taken)} of ${Number(r.capacity)} in${r.wifi != null ? ` · Wi-Fi ${Number(r.wifi)} Mbps` : ''}${topics[r.id]?.length ? ` · topics: ${topics[r.id].map(RR.esc).join(', ')}` : ''}</span>
+            ${fcLine(r.id)}
+          </div>${RR.status(r.status)}</a>`).join('')}</div>`;
+    } catch (x) { RR.showError($('err'), x); }
+  }
+
+  document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    render();
+  }));
+
+  (async () => {
+    const me = await RR.api('/me').catch(() => null);
+    const rooms = await RR.api('/sessions').catch(() => []);
+    // Where the person is checked in, for "you are here" and walking times; topics come from each room's comments.
+    await Promise.all(rooms.map(async (r) => {
+      if (me) { const s = await RR.api(`/spaces/${encodeURIComponent(r.id)}`).catch(() => null); if (s?.me?.checkedIn) here = r.id; }
+      topics[r.id] = (await RR.api(`/spaces/${encodeURIComponent(r.id)}/comments`).catch(() => ({ topics: [] }))).topics.slice(0, 3);
+    }));
+    forecast = await RR.api('/forecast').then((f) => f.sessions).catch(() => false);
+    await render();
+    let t;
+    RR.live('*', { status: () => { clearTimeout(t); t = setTimeout(render, 300); } });
+  })();
+</script>
+</body>
+</html>
