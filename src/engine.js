@@ -13,7 +13,9 @@ const ADMIT_MS = 30 * 60_000;     // venue admission expiry
 // src/policy.js (P1, coming) plugs in, with its separate time for a stated access need and the walking-time add-on.
 const NO_POLICY = { claimWindowMs: () => null };
 
-function createEngine({ store, redirect, publish = () => {}, now = Date.now, policy = NO_POLICY }) {
+// `now` defaults to src/clock.js (P1), so offers, claims and the sweeper run on the same demo clock as redirect,
+// floors and search (DEMO_CLOCK).
+function createEngine({ store, redirect, publish = () => {}, now = require('./clock').nowMs, policy = NO_POLICY }) {
   const db = () => store.db;
   const space = (id) => db().spaces.get(String(id));
   const inside = (sp) => db().checkins.get(sp.id) || new Map();
@@ -36,6 +38,7 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now, pol
     const t = taken(sp);
     const base = { id: sp.id, type: sp.type, floor: sp.floor, title: sp.title, capacity: sp.capacity, taken: t, free: Math.max(0, sp.capacity - t), status: status(sp), rule: sp.rule };
     if (sp.type === 'venue') return { ...base, scannedIn: admitted().filter((q) => q.scannedIn).length };
+    Object.assign(base, { name: sp.name || null, building: sp.building || null, session: sp.session || null });
     // Seats held for people already sent here by a redirect (SLO 2); `free` stays the one number everyone shows.
     base.heldForRedirects = (sp.redirectHolds || []).filter((h) => h.until > now()).length;
     const zoneFill = Object.fromEntries(ZONES.map((z) => [z, 0]));
@@ -349,7 +352,7 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now, pol
       floor: f,
       rooms: rooms.filter((r) => r.floor === f).map((r) => {
         const v = view(r);
-        const out = { id: v.id, title: v.title, capacity: v.capacity, taken: v.taken, free: v.free, status: v.status, stepFree: v.stepFree, access: v.access, wifi: wifiMedian(r.id), walk: from ? walk(from, r) : undefined };
+        const out = { id: v.id, title: v.title, name: v.name, building: v.building, session: v.session, capacity: v.capacity, taken: v.taken, free: v.free, status: v.status, stepFree: v.stepFree, access: v.access, wifi: wifiMedian(r.id), walk: from ? walk(from, r) : undefined };
         if (staff) Object.assign(out, { staffOn: r.staffOn, queue: waiting(r).length });
         return out;
       }),
@@ -358,6 +361,9 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now, pol
 
   function walk(a, b) {
     if (!a || !b || a.id === b.id) return 0;
+    // The organiser's (or P1 seed's) walking time when the venue has one, else an estimate from floors and position.
+    const set = Array.isArray(a.walks) && a.walks.find((w) => w.to === b.id);
+    if (set) return set.minutes;
     return 1 + Math.abs(a.floor - b.floor) * 2 + Math.abs((a.pos || 0) - (b.pos || 0));
   }
 

@@ -42,7 +42,8 @@ function api({ store, engine }) {
   r.post('/guest', h((req, res) => { const u = req.user || auth.guest(db()); auth.setSession(res, u); return auth.publicUser(u); }));
 
   // Profile (A2)
-  r.get('/me', h((req) => ({ ...auth.publicUser(signedIn(req)), venue: engine.myVenue(req.user.handle) })));
+  // `hosting`: ids of the talks this person hosts (organisers assign hosts; src/catalog.js).
+  r.get('/me', h((req) => ({ ...auth.publicUser(signedIn(req)), venue: engine.myVenue(req.user.handle), hosting: require('../catalog').hosting(db(), req.user.handle) })));
   r.put('/me', h((req) => {
     const u = signedIn(req);
     // Free tags typed on /me arrive normalised by the page; normalise again here so "Platform Eng" still works.

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Venue setup · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<style>
+  /* Organiser view (P2, src/routes/venue.js). Built only from rr.css tokens and components. */
+  .bld { display: grid; gap: var(--rr-s3); }
+  .flr { display: grid; gap: var(--rr-s2); }
+  .flr h3 { margin: 0; font: 700 var(--rr-t-sm)/1.3 var(--rr-font-sign); color: var(--rr-muted); }
+  .rooms { display: grid; gap: var(--rr-s2); grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .room { text-align: left; display: grid; gap: 2px; padding: var(--rr-s3); border: 1px solid var(--rr-hair); border-radius: 10px; background: var(--rr-panel); color: var(--rr-ink); font: inherit; cursor: pointer; min-height: 44px; }
+  .room[aria-current="true"] { border-color: var(--rr-ink); box-shadow: 0 0 0 2px var(--rr-ink) inset; }
+  .room b { font: 700 var(--rr-t-md)/1.2 var(--rr-font-sign); }
+  .room span { color: var(--rr-muted); font-size: var(--rr-t-sm); }
+  .grid2 { display: grid; gap: var(--rr-s3); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .chk { display: flex; gap: var(--rr-s2); align-items: center; min-height: 44px; font-weight: 600; }
+  .chk input { width: 22px; height: 22px; accent-color: var(--rr-signal); }
+  .v-talk { display: grid; gap: var(--rr-s2); padding: var(--rr-s3) 0; border-top: 1px solid var(--rr-hair); }
+  .v-talk:first-child { border-top: 0; }
+  .v-talk .when { color: var(--rr-muted); font-size: var(--rr-t-sm); }
+  .row { display: flex; gap: var(--rr-s2); flex-wrap: wrap; align-items: end; }
+  .row .fld { flex: 1 1 200px; }
+  .row .rr-btn { width: auto; }
+</style>
+</head>
+<body>
+<main class="rr-screen rr-screen--wide" id="main">
+  <div class="rr-sign rr-span"><span class="rr-eyebrow" id="who">Organiser</span><h1>Venue setup</h1>
+    <p class="note">Rooms, layout and capacity for the whole event, and who hosts each talk. Changes go live at once and are saved to Elasticsearch. <a href="/host">Host view</a></p>
+  </div>
+
+  <section class="rr-panel" aria-labelledby="h-venue">
+    <h2 class="rr-eyebrow" id="h-venue">Venue</h2>
+    <form id="venue-form" class="rr-btn-stack">
+      <div class="fld"><label for="v-name">Venue name</label><input id="v-name" maxlength="80" required></div>
+      <div class="fld"><label for="v-cap">Capacity (people in the building)</label><input id="v-cap" type="number" min="1" max="100000" inputmode="numeric" required></div>
+      <div class="fld"><label for="v-rule">Published entry rule</label><textarea id="v-rule" rows="2" maxlength="200" required></textarea></div>
+      <button class="rr-btn" type="submit">Save venue</button>
+    </form>
+  </section>
+
+  <section class="rr-panel rr-span" aria-labelledby="h-layout">
+    <div class="row" style="justify-content:space-between"><h2 class="rr-eyebrow" id="h-layout">Layout · <span id="count"></span></h2>
+      <button class="rr-btn rr-btn--ghost" type="button" id="new-room">Add a room</button></div>
+    <div id="layout" class="rr-btn-stack" aria-live="polite"><p class="note">Loading…</p></div>
+  </section>
+
+  <section class="rr-panel" aria-labelledby="h-room" id="room-panel">
+    <h2 class="rr-eyebrow" id="h-room">Room</h2>
+    <form id="room-form" class="rr-btn-stack">
+      <div class="fld"><label for="r-name">Room name</label><input id="r-name" maxlength="80" required></div>
+      <div class="grid2">
+        <div class="fld"><label for="r-building">Building</label><input id="r-building" maxlength="60" list="buildings"></div>
+        <div class="fld"><label for="r-floor">Floor</label><input id="r-floor" type="number" min="-5" max="200" inputmode="numeric" required></div>
+        <div class="fld"><label for="r-cap">Capacity (fire limit)</label><input id="r-cap" type="number" min="1" max="5000" inputmode="numeric" required></div>
+        <div class="fld"><label for="r-access">Accessibility seats</label><input id="r-access" type="number" min="0" max="5000" inputmode="numeric" value="0"></div>
+      </div>
+      <datalist id="buildings"></datalist>
+      <label class="chk"><input type="checkbox" id="r-stepfree"> Step-free route</label>
+      <label class="chk"><input type="checkbox" id="r-captions"> Live captions</label>
+      <div class="fld"><label for="r-rule">Published seat rule</label><textarea id="r-rule" rows="2" maxlength="200">Seats go first come, first served at the door. Accessibility seats only go to people who stated that need.</textarea></div>
+      <div class="fld"><label for="r-overflow">Overflow room when full</label><select id="r-overflow"></select></div>
+      <button class="rr-btn" type="submit" id="room-save">Save room</button>
+      <button class="rr-btn rr-btn--ghost" type="button" id="room-delete">Remove this room</button>
+    </form>
+  </section>
+
+  <section class="rr-panel" aria-labelledby="h-talks">
+    <h2 class="rr-eyebrow" id="h-talks">Talks in <span id="talks-room">this room</span></h2>
+    <div id="talks" aria-live="polite"><p class="note">Pick a room.</p></div>
+    <form id="talk-form" class="rr-btn-stack" style="margin-top:var(--rr-s4)">
+      <h3 class="rr-eyebrow m0">Add a talk</h3>
+      <div class="fld"><label for="t-title">Title</label><input id="t-title" maxlength="200" placeholder="Talk to be announced"></div>
+      <div class="grid2">
+        <div class="fld"><label for="t-start">Starts</label><input id="t-start" type="datetime-local" required></div>
+        <div class="fld"><label for="t-end">Ends</label><input id="t-end" type="datetime-local" required></div>
+      </div>
+      <div class="fld"><label for="t-hosts">Hosts (usernames, comma-separated)</label><input id="t-hosts" placeholder="host" autocapitalize="off" spellcheck="false"></div>
+      <button class="rr-btn" type="submit">Add talk</button>
+    </form>
+  </section>
+
+  <p class="rr-panel rr-span m0" id="msg" role="status" hidden></p>
+  <p class="rr-panel rr-span m0" id="err" role="alert" hidden></p>
+</main>
+<script src="/app.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const hm = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const err = $('err'), msg = $('msg');
+  let data = null, current = null; // current room id, or null for a new room
+  const rooms = () => (data?.layout || []).flatMap((b) => b.floors).flatMap((f) => f.rooms);
+  const say = (text) => { err.hidden = true; msg.textContent = text; msg.hidden = false; };
+  const fail = (x) => { msg.hidden = true; RR.showError(err, x); };
+  const hostsOf = (v) => v.split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
+  const local = (iso) => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  const when = (t) => `${new Date(t.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${hm(t.start)}–${hm(t.end)}`;
+
+  function renderLayout() {
+    $('count').textContent = `${data.rooms} rooms, ${data.talks} talks`;
+    $('layout').innerHTML = data.layout.map((b) => `<div class="bld"><h3 class="rr-eyebrow m0">${RR.esc(b.building || 'No building')}</h3>${b.floors.map((f) => `
+      <div class="flr"><h3>Floor ${RR.esc(f.floor)}</h3><div class="rooms">${f.rooms.map((r) => `
+        <button type="button" class="room" data-id="${RR.esc(r.id)}" aria-current="${r.id === current}">
+          <b>${RR.esc(r.name)}</b><span>${r.capacity} seats · ${r.access_seats} accessible</span>
+          <span>${r.step_free ? '&#9855; Step-free' : 'Stairs only'}${r.captions ? ' · captions' : ''}</span></button>`).join('')}</div></div>`).join('')}</div>`).join('') || '<p class="note">No rooms yet. Add the first one.</p>';
+    $('layout').querySelectorAll('.room').forEach((b) => b.addEventListener('click', () => pick(b.dataset.id)));
+    $('buildings').innerHTML = data.layout.map((b) => b.building).filter(Boolean).map((b) => `<option value="${RR.esc(b)}">`).join('');
+  }
+
+  function pick(id) {
+    current = id;
+    const r = rooms().find((x) => x.id === id);
+    $('h-room').textContent = r ? `Room · ${r.name}` : 'New room';
+    $('r-name').value = r?.name || ''; $('r-building').value = r?.building || ''; $('r-floor').value = r?.floor ?? 1;
+    $('r-cap').value = r?.capacity || ''; $('r-access').value = r?.access_seats ?? 0;
+    $('r-stepfree').checked = r ? r.step_free : true; $('r-captions').checked = !!r?.captions;
+    if (r) $('r-rule').value = r.rule;
+    $('r-overflow').innerHTML = '<option value="">None</option>' + rooms().filter((x) => x.id !== id).map((x) => `<option value="${RR.esc(x.id)}"${r?.overflow_space_id === x.id ? ' selected' : ''}>${RR.esc(x.name)}${x.building ? ` (${RR.esc(x.building)})` : ''}</option>`).join('');
+    $('room-delete').hidden = !r;
+    $('talks-room').textContent = r ? r.name : 'this room';
+    $('talk-form').hidden = !r;
+    $('layout').querySelectorAll('.room').forEach((b) => b.setAttribute('aria-current', b.dataset.id === id));
+    if (r) loadTalks(); else $('talks').innerHTML = '<p class="note">Save the room first, then add its talks.</p>';
+  }
+
+  async function loadTalks() {
+    const { talks } = await RR.api(`/staff/sessions?room=${encodeURIComponent(current)}`);
+    $('talks').innerHTML = talks.length ? talks.map((t) => `
+      <div class="v-talk" data-id="${RR.esc(t.id)}">
+        <div><b>${RR.esc(t.title)}</b><div class="when">${when(t)}${t.speakers.length ? ` · ${RR.esc(t.speakers.join(', '))}` : ''}</div></div>
+        <div class="row"><div class="fld"><label for="h-${RR.esc(t.id)}">Hosts</label><input id="h-${RR.esc(t.id)}" value="${RR.esc(t.hosts.join(', '))}" placeholder="usernames" autocapitalize="off" spellcheck="false"></div>
+          <button class="rr-btn rr-btn--ghost" type="button" data-act="hosts">Save hosts</button>
+          <button class="rr-btn rr-btn--ghost" type="button" data-act="del">Delete</button></div>
+      </div>`).join('') : '<p class="note">No talks in this room yet.</p>';
+    $('talks').querySelectorAll('.v-talk').forEach((row) => {
+      const id = row.dataset.id;
+      row.querySelector('[data-act="hosts"]').addEventListener('click', async () => {
+        try { const t = await RR.api(`/staff/sessions/${encodeURIComponent(id)}/hosts`, { method: 'PUT', body: { hosts: hostsOf(row.querySelector('input').value) } }); say(`Hosts of "${t.title}": ${t.hosts.join(', ') || 'none'}.`); } catch (x) { fail(x); }
+      });
+      row.querySelector('[data-act="del"]').addEventListener('click', async () => {
+        if (!confirm('Delete this talk from the schedule?')) return;
+        try { await RR.api(`/staff/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }); say('Talk deleted.'); await refresh(); } catch (x) { fail(x); }
+      });
+    });
+  }
+
+  async function refresh() {
+    data = await RR.api('/staff/venue');
+    $('v-name').value = data.venue?.name || ''; $('v-cap').value = data.venue?.capacity || ''; $('v-rule').value = data.venue?.rule || '';
+    renderLayout();
+    if (current && rooms().some((r) => r.id === current)) pick(current); else if (rooms()[0]) pick(rooms()[0].id); else pick(null);
+  }
+
+  $('venue-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try { await RR.api('/staff/venue', { method: 'PUT', body: { name: $('v-name').value, capacity: Number($('v-cap').value), rule: $('v-rule').value } }); say('Venue saved.'); await refresh(); } catch (x) { fail(x); }
+  });
+  $('new-room').addEventListener('click', () => { pick(null); $('r-name').focus(); });
+  $('room-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = { name: $('r-name').value, building: $('r-building').value || null, floor: Number($('r-floor').value), capacity: Number($('r-cap').value),
+      access_seats: Number($('r-access').value || 0), step_free: $('r-stepfree').checked, captions: $('r-captions').checked, rule: $('r-rule').value, overflow_space_id: $('r-overflow').value || null };
+    try {
+      const r = current ? await RR.api(`/staff/venue/rooms/${encodeURIComponent(current)}`, { method: 'PUT', body }) : await RR.api('/staff/venue/rooms', { method: 'POST', body });
+      current = r.id; say(`Saved ${r.name}.`); await refresh();
+    } catch (x) { fail(x); }
+  });
+  $('room-delete').addEventListener('click', async () => {
+    if (!current || !confirm('Remove this room from the venue?')) return;
+    try { await RR.api(`/staff/venue/rooms/${encodeURIComponent(current)}`, { method: 'DELETE' }); say('Room removed.'); current = null; await refresh(); } catch (x) { fail(x); }
+  });
+  $('talk-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const t = await RR.api('/staff/sessions', { method: 'POST', body: { room_id: current, title: $('t-title').value || undefined,
+        start: new Date($('t-start').value).toISOString(), end: new Date($('t-end').value).toISOString(), hosts: hostsOf($('t-hosts').value) } });
+      say(`Added "${t.title}".`); $('t-title').value = ''; $('t-hosts').value = ''; await refresh();
+    } catch (x) { fail(x); }
+  });
+
+  (async () => {
+    const me = await RR.requireLogin('organiser');
+    $('who').textContent = `${me.handle} · organiser`;
+    const now = new Date(); now.setMinutes(0, 0, 0);
+    $('t-start').value = local(now.toISOString()); $('t-end').value = local(new Date(now.getTime() + 45 * 60_000).toISOString());
+    try { await refresh(); } catch (x) { fail(x); }
+  })();
+</script>
+</body>
+</html>

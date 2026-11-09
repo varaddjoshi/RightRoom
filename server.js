@@ -11,6 +11,18 @@ const PORT = process.env.PORT || 3000;
 const engine = createEngine({ store, redirect, publish: stream.publish });
 require('./src/slo2').instrument({ engine, store }); // SLO 2 and the other Dash0 proof numbers; wraps engine methods, changes nothing
 auth.ensureDemoUsers(store.db);
+const catalog = require('./src/catalog'); // venue, rooms and talks; organisers and hosts edit them
+catalog.ensureSessions(store.db);
+catalog.ensureDemoHost(store.db, 'host', { log: { log() {} } }); // the 'host' demo login hosts one room's talks
+// "Reset demo" re-seeds the live state; the venue and talks come back from Elasticsearch when it's on.
+const seedReset = store.reset;
+store.reset = (now) => {
+  const db = seedReset(now);
+  auth.ensureDemoUsers(db);
+  const venue = catalog.esOn() ? catalog.loadFromES(db) : Promise.resolve(catalog.ensureSessions(db));
+  venue.then(() => catalog.ensureDemoHost(db)).catch((e) => console.error(`[catalog] Reload after reset failed: ${e.message}`));
+  return db;
+};
 
 const app = express();
 app.use(express.json({ limit: '20kb' }));
@@ -28,12 +40,13 @@ app.use('/api', require('./src/routes/search').searchRouter({ engine }));
 app.use('/api', require('./src/routes/events').eventsRouter({ store, engine })); // /events listings, agenda, RSVP, .ics
 app.use('/api', require('./src/routes/heat').heatRouter({ engine, store, requireRole: auth.requireRole }));
 app.use(require('./src/routes/qr').qrRouter({ store, requireRole: auth.requireRole }));
+app.use('/api', require('./src/routes/venue').venueRouter({ store, engine }));
 
 // Screen URLs from docs/journey-map.md, each served by one page in public/.
 const PAGES = {
   '/login': 'login', '/me': 'me', '/event': 'event', '/sessions': 'sessions', '/news': 'news',
   '/r/:room': 'room', '/r/:room/in': 'in',
-  '/staff/room/:room': 'staff-room', '/staff/setup': 'staff-setup', '/staff/qr': 'staff-qr', '/screen/:room': 'screen', '/sim': 'sim', '/scan': 'scan',
+  '/host': 'host', '/staff/venue': 'venue', '/staff/room/:room': 'staff-room', '/staff/setup': 'staff-setup', '/staff/qr': 'staff-qr', '/screen/:room': 'screen', '/sim': 'sim', '/scan': 'scan',
   '/events': 'events', '/e/:slug': 'e',
 };
 for (const [url, page] of Object.entries(PAGES)) {
@@ -47,6 +60,13 @@ async function main() {
   await store.restore();
   auth.setSecret(store.sessionSecret);
   auth.ensureDemoUsers(store.db);
+  // The real venue and talks (P1's rr_spaces / rr_sessions) replace the stand-in rooms when Elasticsearch is on.
+  if (store.mode === 'elasticsearch') {
+    try { await catalog.loadFromES(store.db); } catch (e) { console.error(`[catalog] Could not load the venue from Elasticsearch (${e.message}); keeping the rooms from the saved state.`); }
+  }
+  catalog.ensureSessions(store.db);
+  await catalog.ensureDemoHost(store.db).catch((e) => console.error(`[catalog] Demo host: ${e.message}`));
+  setInterval(() => catalog.refreshTitles(store.db), 30_000).unref(); // room titles follow the talk on now
   store.startAutosave();
   require('./src/heat').startMirror(() => store.db); // anonymous check-ins into Elasticsearch for the zone heatmap
   // The sweeper (rule 2): expires offers and passes them on, times out confirms and venue admissions.
