@@ -35,7 +35,10 @@ const TAGS = {
   'ci-cd': /\bci\/cd\b|continuous delivery|pipeline|tekton/i,
 };
 
-const SKIP_TITLE = /registration|badge|coffee|lunch|breakfast|break|coat|lounge|reception|expo|happy hour|quiet room|prayer|wellness|first aid|lactation|sign-?in|closing remarks|opening remarks/i;
+// Logistics (registration, breaks, meals, coat check) have no speakers, so the speaker check drops them.
+// Among sessions with speakers, only the short opening/closing housekeeping slots are skipped. Whole words only,
+// so talks like "Breaking up Is Hard" or "When ML Workloads Break the Scheduler" stay in.
+const SKIP_TITLE = /\b(opening|closing) remarks\b/i;
 
 const MONTHS = { January: 1, February: 2, March: 3, April: 4, May: 5, June: 6, July: 7, August: 8, September: 9, October: 10, November: 11, December: 12 };
 
@@ -118,6 +121,8 @@ function description(md) {
 async function main() {
   const index = parseIndex((await get(BASE)).replace(/\r\n?/g, '\n'));
   const talks = index.sessions.filter((s) => s.speakers.length && !SKIP_TITLE.test(s.title) && s.start && s.end);
+  const skippedWithSpeakers = index.sessions.filter((s) => s.speakers.length && SKIP_TITLE.test(s.title));
+  if (skippedWithSpeakers.length) console.log(`Skipped ${skippedWithSpeakers.length} housekeeping slots: ${skippedWithSpeakers.map((s) => s.title).join('; ')}`);
   console.log(`${index.name}: ${index.sessions.length} sessions in the feed, ${talks.length} talks kept`);
 
   let done = 0;
