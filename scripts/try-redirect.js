@@ -3,6 +3,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 const { redirect } = require('../src/redirect');
+const clock = require('../src/clock');
 
 function arg(name) {
   const i = process.argv.indexOf(`--${name}`);
@@ -13,7 +14,7 @@ const list = (v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : [])
 async function main() {
   const spaceId = process.argv[2];
   if (!spaceId || spaceId.startsWith('--')) throw new Error('usage: try-redirect.js <spaceId> [--group N] [--needs a,b] [--interests a,b] [--json]');
-  const now = arg('at') ? new Date(arg('at')) : new Date();
+  const now = arg('at') ? new Date(arg('at')) : clock.now();
   const r = await redirect({ spaceId, groupSize: Number(arg('group') || 1), needs: list(arg('needs')), interests: list(arg('interests')), now });
   if (process.argv.includes('--json')) return console.log(JSON.stringify(r, null, 2));
 

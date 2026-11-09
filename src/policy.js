@@ -9,6 +9,8 @@
 //   add_walk_time           adds WALK_AVERAGE_MIN to the claim window
 // Outside the door window nothing happens for that session: no check-ins, offers or claims.
 
+const clock = require('./clock');
+
 const MIN = 60 * 1000;
 const WALK_AVERAGE_MIN = 10;
 const KEYS = ['door_opens_before_min', 'door_closes_after_min', 'claim_min', 'claim_access_min', 'add_walk_time'];
@@ -34,7 +36,7 @@ function doorWindow(session, policy) {
 }
 
 // True when check-ins, offers and claims are allowed for this session right now.
-function isDoorOpen(session, policy, now = new Date()) {
+function isDoorOpen(session, policy, now = clock.now()) {
   const { open, close } = doorWindow(session, policy);
   return (!open || now >= open) && now < close;
 }
