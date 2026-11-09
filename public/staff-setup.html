@@ -16,6 +16,7 @@
 <style>
   .seg button { min-width: 64px; padding: 0 var(--rr-s3); }
   /* Laptop-first: board on the left, setup and insights on the right; one column under 720px. */
+  body { --rr-shell: 1440px; }
   .wrap { max-width: 1440px; margin: 0 auto; padding-block: var(--rr-s5) calc(var(--rr-nav-h) + var(--rr-s6)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: var(--rr-s5); }
   .cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: var(--rr-s5); align-items: start; }
   .side { display: grid; gap: var(--rr-s4); }

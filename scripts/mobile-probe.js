@@ -47,8 +47,11 @@
     // Only counts when the button is really painted on top: elementFromPoint at the middle of the overlap.
     const tapEls = all.filter(el => el.matches('button, a[href], summary, [role=button]'));
     const textEls = all.filter(el => [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()));
+    // Fixed or sticky chrome (tab bar, app bar) stays put while the probe scrolls, so its overlap with content
+    // isn't a real covering; skip it on both sides.
+    const pinned = (el) => { for (let n = el; n && n !== document.body; n = n.parentElement) { const p = getComputedStyle(n).position; if (p === 'fixed' || p === 'sticky') return true; } return false; };
     for (const t of textEls) for (const b of tapEls) {
-      if (b.contains(t) || t.contains(b)) continue;
+      if (b.contains(t) || t.contains(b) || pinned(t) || pinned(b)) continue;
       const a = t.getBoundingClientRect(), c = b.getBoundingClientRect();
       const left = Math.max(a.left, c.left), right = Math.min(a.right, c.right);
       const top = Math.max(a.top, c.top), bottom = Math.min(a.bottom, c.bottom);

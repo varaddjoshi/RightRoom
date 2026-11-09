@@ -66,7 +66,8 @@
   // the schedule data has it. shortcut: the in-memory demo has no session times, so those slots stay empty there.
   function upcoming(rooms, risk) {
     const mine = new Set([...(me?.interests || [])]);
-    const forYou = (r) => (r.tags || []).some((t) => mine.has(t));
+    // Two shared interests, so a broad tag like "kubernetes" doesn't mark every room.
+    const forYou = (r) => (r.tags || []).filter((t) => mine.has(t)).length >= Math.min(2, mine.size);
     const name = (r) => RR.esc(RR.roomName(r));
     const row = (r, s, live) => `<a class="talk" href="/r/${enc(r.id)}"><div><b>${RR.esc(s.title)}</b>
         <span>${name(r)} · Floor ${RR.esc(r.floor)}${s.startsAt ? ` · ${time(s.startsAt)}` : ''}${live ? ` · ${Number(r.free)} seats free` : ''}${forYou(r) ? ' · <span class="star">For you</span>' : ''}</span>

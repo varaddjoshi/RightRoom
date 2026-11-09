@@ -144,7 +144,7 @@ body.rr-nonav .rr-screen { padding-bottom: var(--rr-s6); }
 .rr-nav--tabs a[aria-current="page"] svg { stroke-width: 2.4; }
 .rr-nav--tabs a[aria-current="page"]::before { content: ""; width: 24px; height: 3px; margin: -6px 0 3px; border-radius: 3px; background: var(--rr-action); }
 @media (min-width: 960px) {
-  .rr-bar { height: var(--rr-nav-h); padding-inline: max(24px, calc((100vw - 1120px) / 2)); }
+  .rr-bar { height: var(--rr-nav-h); padding-inline: max(24px, calc((100vw - var(--rr-shell, 1120px)) / 2 + 16px)); }
   .rr-nav--tabs { display: none; }
   .rr-nav--top { display: flex; align-items: center; gap: var(--rr-s1); margin-left: var(--rr-s4); }
   .rr-nav--top a { display: inline-flex; align-items: center; gap: var(--rr-s2); min-height: 44px; padding: 0 var(--rr-s3); font-size: var(--rr-t-sm); }
@@ -247,7 +247,8 @@ body.rr-dark .rr-btn:hover { background: var(--rr-action); filter: brightness(1.
   font: 700 var(--rr-t-sm)/1.2 var(--rr-font-sign); color: var(--rr-action); list-style: none;
 }
 .rr-why summary::-webkit-details-marker, .rr-more > summary::-webkit-details-marker { display: none; }
-.rr-why summary::after, .rr-more > summary::after { content: ""; width: 8px; height: 8px; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-2px); }
+.rr-why summary::after, .rr-more > summary::after { content: ""; flex: none; width: 8px; height: 8px; margin-right: 6px; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-2px); }
+.rr-more > summary > span { min-width: 0; }
 .rr-why[open] summary::after, .rr-more[open] > summary::after { transform: rotate(-135deg); }
 body.rr-dark .rr-why summary { color: var(--rr-accent-ink); }
 .rr-why ul { margin: 0; padding-left: var(--rr-s5); display: grid; gap: var(--rr-s2); color: var(--rr-muted); }
