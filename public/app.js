@@ -2,7 +2,7 @@
 // Browser monitoring: /rum.js starts Dash0 website monitoring when the server has a token (P4 owns rum.js).
 if (typeof document !== 'undefined') document.head.appendChild(Object.assign(document.createElement('script'), { src: '/rum.js', defer: true }));
 (() => {
-  const WORD = { free: 'Seats free', filling: 'Filling', full: 'Full' };
+  const WORD = { free: 'Seats free', filling: 'Filling', full: 'Full', checking: 'Full · being checked' };
 
   // Escape anything that came from a person (handles, comments, titles) before it goes into innerHTML.
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -27,7 +27,7 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
       if (!ok) throw Object.assign(new Error('role'), { status: 403 });
       return me;
     } catch (e) {
-      location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}${e.status === 403 ? '&role=1' : ''}`;
+      location.href = `/login?mode=login&next=${encodeURIComponent(location.pathname + location.search)}${e.status === 403 ? '&role=1' : ''}`;
       return new Promise(() => {});
     }
   }
@@ -100,7 +100,8 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
   // opts: { role: 'attendee'|'staff'|'organiser', here: room id, mode: 'map'|'list', notices: GET /api/announcements, onPick: (roomId) => void }. Walking minutes come from GET /api/floors?from=<here>.
   function floorBoard(el, floors, opts = {}) {
     const staff = opts.role === 'staff' || opts.role === 'organiser';
-    const needs = (r) => staff && r.queue > 0 && !r.staffOn;
+    // Same rule as the server's need-staff count: no console open and either a queue or a room that isn't free.
+    const needs = (r) => staff && !r.staffOn && (r.queue > 0 || r.status !== 'free');
     const access = (r) => `${r.stepFree ? '&#9855; ' : ''}${esc(r.access)}`;
     const extra = (r) => {
       if (staff) return `<span class="tile-m">${r.staffOn ? `${esc(r.staffOn)} on door` : 'No staff'}${r.queue ? ` · Queue ${Number(r.queue)}` : ''}</span>${needs(r) ? '<span class="tile-x">Needs staff</span>' : ''}`;
@@ -178,7 +179,8 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
     const needs = me?.needs || [];
     if (needs.includes('step-free')) reasons.push(room.stepFree ? 'Step-free, as you asked' : 'Not step-free: stairs only');
     if (needs.includes('captions')) reasons.push(/caption/i.test(room.access || '') ? 'Has captions, as you asked' : 'No captions listed');
-    if (room?.free != null) reasons.push(room.free > 0 ? `${Number(room.free)} ${room.free === 1 ? 'seat' : 'seats'} free now` : 'Full right now: join the queue or pick another room');
+    if (room?.status === 'checking') reasons.push('Full, being checked by staff: you can join the queue');
+    else if (room?.free != null) reasons.push(room.free > 0 ? `${Number(room.free)} ${room.free === 1 ? 'seat' : 'seats'} free now` : 'Full right now: join the queue or pick another room');
     const w = room?.wifiStats;
     if (w?.count) reasons.push(`Wi-Fi ${String(BAND[w.band] || w.band).toLowerCase()} (${Math.round(w.mbps)} Mbps, crowd-sourced)`);
     else if (room?.wifi != null) reasons.push(`Wi-Fi about ${Math.round(room.wifi)} Mbps (crowd-sourced)`);
@@ -289,6 +291,7 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
     sim: '<path d="M8 5.5v13l10-6.5z"/>',
     cal: '<rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
     in: '<path d="M10 17l5-5-5-5M15 12H4M14 4h5v16h-5"/>',
+    star: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
   };
   const svg = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
 
@@ -311,9 +314,15 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
   // Name of the live event the live pages (/event, /sessions, /r/*, My seat) belong to, so they say which event.
   let eventCache;
   const liveEvent = () => (eventCache ??= api('/event').then((e) => ({ name: e.name, slug: e.slug })).catch(() => ({ name: null, slug: null })));
-  const tabsFor = (me) => {
-    const room = recall('rr-room'), door = recall('rr-door');
-    if (!me) return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['cal', 'Events', '/events'], ['me', 'Sign in', `/login?next=${encodeURIComponent(location.pathname)}`]];
+  // My seat follows the person across devices: GET /api/me/places (the room I'm checked in to, else my first place).
+  // Falls back to the room this device last used when the call fails (signed out, or a server without the route).
+  let roomCache;
+  const myRoom = () => (roomCache ??= api('/me/places')
+    .then((p) => { const r = (p.rooms || []).find((x) => x.status === 'checkedIn') || (p.rooms || [])[0]; return r ? String(r.room) : null; })
+    .catch(() => recall('rr-room')));
+  const tabsFor = (me, room = recall('rr-room')) => {
+    const door = recall('rr-door');
+    if (!me) return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['cal', 'Events', '/events'], ['me', 'Sign in', `/login?mode=login&next=${encodeURIComponent(location.pathname)}`]];
     if (me.role === 'organiser') return [['board', 'Board', '/staff/setup'], ['door', 'Rooms', '/staff/setup#edit'], ['bell', 'Announce', '/staff/setup#ann'], ['qr', 'QR codes', '/staff/qr']];
     if (me.role === 'staff') return [['door', 'Door', door ? `/staff/room/${encodeURIComponent(door)}` : '/sessions?pick=door'], ['board', 'Board', '/sessions'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']];
     return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['cal', 'Events', '/events'], ['seat', 'My seat', room ? `/r/${encodeURIComponent(room)}` : '/seat.html'], ['me', 'Me', '/me']];
@@ -322,7 +331,7 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
   async function nav() {
     if (document.body.classList.contains('rr-nonav') || document.querySelector('.rr-bar')) return;
     const me = await whoami();
-    const tabs = tabsFor(me);
+    const tabs = tabsFor(me, me && !['staff', 'organiser'].includes(me.role) ? await myRoom() : null);
     const path = location.pathname, hash = location.hash;
     // Exactly one current tab: an exact path+hash match wins, then the same section (any room, any door).
     const score = (href) => { const [p, h = ''] = href.split('?')[0].split('#'); if (p === path && `#${h}` === (hash || '#')) return 3; if (p === path && !h) return 2; if (p.startsWith('/r/') && path.startsWith('/r/')) return 1; if (p === '/events' && path.startsWith('/e/')) return 1; if (p.startsWith('/staff/room/') && path.startsWith('/staff/room/')) return 1; return 0; };
@@ -331,11 +340,12 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
     const home = tabs[0][2];
     const user = me ? `<details class="rr-user"><summary aria-label="Account: ${esc(me.handle)}"><span class="rr-avatar" aria-hidden="true">${esc(String(me.handle).slice(0, 1).toUpperCase())}</span><span class="rr-user-name">${esc(me.handle)}</span></summary>
         <div class="rr-user-menu"><p><b>${esc(me.handle)}</b><br><span class="muted">${esc(ROLE[me.role] || me.role)}</span></p>${me.role === 'attendee' ? '<a href="/me">Profile and interests</a>' : ''}<button type="button" id="rr-signout">Sign out</button></div></details>`
-      : `<a class="rr-signin" href="/login?next=${encodeURIComponent(location.pathname)}">Sign in</a>`;
+      : `<a class="rr-signin" href="/login?mode=login&next=${encodeURIComponent(location.pathname)}">Sign in</a>`;
+    // Signed out: laptops show Sign in once, top right; phones show it once, as a bottom tab.
     const bar = document.createElement('header');
     bar.className = 'rr-bar';
     const scan = me && me.role !== 'organiser' && !path.startsWith('/scan') ? `<a class="rr-scanbtn" href="/scan">${svg('qr')}<span>Scan</span></a>` : '';
-    bar.innerHTML = `<a class="rr-nav-brand" href="${esc(home)}"><i aria-hidden="true"></i>RightRoom</a><nav class="rr-nav rr-nav--top" aria-label="Main">${tabs.map(link).join('')}</nav><span class="rr-here" id="rr-here"></span>${scan}${user}`;
+    bar.innerHTML = `<a class="rr-nav-brand" href="${esc(home)}"><i aria-hidden="true"></i>RightRoom</a><nav class="rr-nav rr-nav--top" aria-label="Main">${tabs.filter(([ic]) => me || ic !== 'me').map(link).join('')}</nav><span class="rr-here" id="rr-here"></span>${scan}${user}`;
     const tabbar = document.createElement('nav');
     tabbar.className = 'rr-nav rr-nav--tabs';
     tabbar.setAttribute('aria-label', 'Main');
@@ -366,5 +376,5 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', nav); else nav();
 
-  window.RR = { insights, whyForYou, nearbyFree, heat, suggestZones, wifiChip, BAND, api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, liveEvent, eventWhen, evTime, evDay, roomName, toast };
+  window.RR = { myRoom, insights, whyForYou, nearbyFree, heat, suggestZones, wifiChip, BAND, api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, liveEvent, eventWhen, evTime, evDay, roomName, toast };
 })();
