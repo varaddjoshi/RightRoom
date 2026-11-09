@@ -66,6 +66,7 @@ const MAPPINGS = {
     ...base,
     type: keyword, // venue | room | table
     name: textKw,
+    building: keyword,
     floor: int,
     capacity: int,
     taken: int, // check-ins + staff_correction + held seats (open offers); changed with scripted updates only
