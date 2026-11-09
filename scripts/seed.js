@@ -29,7 +29,7 @@ const MIN = 60 * 1000;
 function statusFor(taken, capacity) {
   if (taken >= capacity) return 'full';
   if (taken >= 0.8 * capacity) return 'filling';
-  return 'seats_free';
+  return 'free';
 }
 
 // Walking minutes between rooms (stand-in): corridor distance plus 2 minutes per floor by lift, plus 5 to
