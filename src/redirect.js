@@ -128,9 +128,10 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
   const spaces = roomIds.length
     ? (await es().mget({ index: INDEX.spaces, ids: roomIds })).docs
     : [];
-  // ELSER scores bunch together (every session scores something), so scale between the lowest and highest
-  // candidate room: only rooms near the top count as a similar topic.
-  const roomScores = [...byRoom.values()].map((s) => s.score);
+  // Scores of the room candidates actually considered (found, type room).
+  const roomScores = spaces
+    .filter((d) => d.found && (!d._source.type || d._source.type === 'room') && byRoom.has(d._id))
+    .map((d) => byRoom.get(d._id).score);
   const maxScore = roomScores.length ? Math.max(...roomScores) : 0;
   const minScore = roomScores.length ? Math.min(...roomScores) : 0;
   const spread = maxScore - minScore;
@@ -184,8 +185,11 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
       continue;
     }
 
-    // With one candidate, or all scoring the same, nothing stands out: everyone is band 0 unless it's the only one.
-    const rel = spread > 1e-6 ? (session.score - minScore) / spread : roomScores.length === 1 && maxScore > 0 ? 1 : 0;
+    // Semantic (ELSER) scores bunch together and are never 0, so scale between the lowest and highest candidate;
+    // with one candidate or no spread nothing stands out. Keyword (BM25) scores keep their meaning: 0 is no match.
+    const rel = method === 'semantic'
+      ? (spread > 1e-6 ? (session.score - minScore) / spread : 0)
+      : (maxScore > 0 ? session.score / maxScore : 0);
     const band = method === 'none' ? 0 : rel >= 0.7 ? 2 : rel >= 0.35 ? 1 : 0;
     const matched = (session.tags || []).filter((t) => interestSet.has(String(t).toLowerCase()));
 
