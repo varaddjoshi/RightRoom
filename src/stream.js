@@ -1,7 +1,8 @@
 // Server-sent events. Each event carries the server time so /api/ack can measure delivery on the server's own clock (SLO 1).
 // shortcut: subscribers live in this process only; run exactly one replica.
+const { recordDelivery } = require('./metrics');
 const subs = new Set();
-const sent = new Map(); // event id -> server time, for /api/ack
+const sent = new Map(); // event id -> { at: server time, type }, for /api/ack
 let nextId = 0;
 
 function subscribe(req, res, { space, handle }) {
@@ -17,7 +18,7 @@ function subscribe(req, res, { space, handle }) {
 // `to.space`: everyone watching that space (or '*'); `to.handle`: one person, on any page.
 function publish(type, data, to = {}) {
   const ev = { ...data, event_id: ++nextId, at: Date.now() };
-  sent.set(ev.event_id, ev.at);
+  sent.set(ev.event_id, { at: ev.at, type });
   if (sent.size > 5000) sent.delete(sent.keys().next().value);
   const line = `id: ${ev.event_id}\nevent: ${type}\ndata: ${JSON.stringify(ev)}\n\n`;
   for (const s of subs) {
@@ -30,11 +31,12 @@ function publish(type, data, to = {}) {
 
 const deliveries = [];
 function ack(eventId, now = Date.now()) {
-  const at = sent.get(Number(eventId));
-  if (!at) return null;
-  const ms = now - at;
+  const e = sent.get(Number(eventId));
+  if (!e) return null;
+  const ms = now - e.at;
   deliveries.push(ms);
   if (deliveries.length > 500) deliveries.shift();
+  recordDelivery(e.type, ms);
   console.log(`slo1 event=${eventId} delivery_ms=${ms}`);
   return ms;
 }
