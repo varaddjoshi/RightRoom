@@ -373,6 +373,17 @@ body {
 .fl-h span { color: var(--rr-muted); font-size: var(--rr-t-xs); }
 .fl-h .here { color: var(--rr-signal); font-weight: 600; }
 .fl-rooms { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
+/* Floors stacked with room to breathe, so a floor label never sits tight against the tiles above it. */
+.fl-board { display: grid; gap: var(--rr-s6); }
+.fl-all { display: grid; gap: var(--rr-s2); }
+.notice-badge { min-height: 44px; padding: 0 var(--rr-s3); border: 2px solid var(--rr-line); border-radius: var(--rr-r1); background: var(--rr-panel-2); color: var(--rr-ink); font: 700 var(--rr-t-sm)/1 var(--rr-font-sign); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.notice-badge[data-urgent] { background: var(--rr-signal); border-color: var(--rr-signal); color: var(--rr-on-signal); }
+.rr-dialog { width: min(92vw, 520px); padding: var(--rr-s5) var(--rr-s4); background: var(--rr-panel); color: var(--rr-ink); border: 2px solid var(--rr-line); border-top: 6px solid var(--rr-signal); border-radius: 0; }
+.rr-dialog[open] { display: grid; gap: var(--rr-s3); }
+.rr-dialog::backdrop { background: rgb(0 0 0 / 0.6); }
+.rr-dialog h2 { margin: 0; }
+.rr-dialog .rr-announce:not([data-urgency]) { background: var(--rr-panel-2); }
+.rr-dialog-all { display: inline-flex; align-items: center; min-height: 44px; color: var(--rr-signal); font-weight: 600; }
 .tile { flex: var(--cap) 1 120px; min-width: 0; min-height: 64px; display: grid; gap: 4px; align-content: start; padding: var(--rr-s2) var(--rr-s3); background: var(--rr-panel); color: var(--rr-ink); border: 2px solid var(--rr-line); border-radius: var(--rr-r2); font: inherit; text-align: left; cursor: pointer; }
 .tile:hover { border-color: var(--rr-ink); }
 .tile.needs { border-color: var(--rr-signal); }

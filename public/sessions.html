@@ -15,15 +15,16 @@
   a.talk { color: inherit; text-decoration: none; min-height: 64px; }
   a.talk:hover { outline: 2px solid var(--rr-line); }
   .talk .fc { color: var(--rr-filling); }
-  @media (min-width: 960px) { .seg { max-width: 420px; } #view > .rr-btn-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 960px) { .seg { max-width: 420px; } #view .fl .rr-btn-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
 </head>
 <body>
 <main class="rr-screen rr-screen--wide" id="main">
-  <nav class="nav" aria-label="Pages"><a href="/event">Event</a><a href="/sessions" aria-current="page">Schedule</a><a href="/news">News</a><a href="/me">Me</a></nav>
+  <nav class="nav" aria-label="Pages"><a href="/event">Event</a><a href="/sessions" aria-current="page">Schedule</a><a href="/me">Me</a></nav>
   <div class="rr-sign"><span class="rr-eyebrow" id="now">Now</span><h1>Schedule</h1></div>
   <div class="seg" role="group" aria-label="View"><button type="button" data-mode="map" aria-pressed="true">Map</button><button type="button" data-mode="list" aria-pressed="false">List</button></div>
   <div id="view" aria-live="polite"></div>
+  <a class="rr-dialog-all" href="/news">All announcements</a>
   <p class="note" id="legend"></p>
   <p class="rr-panel rr-span m0" id="err" role="alert" hidden></p>
 </main>
@@ -32,7 +33,8 @@
   const $ = (id) => document.getElementById(id);
   $('legend').innerHTML = `${RR.label('live')} room status · ${RR.label('crowd-sourced')} Wi-Fi · ${RR.label('stand-in')} forecast`;
   $('now').textContent = `Now · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  let mode = 'map', here = null, forecast = null, topics = {};
+  // ?view=list opens the list (for links and checks); Map is the default.
+  let mode = new URLSearchParams(location.search).get('view') === 'list' ? 'list' : 'map', here = null, forecast = null, topics = {}, notices = [];
 
   const riskWord = { high: 'Likely to fill', medium: 'May fill', low: 'Unlikely to fill' };
   function fcLine(id) {
@@ -47,21 +49,27 @@
     try {
       if (mode === 'map') {
         const floors = await RR.api(`/floors${here ? `?from=${encodeURIComponent(here)}` : ''}`);
-        RR.floorBoard($('view'), floors, { role: 'attendee', here, mode: 'map', onPick: (id) => { location.href = `/r/${encodeURIComponent(id)}`; } });
+        RR.floorBoard($('view'), floors, { role: 'attendee', here, mode: 'map', notices, onPick: (id) => { location.href = `/r/${encodeURIComponent(id)}`; } });
         return;
       }
       const rooms = await RR.api('/sessions');
       rooms.sort((a, b) => b.floor - a.floor || a.id.localeCompare(b.id));
-      $('view').innerHTML = `<div class="rr-btn-stack">${rooms.map((r) => `
+      // List mode: one group per floor (top floor first), each led by that floor's announcements.
+      const floorsOf = [...new Set(rooms.map((r) => r.floor))];
+      const all = RR.forFloor(notices, null);
+      $('view').innerHTML = `<div class="fl-board">${all.length ? `<div class="fl-all">${all.map(RR.notice).join('')}</div>` : ''}${floorsOf.map((fl) => `<section class="fl" aria-label="Floor ${Number(fl)}">
+        <div class="fl-h"><b>FLOOR ${Number(fl)}</b></div>${RR.forFloor(notices, fl).map(RR.notice).join('')}
+        <div class="rr-btn-stack">${rooms.filter((r) => r.floor === fl).map((r) => `
         <a class="talk" href="/r/${encodeURIComponent(r.id)}">
           <div><b>${RR.esc(r.title)}</b>
             <span>Room ${RR.esc(r.id)} · Floor ${Number(r.floor)}${r.id === here ? ' · you are here' : ''} · ${r.stepFree ? '&#9855; ' : ''}${RR.esc(r.access)}</span>
             <span>${Number(r.taken)} of ${Number(r.capacity)} in${r.wifi != null ? ` · Wi-Fi ${Number(r.wifi)} Mbps` : ''}${topics[r.id]?.length ? ` · topics: ${topics[r.id].map(RR.esc).join(', ')}` : ''}</span>
             ${fcLine(r.id)}
-          </div>${RR.status(r.status)}</a>`).join('')}</div>`;
+          </div>${RR.status(r.status)}</a>`).join('')}</div></section>`).join('')}</div>`;
     } catch (x) { RR.showError($('err'), x); }
   }
 
+  document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.mode === mode));
   document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
     mode = b.dataset.mode;
     document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', x === b));
@@ -77,9 +85,14 @@
       topics[r.id] = (await RR.api(`/spaces/${encodeURIComponent(r.id)}/comments`).catch(() => ({ topics: [] }))).topics.slice(0, 3);
     }));
     forecast = await RR.api('/forecast').then((f) => f.sessions).catch(() => false);
+    notices = await RR.api('/announcements').catch(() => []);
     await render();
     let t;
     RR.live('*', { status: () => { clearTimeout(t); t = setTimeout(render, 300); } });
+    const myFloor = rooms.find((r) => r.id === here)?.floor ?? null;
+    RR.watchNotices({ floor: myFloor, onChange: (a) => { notices = [a, ...notices]; render(); } });
+    // Demo and screenshot aid: ?notices=open opens the first floor's notices.
+    if (new URLSearchParams(location.search).get('notices') === 'open') (document.querySelector('.notice-badge[data-urgent]') || document.querySelector('.notice-badge'))?.click();
   })();
 </script>
 </body>
