@@ -44,8 +44,9 @@ function seed(now = Date.now()) {
     ],
     comments: [],
     wifi: [],
+    rsvps: {}, // listing-only events (src/mock/events.js): slug -> handles in RSVP order
     seq: 0,
   };
 }
 
-module.exports = { seed, ZONES };
+module.exports = { seed, ZONES, ROOMS };

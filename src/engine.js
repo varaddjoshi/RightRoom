@@ -2,6 +2,7 @@
 // Storage-agnostic: works on whatever `store.db` holds; `redirect` and `publish` are passed in so the ES versions can replace them.
 const crypto = require('node:crypto');
 const { ZONES } = require('./mock/seed');
+const { SEAT_NEEDS } = require('./auth');
 
 const OFFER_MS = 60_000;          // seat offer hold
 const CONFIRM_MS = 30_000;        // staff answer window before Full goes out
@@ -30,14 +31,16 @@ function createEngine({ store, redirect, publish = () => {}, now = require('./cl
     if (sp.type === 'venue') return taken(sp) >= sp.capacity ? 'full' : taken(sp) >= 0.8 * sp.capacity ? 'filling' : 'free';
     if (sp.override === 'full') return 'full';
     const t = taken(sp);
-    if (t >= sp.capacity && sp.confirmed && sp.override !== 'not_full') return 'full';
+    if (t >= sp.capacity && sp.override !== 'not_full') return sp.confirmed ? 'full' : 'checking'; // at capacity, staff confirming: "Full · being checked", never "Filling" at 0 free
     return t >= 0.8 * sp.capacity ? 'filling' : 'free';
   }
   function view(sp) {
     const t = taken(sp);
     const base = { id: sp.id, type: sp.type, floor: sp.floor, title: sp.title, capacity: sp.capacity, taken: t, free: Math.max(0, sp.capacity - t), status: status(sp), rule: sp.rule };
-    if (sp.type === 'venue') return base;
+    if (sp.type === 'venue') return { ...base, scannedIn: admitted().filter((q) => q.scannedIn).length };
     Object.assign(base, { name: sp.name || null, building: sp.building || null, session: sp.session || null });
+    // Seats held for people already sent here by a redirect (SLO 2); `free` stays the one number everyone shows.
+    base.heldForRedirects = (sp.redirectHolds || []).filter((h) => h.until > now()).length;
     const zoneFill = Object.fromEntries(ZONES.map((z) => [z, 0]));
     let standIn = 0;
     for (const c of inside(sp).values()) { zoneFill[c.zone] = (zoneFill[c.zone] || 0) + 1; if (c.standIn) standIn++; }
@@ -46,6 +49,7 @@ function createEngine({ store, redirect, publish = () => {}, now = require('./cl
 
   // Called after every change: offers free seats to the queue first (decision 17), then works out Full (decisions 14-15).
   function update(sp) {
+    if (sp.type === 'venue') admitVenue(); // a freed place (e.g. a deleted account) goes to the waitlist straight away
     if (sp.type === 'room') {
       fill(sp);
       const atCap = taken(sp) >= sp.capacity;
@@ -74,7 +78,7 @@ function createEngine({ store, redirect, publish = () => {}, now = require('./cl
       const isAccess = (z) => !!z && sp.accessZones.includes(z);
       let q = list[0];
       let zi = sp.freeZones.findIndex((z) => !isAccess(z));
-      const needy = list.find((x) => x.needs.length);
+      const needy = list.find((x) => x.needs.some((n) => SEAT_NEEDS.includes(n)));
       const ai = sp.freeZones.findIndex(isAccess);
       if (needy && ai >= 0) { q = needy; zi = ai; }
       const unzoned = sp.capacity - taken(sp) > sp.freeZones.length; // seats free without a known zone
@@ -312,6 +316,27 @@ function createEngine({ store, redirect, publish = () => {}, now = require('./cl
     return { ...v, me: { queue: q && q.status !== 'claimed' ? entryView(q) : null, claimed, checkedIn: c ? { zone: c.zone } : null } };
   }
 
+  // Every place one person holds, across all rooms (decision 34: seated in one room, queued in others), plus the venue.
+  // Guests are matched by device too (decision 28). Offers and claims sort first: they expire.
+  const URGENCY = { offered: 0, claimed: 1, checkedIn: 2, waiting: 3 };
+  function myPlaces(handle, device) {
+    const rooms = [];
+    for (const sp of db().spaces.values()) {
+      if (sp.type !== 'room' || sp.test) continue;
+      const base = { room: sp.id, title: sp.title, floor: sp.floor };
+      const c = inside(sp).get(handle);
+      if (c) { rooms.push({ ...base, status: 'checkedIn', zone: c.zone }); continue; }
+      const q = db().queue.find((x) => x.space === sp.id && ['waiting', 'offered', 'claimed'].includes(x.status) && (x.handle === handle || (device && x.device === device)));
+      if (!q) continue;
+      const o = q.offer && db().offers.get(q.offer);
+      if (q.status === 'waiting') rooms.push({ ...base, status: 'waiting', position: position(q).position, of: waiting(sp).length });
+      else if (q.status === 'offered') rooms.push({ ...base, status: 'offered', zone: o?.zone ?? null, offerExpiresAt: o?.heldUntil });
+      else rooms.push({ ...base, status: 'claimed', zone: o?.zone ?? null, code: o?.code, scanBy: o?.scanBy ?? null });
+    }
+    rooms.sort((a, b) => URGENCY[a.status] - URGENCY[b.status] || (a.position || 0) - (b.position || 0));
+    return { venue: myVenue(handle), rooms };
+  }
+
   function staffView(spaceId) {
     const sp = room(spaceId);
     const queue = db().queue.filter((q) => q.space === sp.id && ['waiting', 'offered', 'claimed'].includes(q.status)).sort((a, b) => a.at - b.at)
@@ -350,7 +375,7 @@ function createEngine({ store, redirect, publish = () => {}, now = require('./cl
 
   const api = {
     space, view, taken, status, update, joinQueue, leaveQueue, claim, checkin, leave, correct, release, override, setConsole, confirm,
-    register, myVenue, sweep, endSession, roomForUser, staffView, floors, walk, wifiMedian, waiting,
+    register, myVenue, myPlaces, sweep, endSession, roomForUser, staffView, floors, walk, wifiMedian, waiting,
     redirect: (spaceId, user) => redirect({ db: db(), engine: api, from: room(spaceId), user, now: now() }),
   };
   return api;

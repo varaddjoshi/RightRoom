@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Event · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RightRoom">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<style>
+  .ev-cover { height: 120px; border-radius: var(--rr-r2); background: linear-gradient(135deg, var(--rr-action), var(--rr-free)); }
+  .ev-cover[data-cover="violet"] { background: linear-gradient(135deg, var(--rr-action), var(--rr-access)); }
+  .facts { display: grid; gap: var(--rr-s3); margin: 0; }
+  .facts dt { font-weight: 700; }
+  .facts dd { margin: 0; color: var(--rr-muted); }
+  .day { display: grid; gap: var(--rr-s2); }
+  .day h3 { margin: var(--rr-s3) 0 0; font: 700 var(--rr-t-md)/1.3 var(--rr-font-sign); }
+  .talk p { margin: var(--rr-s1) 0 0; font-size: var(--rr-t-sm); }
+  .talk .when { font-weight: 700; color: var(--rr-ink); }
+  a.talk { min-height: 64px; }
+  .people { display: grid; gap: var(--rr-s3); margin: 0; padding: 0; list-style: none; }
+  .people b { display: block; }
+  details.faq { border-top: 1px solid var(--rr-hair); padding: var(--rr-s3) 0; }
+  details.faq summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+  .ev-links { display: flex; flex-wrap: wrap; gap: var(--rr-s3); }
+  .ev-links a, .ev-links button, #venue a { min-height: 44px; }
+  #venue a { display: inline-flex; align-items: center; }
+  @media (min-width: 960px) { .ev-cover { height: 160px; } }
+</style>
+</head>
+<body>
+<main class="rr-screen rr-screen--split" id="main">
+  <aside class="rr-aside">
+    <a class="back" href="/events">All events</a>
+    <div class="ev-cover" id="cover" aria-hidden="true"></div>
+    <div class="rr-sign"><span class="rr-eyebrow" id="when">Loading</span><h1 id="title">Event</h1><p class="m0" id="tagline"></p></div>
+    <section class="rr-panel" aria-labelledby="h-join"><h2 class="rr-eyebrow" id="h-join">Your place</h2><div id="join" class="rr-btn-stack"><div class="rr-skel" aria-hidden="true"><i></i></div></div></section>
+    <div class="ev-links"><a class="rr-btn rr-btn--ghost" id="ics" href="#" download>Add to calendar</a><button class="rr-btn rr-btn--ghost" type="button" id="share">Share</button></div>
+    <p class="rr-panel m0" id="err" role="alert" hidden></p>
+  </aside>
+  <section aria-labelledby="h-about"><h2 id="h-about">About</h2><div id="about"></div></section>
+  <section aria-labelledby="h-agenda"><h2 id="h-agenda">Agenda</h2><p class="note" id="tznote"></p><div id="agenda"></div></section>
+  <section aria-labelledby="h-speakers"><h2 id="h-speakers">Speakers</h2><ul class="people" id="speakers"></ul></section>
+  <section aria-labelledby="h-venue"><h2 id="h-venue">Venue and access</h2><div id="venue"></div></section>
+  <section aria-labelledby="h-faq"><h2 id="h-faq">Questions</h2><div id="faq"></div></section>
+</main>
+<script src="/app.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const enc = encodeURIComponent;
+  const esc = RR.esc;
+  const slug = location.pathname.split('/')[2] || '';
+  let ev, me, force = false;
+
+  // Your place: Register (the live event's venue queue, same engine flow as /event) or RSVP (listing-only events).
+  function joinBox() {
+    const word = ev.register ? 'registered' : 'going';
+    const count = `<p class="m0"><b>${Number(ev.going)} of ${Number(ev.capacity)}</b> ${word}${ev.waitlist ? ` · ${Number(ev.waitlist)} on the waitlist` : ''} ${RR.label(ev.register ? 'live' : 'stand-in')}</p><p class="m0 muted">${esc(ev.rule)}</p>`;
+    const verb = ev.register ? 'Register' : 'RSVP';
+    if (ev.status === 'past') return `${count}<p class="m0">This event has ended.</p>`;
+    if (!me) return `${count}<a class="rr-btn" href="/login?mode=login&next=${enc(location.pathname)}">Sign in to ${verb.toLowerCase()}</a>`;
+    if (me.role === 'guest') return `${count}<a class="rr-btn rr-btn--ghost" href="/login?next=${enc(location.pathname)}">Create an account to ${verb.toLowerCase()}</a>`;
+    const m = ev.me;
+    if (!m || m.status === 'expired') return `${count}<button class="rr-btn" type="button" id="go">${force ? `${verb} anyway` : `${verb} for this event`}</button>`;
+    if (m.status === 'waiting' || m.status === 'waitlist') return `${count}<div class="rr-position"><span class="rr-eyebrow">Your place on the waitlist</span><strong>#${Number(m.position)}</strong></div>${ev.register ? '' : '<button class="rr-btn rr-btn--ghost" type="button" id="cancel">Cancel my RSVP</button>'}`;
+    const yes = RR.status('free', ev.register ? "You're registered" : "You're going");
+    return `${count}<div>${yes}</div>${ev.register ? `<a class="rr-btn" href="/event">Open the live event</a>` : '<button class="rr-btn rr-btn--ghost" type="button" id="cancel">Cancel my RSVP</button>'}`;
+  }
+
+  function agenda() {
+    const now = Date.parse(ev.now);
+    const days = new Map();
+    for (const s of ev.sessions) { const d = RR.evDay(ev.timezone, s.start); days.set(d, [...(days.get(d) || []), s]); }
+    const t = (x) => RR.evTime(ev.timezone, x);
+    const row = (s) => {
+      const on = Date.parse(s.start) <= now && now < Date.parse(s.end);
+      const room = s.roomName || `${RR.roomName(s.room)}${s.floor != null ? ` · Floor ${Number(s.floor)}` : ''}`;
+      // The live talks link to their room door, where seats are live.
+      const tag = s.live && ev.register ? 'a' : 'div';
+      return `<${tag} class="talk"${tag === 'a' ? ` href="/r/${enc(s.room)}"` : ''}><div>
+        <span class="when">${esc(t(s.start))} to ${esc(t(s.end))}${on ? ' · On now' : ''}</span>
+        <b>${esc(s.title)}</b>
+        <span>${esc(room)} · ${esc(s.track)} · ${esc(s.level)}${s.speakers.length ? ` · ${s.speakers.map((p) => esc(p.name)).join(', ')}` : ''}</span>
+        <p>${esc(s.abstract)}</p></div>${on ? RR.label('live') : ''}</${tag}>`;
+    };
+    $('agenda').innerHTML = [...days].map(([d, list]) => `<div class="day"><h3>${esc(d)}</h3>${list.map(row).join('')}</div>`).join('');
+  }
+
+  function render() {
+    document.title = `${ev.name} · RightRoom`;
+    $('cover').dataset.cover = ev.cover;
+    $('title').textContent = ev.name;
+    $('when').textContent = `${RR.eventWhen(ev)} · ${ev.city}`;
+    $('tagline').textContent = ev.tagline;
+    $('ics').href = `/api/events/${enc(ev.slug)}/calendar.ics`;
+    $('join').innerHTML = joinBox();
+    $('go')?.addEventListener('click', join);
+    $('cancel')?.addEventListener('click', cancel);
+    $('about').innerHTML = `${ev.description.map((p) => `<p>${esc(p)}</p>`).join('')}
+      <dl class="facts"><div><dt>Hosted by</dt><dd>${esc(ev.organiser)} · ${ev.hosts.map((h) => `${esc(h.name)} (${esc(h.role)})`).join(', ')}</dd></div><div><dt>Price</dt><dd>${esc(ev.price)}</dd></div></dl>
+      <div class="chips static">${ev.tags.map((x) => `<span>${esc(x)}</span>`).join('')}</div>
+      <p class="note">${RR.label('stand-in')} event details for the demo.</p>`;
+    $('tznote').textContent = `Times are ${ev.city} time.`;
+    agenda();
+    $('speakers').innerHTML = ev.speakers.map((p) => `<li><b>${esc(p.name)}</b><span class="muted">${esc(p.bio)}</span></li>`).join('');
+    $('venue').innerHTML = `<p><b>${esc(ev.venue.name)}</b><br>${esc(ev.venue.address)}</p>
+      <p><a href="${esc(ev.venue.mapUrl)}" rel="noopener" target="_blank">Open in a map</a></p>
+      <ul>${ev.accessibility.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>
+      <p><a href="${esc(ev.codeOfConduct)}" rel="noopener" target="_blank">Code of conduct</a></p>`;
+    $('faq').innerHTML = ev.faq.map(([q, a]) => `<details class="faq"><summary>${esc(q)}</summary><p class="m0">${esc(a)}</p></details>`).join('');
+  }
+
+  async function load() {
+    try { ev = await RR.api(`/events/${enc(slug)}`); render(); } catch (x) {
+      $('title').textContent = x.status === 404 ? 'No such event' : 'Event';
+      $('when').textContent = '';
+      $('join').innerHTML = '<a class="rr-btn rr-btn--ghost" href="/events">See all events</a>';
+      RR.showError($('err'), x, load);
+    }
+  }
+  async function join() {
+    $('err').hidden = true;
+    try {
+      await RR.api(`/events/${enc(slug)}/rsvp`, { method: 'POST', body: { force } });
+      force = false;
+      RR.toast(ev.register ? 'Registered' : "You're on the list");
+      load();
+    } catch (x) {
+      if (!x.data?.overlap) return RR.showError($('err'), x);
+      // Overlapping dates in another city: say so and ask again instead of silently registering twice.
+      force = true;
+      $('join').innerHTML = joinBox();
+      $('go')?.addEventListener('click', join);
+      $('err').textContent = x.message;
+      $('err').hidden = false;
+    }
+  }
+  function cancel() {
+    RR.undo('Cancelling your RSVP', async () => {
+      try { await RR.api(`/events/${enc(slug)}/rsvp`, { method: 'DELETE' }); RR.toast('RSVP cancelled'); load(); } catch (x) { RR.showError($('err'), x); }
+    });
+  }
+  $('share').addEventListener('click', async () => {
+    const url = location.href.split('#')[0];
+    try {
+      if (navigator.share) await navigator.share({ title: ev?.name, url });
+      else { await navigator.clipboard.writeText(url); RR.toast('Link copied'); }
+    } catch (x) { if (x.name !== 'AbortError') RR.toast(url); }
+  });
+
+  (async () => { me = await RR.whoami(); load(); })();
+</script>
+</body>
+</html>

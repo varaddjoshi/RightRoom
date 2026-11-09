@@ -3,7 +3,7 @@
 // The same line loads /demo-clock.js, which labels a demo clock (P4 owns it; does nothing on a normal server).
 if (typeof document !== 'undefined') for (const src of ['/rum.js', '/demo-clock.js']) document.head.appendChild(Object.assign(document.createElement('script'), { src, defer: true }));
 (() => {
-  const WORD = { free: 'Seats free', filling: 'Filling', full: 'Full' };
+  const WORD = { free: 'Seats free', filling: 'Filling', full: 'Full', checking: 'Full · being checked' };
 
   // Escape anything that came from a person (handles, comments, titles) before it goes into innerHTML.
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -16,7 +16,7 @@ if (typeof document !== 'undefined') for (const src of ['/rum.js', '/demo-clock.
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { status: res.status });
+    if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { status: res.status, data });
     return data;
   }
 
@@ -28,7 +28,7 @@ if (typeof document !== 'undefined') for (const src of ['/rum.js', '/demo-clock.
       if (!ok) throw Object.assign(new Error('role'), { status: 403 });
       return me;
     } catch (e) {
-      location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}${e.status === 403 ? '&role=1' : ''}`;
+      location.href = `/login?mode=login&next=${encodeURIComponent(location.pathname + location.search)}${e.status === 403 ? '&role=1' : ''}`;
       return new Promise(() => {});
     }
   }
@@ -101,7 +101,8 @@ if (typeof document !== 'undefined') for (const src of ['/rum.js', '/demo-clock.
   // opts: { role: 'attendee'|'staff'|'organiser', here: room id, mode: 'map'|'list', notices: GET /api/announcements, onPick: (roomId) => void }. Walking minutes come from GET /api/floors?from=<here>.
   function floorBoard(el, floors, opts = {}) {
     const staff = opts.role === 'staff' || opts.role === 'organiser';
-    const needs = (r) => staff && r.queue > 0 && !r.staffOn;
+    // Same rule as the server's need-staff count: no console open and either a queue or a room that isn't free.
+    const needs = (r) => staff && !r.staffOn && (r.queue > 0 || r.status !== 'free');
     const access = (r) => `${r.stepFree ? '&#9855; ' : ''}${esc(r.access)}`;
     const extra = (r) => {
       if (staff) return `<span class="tile-m">${r.staffOn ? `${esc(r.staffOn)} on door` : 'No staff'}${r.queue ? ` · Queue ${Number(r.queue)}` : ''}</span>${needs(r) ? '<span class="tile-x">Needs staff</span>' : ''}`;
@@ -111,6 +112,8 @@ if (typeof document !== 'undefined') for (const src of ['/rum.js', '/demo-clock.
     const list = opts.mode === 'list';
     const all = forFloor(opts.notices, null);
     const top = all.length ? (list ? `<div class="fl-all">${all.map(notice).join('')}</div>` : `<div class="fl-all">${badge(all, null, 'All floors')}</div>`) : '';
+    const everyRoom = floors.flatMap((f) => f.rooms.map((x) => ({ ...x, floor: x.floor ?? f.floor })));
+    const go = (r) => { const a = r.status === 'full' && nearbyFree(everyRoom, { ...r, floor: r.floor }); return a ? `<span class="tile-go">Full · seats free in ${esc(roomName(a))}</span>` : ''; };
     el.innerHTML = `<div class="fl-board">${top}${floors.map((f) => {
       const seats = f.rooms.reduce((s, r) => s + r.free, 0);
       const mine = forFloor(opts.notices, f.floor);
@@ -122,7 +125,7 @@ if (typeof document !== 'undefined') for (const src of ['/rum.js', '/demo-clock.
             <span class="tile-top"><span class="tile-n">${esc(r.name || r.displayName || r.id)}</span>${status(r.status)}</span>
             <span class="tile-t">${esc(r.title)}</span>
             <span class="meter" aria-hidden="true"><i style="width:${Math.min(100, Math.round((r.taken / r.capacity) * 100))}%"></i></span>
-            <span class="tile-m">${r.taken} of ${r.capacity}</span><span class="tile-m">${access(r)}</span>${extra(r)}</button>`).join('')}</div>`;
+            <span class="tile-m">${r.taken} of ${r.capacity}</span><span class="tile-m">${access(r)}</span>${go({ ...r, floor: r.floor ?? f.floor })}${wifiChip(r.wifiStats)}${extra(r)}</button>`).join('')}</div>`;
       return `<div class="fl">${head}${body}</div>`;
     }).join('')}</div>`;
     motion(el, opts.mode || 'map');
@@ -132,6 +135,90 @@ if (typeof document !== 'undefined') for (const src of ['/rum.js', '/demo-clock.
       showNotices(floor == null ? 'All floors' : `Floor ${floor} notices`, forFloor(opts.notices, floor), b);
     }));
   }
+
+  // Nearest room with free seats for a full one: same floor first, then the most free seats. Used where the
+  // server's redirect isn't fetched (tiles, Now); the room page itself shows the server's redirect with reasons.
+  const nearbyFree = (rooms, full) => rooms
+    .filter((x) => x.id !== full.id && x.free > 0)
+    .sort((a, b) => (a.floor !== full.floor) - (b.floor !== full.floor) || b.free - a.free)[0] || null;
+
+  // Crowd-sourced Wi-Fi on a tile: band word + speed + how many readings, labelled Live or Stand-in.
+  const BAND = { quiet: 'Quiet', busy: 'Busy', packed: 'Packed', good: 'Good', ok: 'OK', weak: 'Weak' };
+  const dataLabel = (l) => label(l === 'stand_in' ? 'stand-in' : l === 'mixed' ? 'live + stand-in' : 'live');
+  const wifiChip = (w) => (w && w.count ? `<span class="tile-m wifi" data-band="${esc(w.band)}">Wi-Fi ${esc(BAND[w.band] || w.band)} · ${Math.round(w.mbps)} Mbps · ${Number(w.count)} ${w.count === 1 ? 'reading' : 'readings'}${w.label === 'stand_in' ? ' (stand-in)' : w.label === 'mixed' ? ' (incl. stand-in)' : ''}</span>` : '');
+
+  // Crowd-sourced insights (A4, A5): Wi-Fi median, top comment topics and crowd heat in one visually distinct block,
+  // labelled Live or Stand-in. Missing data says "No readings yet", never a made-up number.
+  // wifi: a wifiStats object ({mbps, count, band, label}; GET /api/floors) or falls back to room.wifiStats.
+  // topics: string[] (GET /api/spaces/:id/comments). heat: GET /api/heat?room= ({zones}) or the floors summary ({busiest}).
+  // compact: one line per item for list cards.
+  function insights(room, { wifi, topics, heat, compact } = {}) {
+    const w = wifi || room?.wifiStats;
+    const zones = heat?.zones || [];
+    const busiest = heat?.busiest || zones.filter((z) => z.crowd).sort((a, b) => b.crowd.density - a.crowd.density).map((z) => ({ zone: z.zone, band: z.crowd.band }))[0];
+    const weakest = heat?.weakestWifi || zones.filter((z) => z.wifi).sort((a, b) => a.wifi.mbps - b.wifi.mbps).map((z) => ({ zone: z.zone, band: z.wifi.band, mbps: z.wifi.mbps }))[0];
+    const kinds = [w?.count ? w.label : null, heat?.label || zones.find((z) => z.crowd)?.crowd.label].filter(Boolean);
+    const tag = kinds.length ? dataLabel(new Set(kinds).size > 1 ? 'mixed' : kinds[0]) : '';
+    const wifiTxt = w?.count
+      ? `<span class="wifi-band" data-band="${esc(w.band)}">${esc(BAND[w.band] || w.band)}</span> · ${Math.round(w.mbps)} Mbps median · ${Number(w.count)} ${w.count === 1 ? 'reading' : 'readings'}${weakest && weakest.band === 'weak' ? ` · weak at ${esc(zoneName(weakest.zone).toLowerCase())}` : ''}`
+      : 'No readings yet';
+    const topicTxt = topics?.length ? topics.slice(0, 3).map(esc).join(', ') : 'No comments yet';
+    const heatTxt = busiest ? `${esc(BAND[busiest.band] || busiest.band)} at ${esc(zoneName(busiest.zone).toLowerCase())}` : 'No readings yet';
+    const row = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+    return `<section class="rr-insights${compact ? ' rr-insights--compact' : ''}" aria-label="Crowd-sourced insights for ${esc(roomName(room))}">
+      <div class="rr-insights-h"><span class="rr-eyebrow">Crowd-sourced</span>${tag}</div>
+      <dl>${row('Wi-Fi', wifiTxt)}${row('Topics', topicTxt)}${row('Crowd', heatTxt)}</dl></section>`;
+  }
+
+  // "Why this for you" (A4, A5): plain-language reasons from interests, access needs, seats, Wi-Fi and walk.
+  // Each reason starts with a word that says good or not ("Matches", "Not step-free"), never colour alone.
+  // me: GET /api/me (or null). minutes: walk time (defaults to room.walk). open: start expanded.
+  function whyForYou(room, me, { minutes = room?.walk, open } = {}) {
+    const reasons = [];
+    const mine = (room?.tags || []).filter((t) => (me?.interests || []).includes(t));
+    if (mine.length) reasons.push(`Matches your interests: ${mine.join(', ')}`);
+    const needs = me?.needs || [];
+    if (needs.includes('step-free')) reasons.push(room.stepFree ? 'Step-free, as you asked' : 'Not step-free: stairs only');
+    if (needs.includes('captions')) reasons.push(/caption/i.test(room.access || '') ? 'Has captions, as you asked' : 'No captions listed');
+    if (room?.status === 'checking') reasons.push('Full, being checked by staff: you can join the queue');
+    else if (room?.free != null) reasons.push(room.free > 0 ? `${Number(room.free)} ${room.free === 1 ? 'seat' : 'seats'} free now` : 'Full right now: join the queue or pick another room');
+    const w = room?.wifiStats;
+    if (w?.count) reasons.push(`Wi-Fi ${String(BAND[w.band] || w.band).toLowerCase()} (${Math.round(w.mbps)} Mbps, crowd-sourced)`);
+    else if (room?.wifi != null) reasons.push(`Wi-Fi about ${Math.round(room.wifi)} Mbps (crowd-sourced)`);
+    if (minutes === 0) reasons.push("You're already here");
+    else if (minutes != null) reasons.push(`${Number(minutes)} min walk`);
+    const html = reasons.length
+      ? `<details class="rr-why rr-fit"${open ? ' open' : ''}><summary><span>Why this for you<small> · ${esc(reasons[0])}</small></span></summary><ul>${reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul></details>`
+      : '';
+    return { reasons, html };
+  }
+
+  // Zone heatmap from /api/heat: Crowd or Wi-Fi per zone, a word and a value in every cell, never colour alone.
+  // Zones nobody has measured say "No readings yet" instead of looking empty.
+  async function heat(el, room, opts = {}) {
+    const layer = el.dataset.layer || opts.layer || 'crowd';
+    let h;
+    try { h = await api(`/heat?room=${encodeURIComponent(room)}`); } catch { el.innerHTML = '<p class="note">The heatmap isn\'t available yet.</p>'; return null; }
+    const pick = (z) => (layer === 'crowd' ? z.crowd : z.wifi);
+    const labels = [...new Set(h.zones.map(pick).filter(Boolean).map((d) => d.label).filter(Boolean))];
+    const suggest = opts.suggest ? suggestZones(h) : [];
+    const cell = (z) => {
+      const d = pick(z);
+      if (!d) return `<div class="hz" data-band="none"><b>${esc(zoneName(z.zone))}</b><span>No readings yet</span></div>`;
+      const v = layer === 'crowd' ? `${Number(d.count)} here` : `${Math.round(d.mbps)} Mbps`;
+      return `<div class="hz" data-band="${esc(d.band)}"${suggest.includes(z.zone) ? ' data-suggest' : ''}><b>${esc(zoneName(z.zone))}</b><span>${esc(BAND[d.band] || d.band)} · ${esc(v)}</span>${suggest.includes(z.zone) ? '<em>Suggested</em>' : ''}</div>`;
+    };
+    el.innerHTML = `<div class="hm-head"><div class="seg" role="group" aria-label="Heatmap layer"><button type="button" data-layer="crowd" aria-pressed="${layer === 'crowd'}">Crowd</button><button type="button" data-layer="wifi" aria-pressed="${layer === 'wifi'}">Wi-Fi</button></div>
+      <span class="hm-meta">${labels.length ? dataLabel(labels.length > 1 ? 'mixed' : labels[0]) : ''}<span class="small muted">Updated ${clock(h.updatedAt)}</span></span></div>
+      <div class="hm" role="list" aria-label="${layer === 'crowd' ? 'How busy each part of the room is' : 'Wi-Fi in each part of the room'}"><span class="rr-zones-front" aria-hidden="true">Stage</span>${h.zones.map((z) => cell(z).replace('<div class="hz"', '<div role="listitem" class="hz"')).join('')}</div>`;
+    el.querySelectorAll('[data-layer]').forEach((b) => b.addEventListener('click', () => { el.dataset.layer = b.dataset.layer; heat(el, room, opts); }));
+    return h;
+  }
+  // Up to two zones that are quiet or busy (not packed) with good or ok Wi-Fi: a suggestion, never a seat rule.
+  const suggestZones = (h) => h.zones
+    .filter((z) => z.crowd?.band !== 'packed' && ['good', 'ok'].includes(z.wifi?.band))
+    .sort((a, b) => (a.crowd?.density ?? 0) - (b.crowd?.density ?? 0) || (b.wifi?.mbps ?? 0) - (a.wifi?.mbps ?? 0))
+    .slice(0, 2).map((z) => z.zone);
 
   // Motion: the first render staggers tiles in, switching Map/List cross-fades; live re-renders stay still.
   function motion(el, mode) {
@@ -203,38 +290,63 @@ if (typeof document !== 'undefined') for (const src of ['/rum.js', '/demo-clock.
     board: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
     qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/>',
     sim: '<path d="M8 5.5v13l10-6.5z"/>',
+    cal: '<rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
     in: '<path d="M10 17l5-5-5-5M15 12H4M14 4h5v16h-5"/>',
+    star: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
   };
   const svg = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
+
+  // Event times, always in the event's own timezone (an event in another city must never read in local time).
+  const inTz = (tz, t, o) => new Intl.DateTimeFormat('en-GB', { timeZone: tz, ...o }).format(new Date(t));
+  const evTime = (tz, t) => inTz(tz, t, { hour: '2-digit', minute: '2-digit' });
+  const evDay = (tz, t) => inTz(tz, t, { weekday: 'long', day: 'numeric', month: 'long' });
+  function eventWhen(e) {
+    const zone = new Intl.DateTimeFormat('en-US', { timeZone: e.timezone, timeZoneName: 'short' }).format(new Date(e.start)).split(' ').pop();
+    const d = (t) => inTz(e.timezone, t, { weekday: 'short', day: 'numeric', month: 'short' });
+    return d(e.start) === d(e.end)
+      ? `${d(e.start)} ${inTz(e.timezone, e.start, { year: 'numeric' })} · ${evTime(e.timezone, e.start)} to ${evTime(e.timezone, e.end)} ${zone}`
+      : `${d(e.start)} to ${d(e.end)} ${inTz(e.timezone, e.end, { year: 'numeric' })} · ${zone}`;
+  }
 
   // App shell: a top app bar (brand, where you are, user menu) on every page, plus persona tabs:
   // a fixed bottom tab bar on phones, inline in the top bar on laptops. Pages opt out with <body class="rr-nonav">.
   let meCache;
   const whoami = () => (meCache ??= api('/me').catch(() => null));
-  const tabsFor = (me) => {
-    const room = recall('rr-room'), door = recall('rr-door');
-    if (!me) return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['me', 'Sign in', `/login?next=${encodeURIComponent(location.pathname)}`]];
+  // Name of the live event the live pages (/event, /sessions, /r/*, My seat) belong to, so they say which event.
+  let eventCache;
+  const liveEvent = () => (eventCache ??= api('/event').then((e) => ({ name: e.name, slug: e.slug })).catch(() => ({ name: null, slug: null })));
+  // My seat follows the person across devices: GET /api/me/places (the room I'm checked in to, else my first place).
+  // Falls back to the room this device last used when the call fails (signed out, or a server without the route).
+  let roomCache;
+  const myRoom = () => (roomCache ??= api('/me/places')
+    .then((p) => { const r = (p.rooms || []).find((x) => x.status === 'checkedIn') || (p.rooms || [])[0]; return r ? String(r.room) : null; })
+    .catch(() => recall('rr-room')));
+  const tabsFor = (me, room = recall('rr-room')) => {
+    const door = recall('rr-door');
+    if (!me) return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['cal', 'Events', '/events'], ['me', 'Sign in', `/login?mode=login&next=${encodeURIComponent(location.pathname)}`]];
     if (me.role === 'organiser') return [['board', 'Board', '/staff/setup'], ['door', 'Rooms', '/staff/setup#edit'], ['bell', 'Announce', '/staff/setup#ann'], ['qr', 'QR codes', '/staff/qr']];
     if (me.role === 'staff') return [['door', 'Door', door ? `/staff/room/${encodeURIComponent(door)}` : '/sessions?pick=door'], ['board', 'Board', '/sessions'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']];
-    return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['seat', 'My seat', room ? `/r/${encodeURIComponent(room)}` : '/sessions'], ['me', 'Me', '/me']];
+    return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['cal', 'Events', '/events'], ['seat', 'My seat', room ? `/r/${encodeURIComponent(room)}` : '/seat.html'], ['me', 'Me', '/me']];
   };
   const ROLE = { attendee: 'Attendee', guest: 'Guest', staff: 'Door staff', organiser: 'Organiser' };
   async function nav() {
     if (document.body.classList.contains('rr-nonav') || document.querySelector('.rr-bar')) return;
     const me = await whoami();
-    const tabs = tabsFor(me);
+    const tabs = tabsFor(me, me && !['staff', 'organiser'].includes(me.role) ? await myRoom() : null);
     const path = location.pathname, hash = location.hash;
     // Exactly one current tab: an exact path+hash match wins, then the same section (any room, any door).
-    const score = (href) => { const [p, h = ''] = href.split('?')[0].split('#'); if (p === path && `#${h}` === (hash || '#')) return 3; if (p === path && !h) return 2; if (p.startsWith('/r/') && path.startsWith('/r/')) return 1; if (p.startsWith('/staff/room/') && path.startsWith('/staff/room/')) return 1; return 0; };
+    const score = (href) => { const [p, h = ''] = href.split('?')[0].split('#'); if (p === path && `#${h}` === (hash || '#')) return 3; if (p === path && !h) return 2; if (p.startsWith('/r/') && path.startsWith('/r/')) return 1; if (p === '/events' && path.startsWith('/e/')) return 1; if (p.startsWith('/staff/room/') && path.startsWith('/staff/room/')) return 1; return 0; };
     const best = Math.max(...tabs.map(([, , h]) => score(h)));
     const link = ([ic, text, href]) => `<a href="${esc(href)}"${best && score(href) === best ? ' aria-current="page"' : ''}>${svg(ic)}<span>${esc(text)}</span></a>`;
     const home = tabs[0][2];
     const user = me ? `<details class="rr-user"><summary aria-label="Account: ${esc(me.handle)}"><span class="rr-avatar" aria-hidden="true">${esc(String(me.handle).slice(0, 1).toUpperCase())}</span><span class="rr-user-name">${esc(me.handle)}</span></summary>
         <div class="rr-user-menu"><p><b>${esc(me.handle)}</b><br><span class="muted">${esc(ROLE[me.role] || me.role)}</span></p>${me.role === 'attendee' ? '<a href="/me">Profile and interests</a>' : ''}<button type="button" id="rr-signout">Sign out</button></div></details>`
-      : `<a class="rr-signin" href="/login?next=${encodeURIComponent(location.pathname)}">Sign in</a>`;
+      : `<a class="rr-signin" href="/login?mode=login&next=${encodeURIComponent(location.pathname)}">Sign in</a>`;
+    // Signed out: laptops show Sign in once, top right; phones show it once, as a bottom tab.
     const bar = document.createElement('header');
     bar.className = 'rr-bar';
-    bar.innerHTML = `<a class="rr-nav-brand" href="${esc(home)}"><i aria-hidden="true"></i>RightRoom</a><nav class="rr-nav rr-nav--top" aria-label="Main">${tabs.map(link).join('')}</nav><span class="rr-here" id="rr-here"></span>${user}`;
+    const scan = me && me.role !== 'organiser' && !path.startsWith('/scan') ? `<a class="rr-scanbtn" href="/scan">${svg('qr')}<span>Scan</span></a>` : '';
+    bar.innerHTML = `<a class="rr-nav-brand" href="${esc(home)}"><i aria-hidden="true"></i>RightRoom</a><nav class="rr-nav rr-nav--top" aria-label="Main">${tabs.filter(([ic]) => me || ic !== 'me').map(link).join('')}</nav><span class="rr-here" id="rr-here"></span>${scan}${user}`;
     const tabbar = document.createElement('nav');
     tabbar.className = 'rr-nav rr-nav--tabs';
     tabbar.setAttribute('aria-label', 'Main');
@@ -265,5 +377,5 @@ if (typeof document !== 'undefined') for (const src of ['/rum.js', '/demo-clock.
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', nav); else nav();
 
-  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, roomName, toast };
+  window.RR = { myRoom, insights, whyForYou, nearbyFree, heat, suggestZones, wifiChip, BAND, api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, liveEvent, eventWhen, evTime, evDay, roomName, toast };
 })();

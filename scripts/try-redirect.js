@@ -1,5 +1,5 @@
 // Prints the redirect for a room, for checking P1 by hand.
-//   node scripts/try-redirect.js r204 [--group 2] [--needs step_free,captions] [--interests observability,ebpf] [--at 2026-11-10T11:45:00-07:00] [--json]
+//   node scripts/try-redirect.js r204 [--group 2] [--needs step-free,captions] [--interests observability,ebpf] [--at 2026-11-10T11:45:00-07:00] [--json]
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 const { redirect } = require('../src/redirect');

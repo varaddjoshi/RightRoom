@@ -37,6 +37,7 @@ app.use(require('./src/clockinfo').router()); // GET /api/clock: lets screens la
 app.use('/api', api({ store, engine }));
 app.use('/api', require('./src/routes/insights').makeRouter({ requireRole: auth.requireRole, db: () => store.db }));
 app.use('/api', require('./src/routes/search').searchRouter({ engine }));
+app.use('/api', require('./src/routes/events').eventsRouter({ store, engine })); // /events listings, agenda, RSVP, .ics
 app.use('/api', require('./src/routes/heat').heatRouter({ engine, store, requireRole: auth.requireRole }));
 app.use(require('./src/routes/qr').qrRouter({ store, requireRole: auth.requireRole }));
 app.use('/api', require('./src/routes/venue').venueRouter({ store, engine }));
@@ -46,6 +47,7 @@ const PAGES = {
   '/login': 'login', '/me': 'me', '/event': 'event', '/sessions': 'sessions', '/news': 'news',
   '/r/:room': 'room', '/r/:room/in': 'in',
   '/host': 'host', '/staff/venue': 'venue', '/staff/room/:room': 'staff-room', '/staff/setup': 'staff-setup', '/staff/qr': 'staff-qr', '/screen/:room': 'screen', '/sim': 'sim', '/scan': 'scan',
+  '/events': 'events', '/e/:slug': 'e',
 };
 for (const [url, page] of Object.entries(PAGES)) {
   app.get(url, (req, res) => res.sendFile(path.join(__dirname, 'public', `${page}.html`), (e) => e && res.status(404).send('Page not built yet.')));

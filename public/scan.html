@@ -5,8 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Scan a code · RightRoom</title>
   <link rel="stylesheet" href="/rr.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#1b2a4a">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <style>
-    /* Neutral fallbacks so the page reads in the current dark skin and the coming light one. */
+    /* Light system: camera view stays dark, everything around it uses the app's tokens. */
     .scan { min-height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; gap: 16px; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
     .scan-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .scan-top h1 { margin: 0; font-size: 1.375rem; }
@@ -24,7 +28,8 @@
     .scan-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
     #status { text-align: center; margin: 0; min-height: 1.5em; }
     .paste { display: grid; gap: 8px; }
-    .paste input { min-height: 48px; padding: 0 12px; font-size: 1rem; }
+    .paste input { min-height: 48px; padding: 0 12px; font: 400 var(--rr-t-md)/1.4 var(--rr-font-body); color: var(--rr-ink); background: var(--rr-panel); border: 1px solid var(--rr-line); border-radius: var(--rr-r1); }
+    .msg { background: var(--rr-panel); border: 1px solid var(--rr-hair); border-radius: var(--rr-r2); padding: var(--rr-s4); }
   </style>
 </head>
 <body>

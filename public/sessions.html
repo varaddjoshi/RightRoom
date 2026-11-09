@@ -14,15 +14,25 @@
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>
-  a.talk { color: inherit; text-decoration: none; min-height: 64px; }
-  .talk .fc { color: var(--rr-full); font-weight: 700; }
-  @media (min-width: 960px) { #view .fl .rr-btn-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  /* Attendee schedule: one list, one card per session, everything on the card (no Map/List toggle). */
+  .sx-list { display: grid; gap: var(--rr-s3); }
+  @media (min-width: 960px) { .sx-list { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
+  .sx { display: grid; gap: var(--rr-s3); padding: var(--rr-s4); background: var(--rr-panel); border: 1px solid var(--rr-hair); border-radius: var(--rr-r2); box-shadow: var(--rr-shadow); }
+  .sx-top { display: flex; justify-content: space-between; align-items: start; gap: var(--rr-s3); }
+  .sx h3 { margin: 0 0 2px; font: 800 var(--rr-t-lg)/1.2 var(--rr-font-sign); text-wrap: balance; }
+  .sx h3 a { color: var(--rr-ink); text-decoration: none; }
+  .sx h3 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .sx-where, .sx-when { display: block; color: var(--rr-muted); font-size: var(--rr-t-sm); }
+  .sx-facts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rr-s1) var(--rr-s3); margin: 0; padding: 0; list-style: none; font-size: var(--rr-t-sm); font-variant-numeric: tabular-nums; }
+  .sx-facts b { font-weight: 800; }
+  .sx .fc { color: var(--rr-muted); font-weight: 700; font-size: var(--rr-t-sm); }
+  .sx .fc[data-risk="high"] { color: var(--rr-full); }
+  .sx .rr-why { padding-top: 0; border-top: 0; }
 </style>
 </head>
 <body>
 <main class="rr-screen rr-screen--wide" id="main">
   <div class="rr-sign"><span class="rr-eyebrow" id="now">Now</span><h1>Schedule</h1></div>
-  <div class="seg" role="group" aria-label="View" style="justify-self:start"><button type="button" data-mode="map" aria-pressed="true">Map</button><button type="button" data-mode="list" aria-pressed="false">List</button></div>
   <div id="view" aria-live="polite"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
   <a class="rr-dialog-all" href="/news">All announcements</a>
   <p class="note" id="legend"></p>
@@ -31,77 +41,123 @@
 <script src="/app.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
-  $('legend').innerHTML = `${RR.label('live')} room status · ${RR.label('crowd-sourced')} Wi-Fi · ${RR.label('stand-in')} forecast`;
+  const esc = RR.esc, enc = encodeURIComponent;
+  $('legend').innerHTML = `${RR.label('live')} room status · ${RR.label('crowd-sourced')} Wi-Fi, topics and crowd · ${RR.label('stand-in')} sample data`;
   $('now').textContent = `Now · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  // ?view=list opens the list (for links and checks); Map is the default.
   const q = new URLSearchParams(location.search);
-  let mode = q.get('view') === 'list' ? 'list' : 'map', here = null, forecast = null, topics = {}, notices = [], role = 'attendee';
-  // Staff and organisers use this board to pick a door: tapping a room opens its door console.
+  let me = null, here = null, forecast = null, topics = {}, notices = [], role = 'attendee', agenda = null, starred = [];
+  // Staff and organisers keep the floor map (it is their board); ?pick=door turns it into a door picker.
   const pickDoor = q.get('pick') === 'door';
-  const open = (id) => { location.href = role === 'attendee' || role === 'guest' ? `/r/${encodeURIComponent(id)}` : `/staff/room/${encodeURIComponent(id)}`; };
+  const staff = () => role === 'staff' || role === 'organiser';
+  const open = (id) => { location.href = staff() ? `/staff/room/${enc(id)}` : `/r/${enc(id)}`; };
+  const opened = new Set(); // "Why this for you" panels the person opened survive live redraws
 
   const riskWord = { high: 'Likely to fill', medium: 'May fill', low: 'Unlikely to fill' };
-  function fcLine(id) {
-    if (forecast === false) return '<span>Forecast: not available yet</span>';
-    const f = forecast?.find((x) => x.room === id);
-    if (!f) return '';
+  function fcLine(r) {
+    if (forecast === false) return '<span class="note">Forecast: not available yet</span>';
+    const f = forecast?.find((x) => x.room === r.id);
+    if (!f || r.free === 0 || r.status === 'checking') return ''; // never "likely to fill" on a room that has no seats
     const by = f.likelyFullMinute != null && f.risk !== 'low' ? `, around ${Math.round(f.likelyFullMinute)} min in` : '';
-    return `<span class="fc">${riskWord[f.risk] || f.risk}${by} · ${Math.round(f.expectedFill * 100)}% expected</span>`;
+    return `<span class="fc" data-risk="${esc(f.risk)}">${riskWord[f.risk] || f.risk}${by} · ${Math.round(f.expectedFill * 100)}% expected</span>`;
+  }
+  // Time comes from the event agenda: the session on now in this room, else the next one.
+  function when(r) {
+    if (!agenda) return '';
+    const now = Date.parse(agenda.now), tz = agenda.timezone;
+    const s = agenda.sessions.filter((x) => x.room === r.id && Date.parse(x.end) > now).sort((a, b) => Date.parse(a.start) - Date.parse(b.start))[0];
+    if (!s) return '<span class="sx-when">Nothing more on the agenda in this room</span>';
+    const t = `${RR.evTime(tz, s.start)} to ${RR.evTime(tz, s.end)}`;
+    const day = RR.evDay(tz, s.start) === RR.evDay(tz, now) ? '' : `${RR.evDay(tz, s.start)}, `;
+    return `<span class="sx-when">${Date.parse(s.start) <= now ? 'On now' : 'Next'}: ${day}${t}${s.title !== r.title ? ` · ${esc(s.title)}` : ''}</span>`;
+  }
+  const walk = (r) => (r.id === here ? "You're here" : r.walk != null ? `${Number(r.walk)} min walk` : 'Walk time: check in to a room first');
+  const isStarred = (id) => starred.includes(id);
+
+  function card(r) {
+    const why = RR.whyForYou(r, me);
+    return `<article class="sx" data-room="${esc(r.id)}" aria-labelledby="t-${esc(r.id)}">
+      <div class="sx-top"><div><h3 id="t-${esc(r.id)}"><a href="/r/${enc(r.id)}">${esc(r.title)}</a></h3>
+        <span class="sx-where">${esc(RR.roomName(r))} · Floor ${esc(r.floor)}</span>${when(r)}</div>
+        <button type="button" class="rr-star" data-star="${esc(r.id)}" aria-pressed="${isStarred(r.id)}" aria-label="Star ${esc(r.title)}">${RR.svg('star')}<span aria-hidden="true">${isStarred(r.id) ? 'Starred' : 'Star'}</span></button></div>
+      <ul class="sx-facts">
+        <li>${RR.status(r.status)}</li>
+        <li><b>${Number(r.free)}</b> ${r.free === 1 ? 'seat' : 'seats'} free · ${Number(r.taken)} of ${Number(r.capacity)} taken</li>
+        <li>${walk(r)}</li>
+        <li class="rr-access">${esc(r.access)}</li>
+      </ul>
+      ${fcLine(r)}
+      ${RR.insights(r, { topics: topics[r.id], heat: r.heat, compact: true })}
+      ${opened.has(r.id) ? why.html.replace('<details', '<details open') : why.html}
+    </article>`;
   }
 
   async function render() {
     try {
-      if (mode === 'map') {
-        const floors = await RR.api(`/floors${here ? `?from=${encodeURIComponent(here)}` : ''}`);
-        RR.floorBoard($('view'), floors, { role: role === 'guest' ? 'attendee' : role, here, mode: 'map', notices, onPick: open });
-        return;
-      }
-      const rooms = await RR.api('/sessions');
-      rooms.sort((a, b) => b.floor - a.floor || a.id.localeCompare(b.id));
-      // List mode: one group per floor (top floor first), each led by that floor's announcements.
-      const floorsOf = [...new Set(rooms.map((r) => r.floor))];
+      const floors = await RR.api(`/floors${here ? `?from=${enc(here)}` : ''}`);
+      if (staff()) { RR.floorBoard($('view'), floors, { role, here, mode: 'map', notices, onPick: open }); return; }
+      // Floors give walk minutes, Wi-Fi stats and heat; /sessions gives tags for "why this for you".
+      const sessions = await RR.api('/sessions');
       const all = RR.forFloor(notices, null);
-      $('view').innerHTML = `<div class="fl-board">${all.length ? `<div class="fl-all">${all.map(RR.notice).join('')}</div>` : ''}${floorsOf.map((fl) => `<section class="fl" aria-label="Floor ${Number(fl)}">
-        <div class="fl-h"><b>FLOOR ${Number(fl)}</b></div>${RR.forFloor(notices, fl).map(RR.notice).join('')}
-        <div class="rr-btn-stack">${rooms.filter((r) => r.floor === fl).map((r) => `
-        <a class="talk" href="${role === 'attendee' || role === 'guest' ? '/r/' : '/staff/room/'}${encodeURIComponent(r.id)}">
-          <div><b>${RR.esc(r.title)}</b>
-            <span>${RR.esc(RR.roomName(r))} · Floor ${RR.esc(r.floor)}${r.id === here ? ' · you are here' : ''} · ${r.stepFree ? '&#9855; ' : ''}${RR.esc(r.access)}</span>
-            <span>${Number(r.taken)} of ${Number(r.capacity)} in${r.wifi != null ? ` · Wi-Fi ${Number(r.wifi)} Mbps` : ''}${topics[r.id]?.length ? ` · topics: ${topics[r.id].map(RR.esc).join(', ')}` : ''}</span>
-            ${fcLine(r.id)}
-          </div>${RR.status(r.status)}</a>`).join('')}</div></section>`).join('')}</div>`;
+      $('view').innerHTML = `<div class="fl-board">${all.length ? `<div class="fl-all">${all.map(RR.notice).join('')}</div>` : ''}${floors.map((f) => {
+        const rooms = f.rooms.map((x) => ({ ...sessions.find((s) => s.id === x.id), ...x, floor: x.floor ?? f.floor }));
+        return `<section class="fl" aria-labelledby="fl-${Number(f.floor)}">
+        <div class="fl-h"><b id="fl-${Number(f.floor)}">Floor ${Number(f.floor)}</b><span>${rooms.length} ${rooms.length === 1 ? 'session' : 'sessions'} · ${rooms.reduce((n, r) => n + r.free, 0)} seats free</span></div>
+        ${RR.forFloor(notices, f.floor).map(RR.notice).join('')}
+        <div class="sx-list">${rooms.map(card).join('')}</div></section>`;
+      }).join('')}</div>`;
+      $('view').querySelectorAll('.rr-fit').forEach((d) => d.addEventListener('toggle', () => { const id = d.closest('[data-room]').dataset.room; d.open ? opened.add(id) : opened.delete(id); }));
+      $('view').querySelectorAll('[data-star]').forEach((b) => b.addEventListener('click', () => star(b.dataset.star)));
       RR.motion($('view'), 'list');
     } catch (x) { RR.showError($('err'), x); }
   }
 
-  document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.mode === mode));
-  document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
-    mode = b.dataset.mode;
-    document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+  // Stars (decision 7) save to the profile. Until the server stores them (no `starred` echoed back, or a 400),
+  // they are kept on this device so the button still works.
+  const keepLocal = () => RR.remember('rr-starred', JSON.stringify(starred));
+  async function star(id) {
+    if (!me) { location.href = `/login?mode=login&next=${enc(location.pathname)}`; return; }
+    const was = starred;
+    starred = isStarred(id) ? starred.filter((x) => x !== id) : [...starred, id];
+    keepLocal();
     render();
-  }));
+    try {
+      const u = await RR.api('/me', { method: 'PUT', body: { starred } });
+      RR.toast(isStarred(id) ? 'Starred' : 'Star removed');
+      if (Array.isArray(u.starred)) starred = u.starred;
+    } catch (x) {
+      if (x.status === 400) { RR.toast(isStarred(id) ? 'Starred on this device' : 'Star removed on this device'); return; }
+      starred = was; keepLocal(); render(); RR.showError($('err'), x, () => star(id));
+    }
+  }
 
   (async () => {
-    const me = await RR.whoami();
+    me = await RR.whoami();
     role = me?.role || 'attendee';
+    try { starred = Array.isArray(me?.starred) ? me.starred : JSON.parse(RR.recall('rr-starred') || '[]'); } catch { starred = []; }
+    // Say which event this live board belongs to (decision: live pages are the live event's, never mixed).
+    const ev = await RR.liveEvent();
+    if (ev.name && !pickDoor) $('now').textContent = `${ev.name} · ${$('now').textContent}`;
     if (pickDoor) { document.querySelector('.rr-sign h1').textContent = 'Pick your door'; $('now').textContent = 'Tap the room you are covering'; }
+    if (staff()) $('legend').innerHTML = `${RR.label('live')} room status · ${RR.label('crowd-sourced')} Wi-Fi`;
     const rooms = await RR.api('/sessions').catch(() => []);
-    // Where the person is checked in, for "you are here" and walking times; topics come from each room's comments.
-    // Only the room you last used is checked (not every room), so a 28-room venue stays one request for this.
+    // Where the person is checked in, for "you are here" and walking times. Only the room last used is checked.
     const last = RR.recall('rr-room');
-    if (me && last && rooms.some((r) => r.id === last)) { const s = await RR.api(`/spaces/${encodeURIComponent(last)}`).catch(() => null); if (s?.me?.checkedIn) here = last; }
-    await Promise.all(rooms.map(async (r) => {
-      topics[r.id] = ((await RR.api(`/spaces/${encodeURIComponent(r.id)}/comments`).catch(() => ({ topics: [] }))).topics || []).slice(0, 3);
-    }));
-    forecast = await RR.api('/forecast').then((f) => f.sessions).catch(() => false);
+    if (me && last && rooms.some((r) => r.id === last)) { const s = await RR.api(`/spaces/${enc(last)}`).catch(() => null); if (s?.me?.checkedIn) here = last; }
+    if (!staff()) {
+      await Promise.all(rooms.map(async (r) => {
+        topics[r.id] = ((await RR.api(`/spaces/${enc(r.id)}/comments`).catch(() => ({ topics: [] }))).topics || []).slice(0, 3);
+      }));
+      agenda = ev.slug ? await RR.api(`/events/${enc(ev.slug)}`).catch(() => null) : null;
+      forecast = await RR.api('/forecast').then((f) => f.sessions).catch(() => false);
+    }
     notices = await RR.api('/announcements').catch(() => []);
     await render();
     let t;
     RR.live('*', { status: () => { clearTimeout(t); t = setTimeout(render, 300); } });
     const myFloor = rooms.find((r) => r.id === here)?.floor ?? null;
     RR.watchNotices({ floor: myFloor, onChange: (a) => { notices = [a, ...notices]; render(); } });
-    // Demo and screenshot aid: ?notices=open opens the first floor's notices.
-    if (new URLSearchParams(location.search).get('notices') === 'open') (document.querySelector('.notice-badge[data-urgent]') || document.querySelector('.notice-badge'))?.click();
+    // Demo and screenshot aid: ?notices=open opens the first floor's notices (staff map).
+    if (q.get('notices') === 'open') (document.querySelector('.notice-badge[data-urgent]') || document.querySelector('.notice-badge'))?.click();
   })();
 </script>
 </body>

@@ -40,6 +40,8 @@ Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, regi
 34. While checked in to one session you can keep waiting in another room's queue (Sam sits in Room 210 and waits for Room 204). Checking in cancels any seat offers or claims you hold elsewhere, but not your queue places. If a seat offer arrives while you're seated, claiming it and scanning in moves you: you're checked out of the first room and that seat goes to its queue as an offer. You still hold at most one place per queue. (Hitesh)
 35. Only organisers set the door window, claim window and walking time, as an event-wide default on S1 with an override on any session. Door staff see the settings for their room but can't change them. (Varad)
 36. Checking in needs the room's "I'm in the room" QR code. The code carries a key signed for that room and day, and the server refuses a check-in without it, so nobody can count themselves in from outside. The "I'm in the room" button opens the scanner; the phone's camera app works too. At the venue entrance, the door code is the scan-in and carries the venue's key. (Hitesh)
+37. Events are listed Luma-style at `/events` and `/e/:slug` (data: `src/mock/events.js`, stand-in). One event is live at a time (KubeKon, the store's `EVENT_ID`): its count and registrations come from the engine, and Register there is the venue queue (decision 6). Other events are listing-only: agenda and RSVP, no room engine. Decision 26 still holds for live ops: there is no event picker on the live pages. (Hitesh)
+38. Everything "now" or "next" belongs to one event and says which: `/event`, `/sessions`, `/r/*` and My seat show the live event's name and only its sessions; "My events" shows each joined event with its own status and its own next session, in that event's timezone. Lists are never merged across events. Joining an event whose dates overlap one you already joined shows a warning and needs a second tap. (Hitesh)
 
 ## Personas
 
@@ -67,7 +69,7 @@ Organisers are also staff and can open any S2 console. Door staff can't open S1.
 
 ## Screens
 
-Eleven screens. One screen is one URL; the states listed are what the screen shows in each situation.
+Thirteen screens. One screen is one URL; the states listed are what the screen shows in each situation.
 
 | ID | Screen | URL | Who | States |
 |---|---|---|---|---|
@@ -82,6 +84,8 @@ Eleven screens. One screen is one URL; the states listed are what the screen sho
 | S2 | Door console | `/staff/room/:room` (staff QR at each door) | Door staff, organiser | Live count from check-ins; +/− correction for walk-ins who didn't scan; "Room looks full, confirm?" prompt with 30-second countdown; Confirm / "Not yet, N free"; manual Full override; release N seats in a chosen zone; queue with claim codes; 3×3 zone fill; accessibility seat status; hide a comment; "Leave this door"; see this session's door and claim windows (set by organisers, decision 35) |
 | D1 | Big-screen room status | `/screen/:room` | Shared | Live count, status in words and zone fill, updates as people check in |
 | D2 | Check-in simulator | `/sim` | Demo | Button that adds stand-in check-ins and waitlist entries, labelled Stand-in |
+| A8 | Events | `/events` | Attendee, anyone | Cards for every event with a Live, Upcoming or Past label; "My events" (signed in): each joined event with date, city, status ("Live now", "In 24 days") and my next session in that event, in its timezone |
+| A9 | Event details | `/e/:slug` | Attendee, anyone | About, hosts, tags; agenda grouped by day in the event's timezone with speakers, room, track and level ("On now" marks live talks, which link to their door); speakers; venue, map link and access; FAQ; Register (live event) or RSVP with waitlist and cancel; overlap warning; add to calendar (.ics); share |
 
 Dash0 views (traces, the two SLOs, Agent0, redirect success rate, staff override rate) live in Dash0 and are not built as app screens.
 

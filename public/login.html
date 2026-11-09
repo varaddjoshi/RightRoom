@@ -13,24 +13,69 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<style>
+  .auth { display: grid; gap: var(--rr-s4); max-width: 30rem; }
+  .auth .seg { display: flex; }
+  .hint { margin: 0; color: var(--rr-muted); font-size: var(--rr-t-xs); line-height: 1.4; }
+  .hint b { color: var(--rr-ink); }
+  .ferr { margin: 0; color: var(--rr-full); font: 600 var(--rr-t-sm)/1.35 var(--rr-font-body); }
+  .fld input[aria-invalid="true"] { border-color: var(--rr-full); }
+  .pw { position: relative; }
+  .pw input { padding-right: 76px; }
+  .pw button { position: absolute; top: 2px; right: 2px; bottom: 2px; min-width: 64px; border: 0; border-radius: var(--rr-r1); background: none; color: var(--rr-action); font: 700 var(--rr-t-sm)/1 var(--rr-font-sign); cursor: pointer; }
+  .pw button:hover { background: var(--rr-panel-2); }
+  .swap { margin: 0; font-size: var(--rr-t-sm); color: var(--rr-muted); }
+  .swap button { min-height: 44px; padding: 0 var(--rr-s1); border: 0; background: none; color: var(--rr-action); font: 700 var(--rr-t-sm)/1 var(--rr-font-body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+</style>
 </head>
 <body class="rr-nonav">
 <main class="rr-screen" id="main">
-  <div class="rr-sign"><span class="rr-eyebrow">RightRoom · KubeCon day</span><h1>Sign in</h1></div>
-  <p class="note" id="why" hidden>That page needs a staff or organiser account.</p>
-  <form id="f" class="rr-btn-stack" novalidate>
-    <div class="fld"><label for="handle">Username (your public handle)</label><input id="handle" name="handle" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
-    <div class="fld"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
-    <p class="rr-panel m0" id="err" role="alert" hidden></p>
-    <button class="rr-btn" type="submit" data-mode="login">Sign in</button>
-    <button class="rr-btn rr-btn--ghost" type="submit" data-mode="signup">Create an account</button>
-  </form>
-  <button class="rr-btn rr-btn--ghost" type="button" id="guest" hidden>Continue as guest</button>
+  <div class="rr-sign"><span class="rr-eyebrow">RightRoom · KubeCon day</span><h1 id="title">Create your account</h1></div>
+
+  <section class="rr-panel auth" id="wrong" hidden aria-labelledby="wrong-h">
+    <h2 class="rr-eyebrow" id="wrong-h">Organisers only</h2>
+    <p class="m0" id="wrong-who"></p>
+    <div class="rr-btn-stack">
+      <a class="rr-btn" href="/event" id="home">Go to my home page</a>
+      <button class="rr-btn rr-btn--ghost" type="button" id="other">Sign in as someone else</button>
+    </div>
+  </section>
+
+  <div class="auth" id="auth">
+    <p class="note" id="why" hidden>That page needs a staff or organiser account. Sign in with one.</p>
+    <div class="seg" role="group" aria-label="Sign in or create an account">
+      <button type="button" data-mode="login">Sign in</button>
+      <button type="button" data-mode="signup">Create account</button>
+    </div>
+    <form id="f" class="rr-btn-stack" novalidate>
+      <div class="fld">
+        <label for="handle">Username</label>
+        <input id="handle" name="handle" autocomplete="username" autocapitalize="none" spellcheck="false" required aria-describedby="handle-hint handle-err">
+        <p class="hint" id="handle-hint"></p>
+        <p class="ferr" id="handle-err" hidden></p>
+      </div>
+      <div class="fld">
+        <label for="password">Password</label>
+        <div class="pw">
+          <input id="password" name="password" type="password" required aria-describedby="pw-hint caps pw-err">
+          <button type="button" id="show" aria-pressed="false" aria-controls="password" aria-label="Show password">Show</button>
+        </div>
+        <p class="hint" id="pw-hint"></p>
+        <p class="ferr" id="caps" hidden>Caps Lock is on. Passwords are case-sensitive.</p>
+        <p class="ferr" id="pw-err" hidden></p>
+      </div>
+      <p class="rr-panel m0" id="err" role="alert" hidden></p>
+      <button class="rr-btn" type="submit" id="go">Create account</button>
+    </form>
+    <p class="swap" id="swap"></p>
+    <button class="rr-btn rr-btn--ghost" type="button" id="guest" hidden>Continue as guest</button>
+  </div>
   <p class="note">No email or name is stored. Your username is the only thing other people see.</p>
 </main>
 <script src="/app.js"></script>
 <script>
   const q = new URLSearchParams(location.search);
+  const $ = (id) => document.getElementById(id);
   // Only same-site paths, so a crafted link can't send people elsewhere after sign-in.
   const next = (() => {
     try {
@@ -38,26 +83,127 @@
       return u.origin === location.origin ? u.pathname + u.search + u.hash : '/event';
     } catch { return '/event'; }
   })();
-  const err = document.getElementById('err');
-  if (q.get('role')) document.getElementById('why').hidden = false;
-  if (q.get('from') === 'qr') document.getElementById('guest').hidden = false;
+  const handle = $('handle'), password = $('password'), err = $('err');
+  const HANDLE = /^[a-z0-9][a-z0-9-]{2,23}$/; // same rule as src/auth.js
+  const ROLE = { staff: 'door staff', organiser: 'organiser', attendee: 'attendee', guest: 'guest' };
 
-  let mode = 'login';
-  document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { mode = b.dataset.mode; }));
-  document.getElementById('f').addEventListener('submit', async (e) => {
-    e.preventDefault();
+  // Account creation is the main path; sign-in when asked for, or when a page needs a staff account.
+  let mode = q.get('mode') === 'login' || q.get('role') ? 'login' : 'signup';
+  let tried = false; // field errors only after the first submit; until then the hints guide
+
+  function fieldError(el, msgEl, msg) {
+    msgEl.textContent = msg || '';
+    msgEl.hidden = !msg;
+    el.setAttribute('aria-invalid', msg ? 'true' : 'false');
+  }
+  function clearErrors() {
+    fieldError(handle, $('handle-err'));
+    fieldError(password, $('pw-err'));
     err.hidden = true;
-    const handle = document.getElementById('handle').value.trim();
-    const password = document.getElementById('password').value;
-    if (!handle || !password) return RR.showError(err, 'Enter a username and a password.');
-    try {
-      await RR.api(mode === 'signup' ? '/signup' : '/login', { method: 'POST', body: { handle, password } });
-      location.href = next;
-    } catch (x) { RR.showError(err, x); }
+  }
+  function handleHint() {
+    const v = handle.value.trim().toLowerCase();
+    if (mode === 'login') return 'Not case-sensitive.';
+    const you = v && HANDLE.test(v) ? ` You'll be <b>@${RR.esc(v)}</b>.` : '';
+    return `3 to 24 letters, numbers or hyphens. Not case-sensitive.${you}`;
+  }
+  function pwHint() {
+    const n = password.value.length;
+    if (mode === 'login') return 'Case-sensitive.';
+    return n && n < 8 ? `At least 8 characters (${n} so far). Case-sensitive.` : 'At least 8 characters. Case-sensitive.';
+  }
+  function check() {
+    if (mode !== 'signup') return true;
+    const v = handle.value.trim().toLowerCase();
+    const h = !v ? 'Pick a username.'
+      : !HANDLE.test(v) ? 'Use 3 to 24 letters, numbers or hyphens, starting with a letter or number.'
+      : /^(guest-|stand-in)/.test(v) ? 'That username is reserved. Pick another.' : '';
+    const p = !password.value ? 'Choose a password.'
+      : password.value.length < 8 ? 'Use at least 8 characters.' : '';
+    fieldError(handle, $('handle-err'), h);
+    fieldError(password, $('pw-err'), p);
+    return !h && !p;
+  }
+  function setMode(m) {
+    mode = m;
+    const up = m === 'signup';
+    $('title').textContent = up ? 'Create your account' : 'Sign in';
+    document.title = `${up ? 'Create account' : 'Sign in'} · RightRoom`;
+    $('go').textContent = up ? 'Create account' : 'Sign in';
+    password.autocomplete = up ? 'new-password' : 'current-password';
+    $('pw-hint').textContent = pwHint();
+    $('handle-hint').innerHTML = handleHint();
+    $('swap').innerHTML = up ? 'Already have an account? <button type="button" data-to="login">Sign in</button>'
+      : 'New here? <button type="button" data-to="signup">Create an account</button>';
+    document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.mode === m));
+    tried = false;
+    clearErrors();
+  }
+  document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  $('swap').addEventListener('click', (e) => { const to = e.target.closest('[data-to]'); if (to) { setMode(to.dataset.to); handle.focus(); } });
+
+  handle.addEventListener('input', () => { $('handle-hint').innerHTML = handleHint(); if (tried) check(); });
+  // Live hints in place of blur validation: an error appearing on blur shifts the layout and eats the click that caused it.
+  password.addEventListener('input', () => { $('pw-hint').textContent = pwHint(); if (tried) check(); });
+  const caps = (e) => { if (e.getModifierState) $('caps').hidden = !e.getModifierState('CapsLock'); };
+  password.addEventListener('keydown', caps);
+  password.addEventListener('keyup', caps);
+  password.addEventListener('blur', () => { $('caps').hidden = true; });
+  $('show').addEventListener('click', () => {
+    const on = password.type === 'password';
+    password.type = on ? 'text' : 'password';
+    $('show').textContent = on ? 'Hide' : 'Show';
+    $('show').setAttribute('aria-pressed', on);
+    $('show').setAttribute('aria-label', on ? 'Hide password' : 'Show password');
   });
-  document.getElementById('guest').addEventListener('click', async () => {
+
+  $('f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearErrors();
+    tried = true;
+    if (mode === 'login' && (!handle.value.trim() || !password.value)) {
+      if (!handle.value.trim()) fieldError(handle, $('handle-err'), 'Enter your username.');
+      if (!password.value) fieldError(password, $('pw-err'), 'Enter your password.');
+      return (handle.value.trim() ? password : handle).focus();
+    }
+    if (!check()) return (handle.getAttribute('aria-invalid') === 'true' ? handle : password).focus();
+    $('go').disabled = true;
+    try {
+      await RR.api(mode === 'signup' ? '/signup' : '/login', { method: 'POST', body: { handle: handle.value.trim(), password: password.value } });
+      location.href = next;
+    } catch (x) {
+      $('go').disabled = false;
+      // Put the server's answer next to the field it is about; anything else (network, 5xx) goes in the panel with a retry.
+      if (x.status === 409) { fieldError(handle, $('handle-err'), `${x.message} Pick another.`); handle.focus(); }
+      else if (x.status === 401) { fieldError(password, $('pw-err'), `${x.message} Usernames aren't case-sensitive, passwords are.`); password.focus(); }
+      else if (x.status === 400) {
+        const pw = /password/i.test(x.message);
+        fieldError(pw ? password : handle, $(pw ? 'pw-err' : 'handle-err'), x.message);
+        (pw ? password : handle).focus();
+      } else RR.showError(err, x, () => $('f').requestSubmit());
+    }
+  });
+  $('guest').addEventListener('click', async () => {
     try { await RR.api('/guest', { method: 'POST' }); location.href = next; } catch (x) { RR.showError(err, x); }
   });
+  $('other').addEventListener('click', () => { $('wrong').hidden = true; $('auth').hidden = false; setMode('login'); handle.focus(); });
+
+  if (q.get('from') === 'qr') $('guest').hidden = false;
+  setMode(mode);
+  // Already signed in but without the right role: say so, instead of offering a sign-in form for an account they have.
+  if (q.get('role')) {
+    $('why').hidden = false;
+    RR.whoami().then((me) => {
+      if (!me) return;
+      // Only /staff/setup needs an organiser; the other gated pages take door staff too.
+      $('wrong-h').textContent = next.startsWith('/staff/setup') ? 'Organisers only' : 'Staff and organisers only';
+      $('wrong-who').textContent = `You're signed in as ${me.handle} (${ROLE[me.role] || me.role}).`;
+      $('title').textContent = 'Not for this account';
+      $('why').hidden = true;
+      $('auth').hidden = true;
+      $('wrong').hidden = false;
+    });
+  }
 </script>
 </body>
 </html>

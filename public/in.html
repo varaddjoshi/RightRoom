@@ -14,7 +14,7 @@
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <!-- The "I'm in the room" QR. The room page does the check-in (zero taps), so this only forwards there. -->
-<script>location.replace(`/r/${encodeURIComponent(decodeURIComponent(location.pathname.split('/')[2] || ''))}?in=1`);</script>
+<script>const k = new URLSearchParams(location.search).get('k'); location.replace(`/r/${encodeURIComponent(decodeURIComponent(location.pathname.split('/')[2] || ''))}?in=1${k ? `&k=${encodeURIComponent(k)}` : ''}`);</script>
 </head>
 <body class="rr-nonav">
 <main class="rr-screen"><p class="note">Checking you in…</p></main>
