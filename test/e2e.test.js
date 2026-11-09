@@ -55,7 +55,7 @@ test('attendee: register, queue for a full room, get an offer live, claim, check
   const code = JSON.stringify(claimed).match(/"code":"([A-Z0-9]{4})"/)[1];
   assert.ok(JSON.stringify(await call('leo', 'GET', '/api/staff/spaces/204')).includes(code), 'staff see the claim code');
 
-  await call('sam', 'POST', '/api/spaces/204/checkin', { zone: 'back-right' });
+  await call('sam', 'POST', '/api/spaces/204/checkin', { zone: 'back-right', k: require('../src/presence').roomKey('204') });
   assert.equal((await call('sam', 'GET', '/api/spaces/204')).taken, 50);
   await call('sam', 'POST', '/api/spaces/204/leave');
   assert.equal((await call('sam', 'GET', '/api/spaces/204')).taken, 49, 'leaving frees the seat and nobody is waiting');
