@@ -1,0 +1,15 @@
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+  res.send('RightRoom is running');
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'rightroom' });
+});
+
+app.listen(PORT, () => {
+  console.log(`RightRoom listening on http://localhost:${PORT}`);
+});
