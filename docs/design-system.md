@@ -2,6 +2,11 @@
 
 The look is venue signage: dark sign panels, signal-yellow actions, condensed capitals for labels, and every status written in words with a shape. Everything lives in `public/rr.css`; open `public/design-system.html` to see each component working.
 
+## Where to see it
+
+- `public/design-system.html`: every component working.
+- `public/mockups/screen-map.html`: every screen by persona and journey stage, plus the floor view. Example data only.
+
 ## Using it
 
 Add one line to every page:
