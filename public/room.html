@@ -3,21 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Room door · RightRoom</title>
+<title>Room · RightRoom</title>
 <link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RightRoom">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>
-  .back { min-height: 44px; display: inline-flex; align-items: center; color: var(--rr-muted); }
-  .rr-route { color: inherit; text-decoration: none; }
-  .rr-panel > .rr-status { justify-self: start; }
+  .you { display: flex; align-items: center; justify-content: space-between; gap: var(--rr-s3); }
+  .you b { font-size: var(--rr-t-lg); }
+  .ask { display: grid; gap: var(--rr-s3); }
+  .ask .line .rr-btn { flex: 1; width: auto; }
+  .guest { font-size: var(--rr-t-sm); color: var(--rr-muted); }
 </style>
 </head>
 <body>
+<!-- One page for a room: at the door (queue, redirect, offer, claim) and inside (checked in, seat, Wi-Fi, comments, leaving).
+     /r/:room/in (the "I'm in the room" QR) lands here with ?in=1 and checks you in with zero taps. -->
 <main class="rr-screen rr-screen--split" id="main">
   <div class="rr-aside">
-  <a class="back" href="/sessions">&larr; Schedule</a>
-  <div class="rr-sign"><span class="rr-eyebrow" id="eyebrow">Room</span><h1 id="title">Loading</h1><div class="line" id="state"></div></div>
+    <a class="back" href="/sessions">&larr; Schedule</a>
+    <div class="rr-sign"><span class="rr-eyebrow" id="eyebrow">Room</span><h1 id="title">Loading</h1><div class="line" id="state"></div></div>
   </div>
-  <section id="body" class="rr-btn-stack"></section>
+  <section id="body" class="rr-btn-stack"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></section>
+  <p class="guest" id="guest" hidden>You're using RightRoom as a guest. <a href="/login">Sign in</a> to keep your place across devices.</p>
   <p class="rr-sr" aria-live="polite" id="sr"></p>
   <p class="rr-panel m0" id="err" role="alert" hidden></p>
 </main>
@@ -25,15 +38,48 @@
 <script>
   const $ = (id) => document.getElementById(id);
   const id = decodeURIComponent(location.pathname.split('/')[2] || '');
-  const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const enc = encodeURIComponent;
-  let redirect = null, timer = null, passed = false;
+  const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const ZONES = ['front-left', 'front-centre', 'front-right', 'middle-left', 'middle-centre', 'middle-right', 'back-left', 'back-centre', 'back-right'];
+  const consent = () => RR.recall('rr-wifi'); // 'yes' | 'no' | null: asked once, remembered
+  let redirect = null, timer = null, passed = false, wasIn = false, left = false, wifi = null, tested = false;
 
+  // ---- In the room -------------------------------------------------------------------------------
+  // A rough 1-second speed test against this server.
+  // shortcut: measures phone to app server, not the room's access point alone; good enough for comparing zones.
+  async function speedTest() {
+    const t0 = performance.now();
+    await fetch(`/health?t=${Date.now()}`, { cache: 'no-store' });
+    const ms = Math.round(performance.now() - t0);
+    let bytes = 0;
+    const start = performance.now();
+    while (performance.now() - start < 1000) bytes += (await (await fetch(`/rr.css?t=${Math.random()}`, { cache: 'no-store' })).arrayBuffer()).byteLength;
+    return { ms, mbps: Math.max(0, Math.round((bytes * 8) / 1e6 / ((performance.now() - start) / 1000))) };
+  }
+  async function runWifi(zone) {
+    if (tested || consent() !== 'yes') return;
+    tested = true;
+    try { wifi = await RR.api(`/spaces/${enc(id)}/wifi`, { method: 'POST', body: { zone, ...(await speedTest()) } }); render(); } catch { /* optional extra */ }
+  }
+  async function commentsBlock() {
+    // `comments` (a count) is optional: older servers only send topics.
+    const t = await RR.api(`/spaces/${enc(id)}/comments`).catch(() => ({ topics: [] }));
+    const n = typeof t.comments === 'number' ? t.comments : null;
+    const summary = t.topics?.length ? `<div class="chips static">${t.topics.map((x) => `<span>${RR.esc(x)}</span>`).join('')}</div>`
+      : n ? `<p class="note">${n} ${n === 1 ? 'comment' : 'comments'}</p>` : n === 0 || !t.topics?.length ? '<p class="note">No comments yet.</p>' : '';
+    return `<details class="rr-more"><summary>What people are saying${n ? ` · ${n}` : ''}</summary><div>${summary}
+      <div class="fld"><label for="c1">Add a comment (optional)</label><textarea id="c1" rows="2" maxlength="280"></textarea></div>
+      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="post">Post comment</button></div></details>`;
+  }
+  const zoneGrid = (r, current) => `<div class="rr-zones" role="group" aria-label="Where are you sitting?"><span class="rr-zones-front">Stage</span>
+    ${ZONES.map((z) => `<button type="button" data-zone="${z}" aria-pressed="${z === current}"${r.accessZones?.includes(z) ? ' data-access' : ''}>${RR.esc(RR.zoneName(z))}</button>`).join('')}</div>`;
+
+  // ---- At the door -------------------------------------------------------------------------------
   function offerView(o) {
-    return `<div class="rr-offer"><span class="rr-eyebrow" role="alert">Seat offer · Room ${RR.esc(id)}</span>
+    return `<div class="rr-offer"><span class="rr-eyebrow" role="alert">A seat is yours · ${RR.esc(RR.roomName(id))}</span>
       <h2 class="rr-title m0">${RR.esc(RR.zoneName(o.zone))}${o.accessible ? ' <span class="rr-access">&#9855; Accessible seat</span>' : ''}</h2>
       <div class="rr-offer__timer" aria-hidden="true"><span id="bar"></span></div>
-      <p class="m0"><strong id="secs">${Number(o.secondsLeft)}</strong> seconds to claim. If you don't, it goes to the next person.</p>
+      <p class="m0"><strong id="secs">${Number(o.secondsLeft)}</strong> seconds to claim it. After that it goes to the next person.</p>
       <button class="rr-btn" type="button" id="claim" data-offer="${RR.esc(o.id)}">Claim my seat</button></div>
       ${o.accessible ? '<p class="note">Offered to you first because it is an accessible seat and you asked for that.</p>' : ''}`;
   }
@@ -41,35 +87,36 @@
     clearInterval(timer);
     const end = Date.now() + o.secondsLeft * 1000;
     const tick = () => {
-      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      const s = Math.max(0, Math.ceil((end - Date.now()) / 1000));
       if (!$('secs')) return clearInterval(timer);
-      $('secs').textContent = left;
-      $('bar').style.setProperty('--rr-scale', left / 60);
-      $('bar').classList.toggle('is-low', left <= 10);
+      $('secs').textContent = s;
+      $('bar').style.setProperty('--rr-scale', s / 60);
+      $('bar').classList.toggle('is-low', s <= 10);
       // Only a few announcements, so a screen reader user can still hear the Claim button.
-      if (left === 30 || left === 10) $('sr').textContent = `${left} seconds left to claim your seat.`;
-      if (!left) { $('sr').textContent = 'Offer expired. It has gone to the next person.'; clearInterval(timer); }
+      if (s === 30 || s === 10) $('sr').textContent = `${s} seconds left to claim your seat.`;
+      if (!s) { $('sr').textContent = 'Offer expired. It has gone to the next person.'; clearInterval(timer); }
     };
     tick();
     timer = setInterval(tick, 1000);
   }
-
   function redirectView(r) {
     if (!r?.suggestion) return '<div class="rr-panel"><p class="m0">No other room has free seats right now. You can wait for this one.</p></div>';
     const s = r.suggestion;
-    return `<a class="rr-route" href="/r/${enc(s.room)}"><span class="rr-route__arrow" aria-hidden="true">&#9654;</span>
-        <div><div class="rr-route__to">Room ${RR.esc(s.room)}</div><div class="rr-route__meta">${RR.esc(s.title)} · ${Number(s.free)} seats free</div>${s.stepFree ? `<span class="rr-access">&#9855; ${RR.esc(s.access)}</span>` : `<span class="rr-route__meta">${RR.esc(s.access)}</span>`}</div>
-        <div class="rr-route__time">${Number(s.minutes)}<small>MIN</small></div></a>
-      <details class="rr-why"><summary>Why this?</summary><ul>
+    return `<a class="rr-route" href="/r/${enc(s.room)}"><span class="rr-route__arrow" aria-hidden="true"></span>
+        <div><div class="rr-route__to">${RR.esc(RR.roomName(s.room))}</div><div class="rr-route__meta">${RR.esc(s.title)} · ${Number(s.free)} seats free</div>${s.stepFree ? `<span class="rr-access">&#9855; ${RR.esc(s.access)}</span>` : `<span class="rr-route__meta">${RR.esc(s.access)}</span>`}</div>
+        <div class="rr-route__time">${Number(s.minutes)}<small>min walk</small></div></a>
+      <details class="rr-why"><summary>Why this room?</summary><ul>
         ${r.reasons.map((x) => `<li>${RR.esc(x)}</li>`).join('')}
-        ${r.rejected.map((x) => `<li class="rr-rejected">Room ${RR.esc(x.room)}: ${RR.esc(x.reason)}.</li>`).join('')}
+        ${r.rejected.map((x) => `<li class="rr-rejected">${RR.esc(RR.roomName(x.room))}: ${RR.esc(x.reason)}.</li>`).join('')}
       </ul></details>`;
   }
 
   async function render() {
     try {
       const r = await RR.api(`/spaces/${enc(id)}`);
-      $('eyebrow').textContent = id === 'venue' ? 'Venue entrance' : `Room ${r.id} · Floor ${r.floor}`;
+      const where = id === 'venue' ? 'Venue entrance' : `${RR.roomName(r)} · Floor ${r.floor}`;
+      $('eyebrow').textContent = where;
+      RR.here(where);
       $('title').textContent = r.title;
       document.title = `${r.title} · RightRoom`;
       $('state').innerHTML = `${RR.status(r.status)}<span>${Number(r.taken)} of ${Number(r.capacity)}</span>${RR.label('live')}`;
@@ -77,12 +124,14 @@
       const body = $('body');
       // Keep an offer that's already on screen, so its alert isn't announced again and the countdown keeps going.
       if (me.queue?.status === 'offered' && $('claim')?.dataset.offer === me.queue.offer?.id) return;
+      // Don't redraw under someone typing a comment or reading the open seat picker.
+      if (document.activeElement?.id === 'c1' || $('adjust')?.open) return;
       clearInterval(timer);
 
       if (id === 'venue') {
         const v = me.venue;
         body.innerHTML = v?.status === 'admitted'
-          ? (v.scannedIn ? `<div class="rr-panel">${RR.status('free', 'Place kept')}<p class="m0">You're scanned in. Your place is confirmed for the day.</p></div><a class="rr-btn" href="/sessions">See the schedule</a>`
+          ? (v.scannedIn ? `<div class="rr-panel">${RR.status('free', 'Place kept')}<p class="m0">You're scanned in. Your place is confirmed for the day.</p></div><a class="rr-btn" href="/event">See what's on now</a>`
             : `<div class="rr-panel"><p class="m0">Scan in to keep your place. It's held until <b>${time(v.expiresAt)}</b>.</p></div><button class="rr-btn" type="button" id="scan">I'm at the venue door</button>`)
           : `<div class="rr-panel"><p class="m0">${v ? `Your registration is ${RR.esc(v.status)}${v.position ? `, #${Number(v.position)} on the waitlist` : ''}.` : "You haven't registered yet."}</p></div><a class="rr-btn" href="/event">Go to registration</a>`;
         $('scan')?.addEventListener('click', () => act(() => RR.api('/spaces/venue/checkin', { method: 'POST', body: {} })));
@@ -90,45 +139,73 @@
       }
 
       if (me.checkedIn) {
-        body.innerHTML = `<div class="rr-panel">${RR.status('free', 'Checked in')}<p class="m0">You're in, at ${RR.esc(RR.zoneName(me.checkedIn.zone))}.</p></div><a class="rr-btn" href="/r/${enc(id)}/in">Open the room page</a>`;
+        wasIn = true;
+        const zone = me.checkedIn.zone;
+        body.innerHTML = `<div class="rr-panel"><div class="you"><div>${RR.status('free', "You're in")}<p class="m0" style="margin-top:6px"><b>${RR.esc(RR.zoneName(zone))}</b></p></div></div>
+            <details class="rr-why" id="adjust"><summary>Adjust seat</summary>${zoneGrid(r, zone)}</details></div>
+          ${consent() == null ? `<div class="rr-panel ask"><p class="m0">Share a 1-second Wi-Fi test from your seat? It helps everyone see where signal is weak.</p>
+              <div class="line"><button class="rr-btn rr-btn--plain" type="button" id="wy">Share</button><button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="wn">No thanks</button></div></div>` : ''}
+          ${wifi ? `<div class="rr-panel"><div class="line"><b class="big">${Number(wifi.mbps)}</b><span>Mbps · ${Number(wifi.ms)} ms</span>${RR.label('live')}</div>${wifi.median != null ? `<p class="m0 muted">Room median ${Number(wifi.median)} Mbps ${RR.label('crowd-sourced')}</p>` : ''}</div>` : ''}
+          ${await commentsBlock()}
+          <button class="rr-btn rr-btn--ghost" type="button" id="leave">I'm leaving</button>`;
+        body.querySelectorAll('[data-zone]').forEach((b) => b.addEventListener('click', () => act(() => RR.api(`/spaces/${enc(id)}/checkin`, { method: 'POST', body: { zone: b.dataset.zone } }))));
+        $('wy')?.addEventListener('click', () => { RR.remember('rr-wifi', 'yes'); runWifi(zone); render(); });
+        $('wn')?.addEventListener('click', () => { RR.remember('rr-wifi', 'no'); render(); });
+        $('leave').addEventListener('click', () => RR.undo(`Leaving ${RR.roomName(id)}. Your seat goes to the next person.`, () => act(async () => { await RR.api(`/spaces/${enc(id)}/leave`, { method: 'POST', body: {} }); left = true; })));
+        runWifi(zone);
+      } else if (wasIn || left) {
+        // Checked out: by "I'm leaving", by checking in somewhere else, or because the session ended.
+        body.innerHTML = `<div class="rr-panel"><p class="m0">${left ? 'Thanks. Your seat has gone to the next person.' : "You've been checked out. Your check-in has been deleted."}</p></div>
+          <a class="rr-btn" href="/event">What's on next</a>${await commentsBlock()}<p class="note">You can still comment for 24 hours.</p>`;
       } else if (me.claimed) {
-        body.innerHTML = `<div class="rr-panel"><span class="rr-eyebrow">Show this at the door</span><div class="rr-code">${RR.esc(me.claimed.code)}</div><p class="m0 muted">Room ${RR.esc(id)} · ${RR.esc(RR.zoneName(me.claimed.zone))}</p></div>
-          <p class="note">Scan "I'm in the room" by ${time(me.claimed.scanBy)} or the seat goes to the next person.</p>
-          <a class="rr-btn" href="/r/${enc(id)}/in">I'm in the room</a>`;
+        body.innerHTML = `<div class="rr-panel"><span class="rr-eyebrow">Show this at the door</span><div class="rr-code">${RR.esc(me.claimed.code)}</div><p class="m0 muted">${RR.esc(RR.zoneName(me.claimed.zone))} · hold until ${time(me.claimed.scanBy)}</p></div>
+          <button class="rr-btn" type="button" id="in">I'm in my seat</button>`;
+        $('in').addEventListener('click', () => checkIn(me.claimed.zone));
       } else if (me.queue?.status === 'offered' && me.queue.offer) {
         body.innerHTML = offerView(me.queue.offer);
         startCountdown(me.queue.offer);
-        $('claim').addEventListener('click', (e) => act(() => RR.api(`/offers/${enc(e.target.dataset.offer)}/claim`, { method: 'POST', body: {} })));
+        $('claim').addEventListener('click', (e) => act(async () => { await RR.api(`/offers/${enc(e.target.dataset.offer)}/claim`, { method: 'POST', body: {} }); RR.toast('Seat claimed'); }));
       } else if (me.queue?.status === 'waiting') {
         body.innerHTML = `${passed ? '<p class="rr-panel m0">You missed the last offer, so it went to the next person. You are back in the queue.</p>' : ''}
-          <div class="rr-position"><span class="rr-eyebrow">Your place for the next seat</span><strong>#${Number(me.queue.position)}</strong><p>${RR.esc(me.queue.reason)} Keep this page open; it updates when a seat is yours.</p></div>
-          <button class="rr-btn rr-btn--ghost" type="button" id="leaveq">Leave the queue</button>`;
+          <div class="rr-panel rr-position"><span class="rr-eyebrow">Your place for the next seat</span><strong>#${Number(me.queue.position)}</strong><p>${RR.esc(me.queue.reason)} Keep this page open; your phone shows the seat when it's yours.</p></div>
+          <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="leaveq">Leave the queue</button>`;
         $('leaveq').addEventListener('click', () => act(() => RR.api(`/spaces/${enc(id)}/queue`, { method: 'DELETE' })));
       } else if (r.status === 'full') {
         redirect ??= await RR.api(`/spaces/${enc(id)}/redirect`).catch(() => null);
         const s = redirect?.suggestion, d = redirect?.somethingDifferent;
-        body.innerHTML = `${redirectView(redirect)}
-          ${s ? `<a class="rr-btn" href="/r/${enc(s.room)}">Go to Room ${RR.esc(s.room)}</a>` : ''}
-          <button class="rr-btn ${s ? 'rr-btn--ghost' : ''}" type="button" id="joinq">Wait for this room</button>
-          ${d ? `<a class="rr-btn rr-btn--ghost" href="/r/${enc(d.room)}">Something different: ${RR.esc(d.title)}</a>` : ''}
-          ${redirect?.overflow ? `<p class="note">Overflow: ${RR.esc(redirect.overflow.title)} for anyone who can't get a seat.</p>` : ''}`;
-        $('joinq').addEventListener('click', () => act(() => RR.api(`/spaces/${enc(id)}/queue`, { method: 'POST', body: {} })));
+        body.innerHTML = `<p class="m0"><b>This room is full.</b> ${s ? 'The closest match with free seats:' : ''}</p>${redirectView(redirect)}
+          ${s ? `<a class="rr-btn" href="/r/${enc(s.room)}">Go to ${RR.esc(RR.roomName(s.room))}</a>` : ''}
+          <button class="rr-btn ${s ? 'rr-btn--ghost' : ''}" type="button" id="joinq">Wait for a seat here</button>
+          ${d || redirect?.overflow ? `<p class="note">${d ? `Or something different: <a href="/r/${enc(d.room)}">${RR.esc(d.title)}</a>. ` : ''}${redirect?.overflow ? `Overflow: ${RR.esc(redirect.overflow.title)}.` : ''}</p>` : ''}`;
+        $('joinq').addEventListener('click', () => act(async () => { await RR.api(`/spaces/${enc(id)}/queue`, { method: 'POST', body: {} }); RR.toast("You're in the queue"); }));
       } else {
-        body.innerHTML = `<div class="rr-panel"><span class="rr-eyebrow">The rule</span><p class="m0">${RR.esc(r.rule)}</p></div>
-          <p class="note">${Number(r.free)} seats free. Walk in and scan "I'm in the room" so the count stays right for everyone outside.</p>
-          <a class="rr-btn" href="/r/${enc(id)}/in">I'm in the room</a>`;
+        body.innerHTML = `<div class="rr-panel"><p class="m0"><b>${Number(r.free)} seats free.</b> ${RR.esc(r.rule)}</p></div>
+          <button class="rr-btn" type="button" id="in">I'm in the room</button>
+          <p class="note">One tap counts you in, so the room's status stays right for everyone outside. You can adjust your seat after.</p>`;
+        $('in').addEventListener('click', () => checkIn(null));
       }
+      $('post')?.addEventListener('click', () => act(async () => { await RR.api(`/spaces/${enc(id)}/comments`, { method: 'POST', body: { text: $('c1').value } }); RR.toast('Comment posted'); }));
     } catch (x) { RR.showError($('err'), x); }
   }
+  // Zone defaults to the claimed seat, else the server's middle-centre; "Adjust seat" changes it after.
+  const checkIn = (zone) => act(async () => { await RR.api(`/spaces/${enc(id)}/checkin`, { method: 'POST', body: zone ? { zone } : {} }); RR.toast("You're checked in"); });
   async function act(fn) {
     $('err').hidden = true;
     try { await fn(); passed = false; await render(); } catch (x) { RR.showError($('err'), x); render(); }
   }
 
   (async () => {
-    // Arriving from a door QR: offer guest access instead of a full sign-in.
-    const me = await RR.api('/me').catch(() => null);
-    if (!me) { location.href = `/login?from=qr&next=${enc(location.pathname)}`; return; }
+    // A QR scan with no account gets a guest handle silently: no form, no extra tap.
+    let me = await RR.whoami();
+    if (!me) { me = await RR.api('/guest', { method: 'POST', body: {} }).catch(() => null); if (!me) { location.href = `/login?from=qr&next=${enc(location.pathname + location.search)}`; return; } location.reload(); return; }
+    if (me.role === 'guest') $('guest').hidden = false;
+    if (id !== 'venue') RR.remember('rr-room', id);
+    const q = new URLSearchParams(location.search);
+    if (q.has('in') && id !== 'venue') {
+      history.replaceState(null, '', `/r/${enc(id)}`);
+      const r = await RR.api(`/spaces/${enc(id)}`).catch(() => null);
+      if (r && !r.me?.checkedIn) await RR.api(`/spaces/${enc(id)}/checkin`, { method: 'POST', body: r.me?.claimed ? { zone: r.me.claimed.zone } : {} }).catch((x) => RR.showError($('err'), x));
+    }
     await render();
     let t;
     const soon = () => { clearTimeout(t); t = setTimeout(render, 200); };

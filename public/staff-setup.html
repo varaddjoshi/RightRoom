@@ -5,23 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Venue board · RightRoom</title>
 <link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RightRoom">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>
   .seg button { min-width: 64px; padding: 0 var(--rr-s3); }
   /* Laptop-first: board on the left, setup and insights on the right; one column under 720px. */
-  .wrap { max-width: 1440px; margin: 0 auto; padding-block: var(--rr-s5); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: var(--rr-s5); }
+  body { --rr-shell: 1440px; }
+  .wrap { max-width: 1440px; margin: 0 auto; padding-block: var(--rr-s5) calc(var(--rr-nav-h) + var(--rr-s6)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: var(--rr-s5); }
   .cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: var(--rr-s5); align-items: start; }
   .side { display: grid; gap: var(--rr-s4); }
   @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
-  .fld select { width: 100%; min-height: 52px; padding: 0 var(--rr-s3); background: var(--rr-panel-2); color: var(--rr-ink); border: 2px solid var(--rr-line); border-radius: var(--rr-r2); font: 400 var(--rr-t-md)/1 var(--rr-font-body); }
   .zchk { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--rr-s1); }
   .zchk label { display: flex; align-items: center; gap: var(--rr-s1); min-height: 44px; font-size: var(--rr-t-sm); }
-  .zchk input { width: 20px; height: 20px; accent-color: var(--rr-signal); }
+  .zchk input { width: 20px; height: 20px; accent-color: var(--rr-action); }
   .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: var(--rr-s3); }
-  .fc { display: grid; gap: var(--rr-s1); border-top: 1px solid var(--rr-line); padding-top: var(--rr-s2); }
+  .fc { display: grid; gap: var(--rr-s1); border-top: 1px solid var(--rr-hair); padding-top: var(--rr-s2); }
   .fc summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: var(--rr-s2); cursor: pointer; }
   .fc ul { margin: 0; padding-left: var(--rr-s5); color: var(--rr-muted); font-size: var(--rr-t-sm); }
-  .risk { padding: 2px var(--rr-s2); border-radius: var(--rr-r1); font: 800 var(--rr-t-xs)/1.4 var(--rr-font-sign); letter-spacing: 0.08em; text-transform: uppercase; color: var(--rr-on-status); }
-  .risk[data-r="high"] { background: var(--rr-full); } .risk[data-r="medium"] { background: var(--rr-filling); } .risk[data-r="low"] { background: var(--rr-free); }
+  .risk { padding: 2px 10px; border-radius: 999px; font: 700 var(--rr-t-xs)/1.4 var(--rr-font-sign); }
+  .risk[data-r="high"] { background: var(--rr-full); color: var(--rr-on-full); } .risk[data-r="medium"] { background: var(--rr-filling); color: var(--rr-on-filling); } .risk[data-r="low"] { background: var(--rr-free); color: var(--rr-on-free); }
+  .quick { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
+  .quick .rr-btn { width: auto; }
   .ok { color: var(--rr-free); margin: 0; } .err { color: var(--rr-full); margin: 0; }
 </style>
 </head>
@@ -29,8 +39,13 @@
 <div class="wrap">
   <header class="rr-sign">
     <div class="head">
-      <div><span class="rr-eyebrow" id="who">Organiser</span><h1>Venue board</h1></div>
+      <div><h1>Venue board</h1><span class="rr-eyebrow" id="who">Organiser</span></div>
       <div class="line" id="venue"></div>
+    </div>
+    <div class="quick" role="group" aria-label="Quick actions">
+      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" data-go="cap">Edit capacity</button>
+      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" data-go="ann-text">Post announcement</button>
+      <a class="rr-btn rr-btn--ghost rr-btn--plain" href="/staff/qr">Print QR codes</a>
     </div>
   </header>
 
@@ -39,7 +54,7 @@
       <div class="line" style="justify-content:space-between"><h2 class="rr-eyebrow" id="h-board">All rooms · tap a room to edit it</h2>
         <div class="seg" role="group" aria-label="View"><button type="button" aria-pressed="true" data-mode="map">Map</button><button type="button" aria-pressed="false" data-mode="list">List</button></div></div>
       <p class="board-sum" id="sum"></p>
-      <div class="board" id="board"></div>
+      <div class="board" id="board"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
     </section>
 
     <div class="side">
@@ -59,7 +74,7 @@
       <form class="rr-panel" id="ann" aria-labelledby="h-ann">
         <h2 class="rr-eyebrow" id="h-ann">New announcement</h2>
         <div class="fld"><label for="ann-text">Message</label><textarea id="ann-text" rows="3" maxlength="280" required></textarea></div>
-        <div class="fld"><label for="ann-floor">Floor</label><select id="ann-floor"><option value="">All floors</option><option>1</option><option>2</option><option>3</option></select></div>
+        <div class="fld"><label for="ann-floor">Floor</label><select id="ann-floor"><option value="">All floors</option></select></div>
         <div class="chips" role="group" aria-label="Urgency"><button type="button" aria-pressed="false" data-u="urgent">Urgent</button><button type="button" aria-pressed="true" data-u="info">Info</button></div>
         <p class="ok" id="ann-ok" role="status" hidden>Posted.</p>
         <p class="err" id="ann-err" role="alert" hidden></p>
@@ -67,13 +82,13 @@
       </form>
 
       <section class="rr-panel" aria-labelledby="h-fc">
-        <h2 class="rr-eyebrow" id="h-fc">Fill forecast <span class="rr-label">STAND-IN</span></h2>
+        <h2 class="rr-eyebrow" id="h-fc">Fill forecast <span class="rr-label">Stand-in</span></h2>
         <p class="note" id="bt"></p>
         <div id="fc"><p class="note">Loading.</p></div>
       </section>
 
       <section class="rr-panel" aria-labelledby="h-met">
-        <h2 class="rr-eyebrow" id="h-met">How it's working <span class="rr-label">STAND-IN</span></h2>
+        <h2 class="rr-eyebrow" id="h-met">How it's working <span class="rr-label">Stand-in</span></h2>
         <div id="met"><p class="note">Loading.</p></div>
       </section>
 
@@ -113,11 +128,12 @@
     const [floors, ev, sessions] = await Promise.all([RR.api('/floors'), RR.api('/event'), RR.api('/sessions')]);
     rooms = sessions;
     const sel = $('room').value;
-    $('room').innerHTML = sessions.map((r) => `<option value="${RR.esc(r.id)}">Room ${RR.esc(r.id)} · ${RR.esc(r.title)}</option>`).join('');
+    $('room').innerHTML = sessions.map((r) => `<option value="${RR.esc(r.id)}">${RR.esc(RR.roomName(r.id))} · ${RR.esc(r.title)}</option>`).join('');
     if (sel) $('room').value = sel;
     const v = ev.venue;
     $('venue').innerHTML = `${RR.status(v.status)} <span>Venue ${v.taken} of ${v.capacity} in</span> ${RR.label('live')}`;
     const all = floors.flatMap((f) => f.rooms);
+    const af = $('ann-floor'); if (af.options.length === 1) af.insertAdjacentHTML('beforeend', floors.map((f) => `<option value="${RR.esc(f.floor)}">Floor ${RR.esc(f.floor)}</option>`).join(''));
     const needs = all.filter((r) => r.queue > 0 && !r.staffOn).length;
     $('sum').textContent = `${all.length} rooms · ${all.reduce((s, r) => s + r.free, 0)} seats free · ${all.filter((r) => r.staffOn).length} staffed · ${needs} need staff`;
     RR.floorBoard($('board'), floors, { role: 'organiser', mode, notices, onPick: pick });
@@ -144,6 +160,7 @@
       await RR.api('/announcements', { method: 'POST', body: { text: $('ann-text').value, floor: $('ann-floor').value || null, urgency } });
       $('ann-text').value = '';
       $('ann-ok').hidden = false;
+      RR.toast('Announcement posted');
     } catch (err) { RR.showError($('ann-err'), err); }
   });
   document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
@@ -157,7 +174,7 @@
 
   RR.api('/forecast/backtest').then((b) => { $('bt').textContent = `Checked against ${b.talks} past talks: right ${pct(b.accuracy)} of the time, fill off by ${pct(b.meanAbsError)} on average.`; }).catch(() => {});
   soft('/forecast', $('fc'), (f) => {
-    $('fc').innerHTML = f.sessions.map((s) => `<details class="fc"><summary><span>Room ${RR.esc(s.room)} · ${RR.esc(s.title)}</span><span class="risk" data-r="${RR.esc(s.risk)}">${RR.esc(s.risk)} risk</span></summary>
+    $('fc').innerHTML = f.sessions.map((s) => `<details class="fc"><summary><span>${RR.esc(RR.roomName(s.room))} · ${RR.esc(s.title)}</span><span class="risk" data-r="${RR.esc(s.risk)}">${RR.esc(s.risk)} risk</span></summary>
       <p class="m0 small">Expected ${pct(s.expectedFill)} full · ${pct(s.probabilityFull)} chance it fills${s.likelyFullMinute != null ? ` · likely full ${Math.round(s.likelyFullMinute)} min in` : ''}</p>
       <ul>${s.because.map((b) => `<li>${RR.esc(b.title)}: ${b.attendance} of ${b.capacity}${b.fullMinute != null ? `, full at ${Math.round(b.fullMinute)} min` : ', never full'}</li>`).join('')}</ul></details>`).join('');
   });
@@ -184,6 +201,10 @@
   refreshBoard().catch(() => {});
   RR.watchNotices({ pop: false, onChange: (a) => { notices = [a, ...notices]; refreshBoard().catch(() => {}); } });
 })();
+  document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { const el = document.getElementById(b.dataset.go); el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' }); el.focus({ preventScroll: true }); }));
+  // Tabs Rooms (#edit) and Announce (#ann) land on their form, ready to type.
+  const goHash = () => { const f = { '#edit': 'cap', '#ann': 'ann-text' }[location.hash]; if (f) { const el = document.getElementById(f); el.scrollIntoView({ block: 'center' }); el.focus({ preventScroll: true }); } };
+  addEventListener('hashchange', goHash); setTimeout(goHash, 300);
 </script>
 </body>
 </html>

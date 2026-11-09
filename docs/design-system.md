@@ -1,6 +1,6 @@
-# RightRoom design system: wayfinding signs
+# RightRoom design system: daylight wayfinding
 
-The look is venue signage: dark sign panels, signal-yellow actions, condensed capitals for labels, and every status written in words with a shape. Everything lives in `public/rr.css`; open `public/design-system.html` to see each component working.
+A calm venue app people can trust at a busy door: white cards on a cool grey ground, one highly legible type family, ink-navy actions, and every status written as a word with a drawn shape. Signal yellow marks where you are and urgent notices. The big screen (`/screen/:room`) keeps a dark signage theme for across-the-room reading. Everything lives in `public/rr.css` and `public/app.js` (`window.RR`).
 
 ## Where to see it
 
@@ -9,64 +9,75 @@ The look is venue signage: dark sign panels, signal-yellow actions, condensed ca
 
 ## Using it
 
-Add one line to every page:
+Every page links `/rr.css`, the manifest and app meta tags, and loads `/app.js`. `app.js` injects the app shell: a sticky top bar (brand, "You're at …", user menu with sign out) and the persona tabs, shown as a fixed bottom tab bar on phones and inside the top bar from 960px. Add `class="rr-nonav"` to `<body>` for pages without the shell (login, big screen, the in-room forwarder). The big screen also takes `class="rr-dark"`.
 
-```html
-<link rel="stylesheet" href="/rr.css">
-```
+| Persona | Tabs (first tab is Home) |
+|---|---|
+| Attendee | Now (`/event`), Schedule (`/sessions`), My seat (last room used), Me |
+| Door staff | Door (last door, or a door picker at `/sessions?pick=door`), Board (`/sessions`), QR codes, Simulator |
+| Organiser | Board (`/staff/setup`), Rooms (`#edit`), Announce (`#ann`), QR codes |
 
-Wrap the page content in `<main class="rr-screen">`. Use the classes below and the `--rr-*` tokens; don't write raw hex values or new font sizes in a page.
+`/` goes to `/event`, which sends staff and organisers on to their Home. After sign in people go back to where they were going (a QR's room) or to their Home.
 
 ## Rules
 
-- One primary action per screen, as a yellow `.rr-btn`. Everything else is `.rr-btn--ghost`.
-- Buttons are full width and at least 64px tall (`--rr-tap`). Staff counter buttons are 96px (`--rr-tap-xl`). Button labels are verbs that say what happens: "Join the queue", "Claim my seat", "Go to Room 210".
-- Status always uses `.rr-status` with `data-status="free|filling|full"`. It shows a shape (● ▲ ■) and a word, so colour is never the only signal. Seats free is blue, not green, so it never depends on telling red from green.
-- Live numbers use `.rr-count` (tabular figures). Every number on screen carries a `.rr-label`: `LIVE`, `REAL` or `STAND-IN`.
-- Positions say why: `.rr-position` holds the number and the published rule in plain words.
-- Access needs use `--rr-access` and the `.rr-access` tag ("♿ Step-free via east lift"). Write them as preferences, never a diagnosis.
-- "Why this?" is a native `<details class="rr-why">`, so it works with a keyboard and screen reader without script. Rejected options get `.rr-rejected` and still say why.
-- Seat offers use `.rr-offer`. Put `role="alert"` on the short static line ("Seat offer · Room 204") so it is announced once. Keep the ticking seconds out of any live region; announce only 30 seconds, 10 seconds and expiry through a separate `.rr-sr` element with `aria-live="polite"`. Set the bar with the `--rr-scale` custom property (`1` to `0`) and add `is-low` for the last 10 seconds.
-- The arrow on `.rr-btn` is decorative and left out of the spoken button name.
-- The zone grid is nine real buttons with text labels ("Front left"), using `aria-pressed` for the selected zone; `data-access` marks zones with accessible seats.
-- Urgent announcements are `.rr-announce[data-urgency="urgent"]` (yellow). Others stay on the panel colour.
-- Focus is a 3px yellow ring on every focusable element. Don't remove it.
-- Toggle visibility with the `hidden` attribute; `rr.css` makes it win over component display rules.
+- One primary action per screen (`.rr-btn`, ink navy). Everything else is `.rr-btn--ghost` or sits in a `.rr-more` disclosure. Labels are verbs that say what happens: "Claim my seat", "I'm in the room", "Release 1 seat".
+- Fewest taps: no confirm dialogs. Reversible actions use `RR.undo(message, run)` (5 seconds). Successful actions say so with `RR.toast(message)`.
+- Status is always `RR.status(st, word)`: a drawn shape (circle, triangle, square) plus a word plus colour. Seats free is blue, so it never depends on telling red from green.
+- Every number carries `RR.label('live' | 'real' | 'stand-in' | 'crowd-sourced')`.
+- Page header (`.rr-sign`): `h1` title first, the location line (`.rr-eyebrow`, e.g. "255 BC · Floor 2") under it, then state chips. Pages one level deep show a `.back` link. Section headings are real `h2`s; there are no kicker labels above headings.
+- Room names come from the data: `RR.roomName(room)` shows the venue's name ("255 BC") and falls back to "Room 204" for numeric ids. Never hard-code room ids, names or floors. Long titles wrap to two lines.
+- Lists show `.rr-skel` placeholders while loading, a sentence when empty, and errors through `RR.showError(el, e, retry?)`, which adds a "Try again" button.
+- Yellow never carries text on white by itself: yellow fills take ink text and a `--rr-signal-edge` outline; yellow-family text uses `--rr-accent-ink`.
+- Focus is a 3px `--rr-focus` ring with a 2px offset on everything focusable. Motion is 120 to 320ms, transform and opacity only, and off under reduced motion.
+- No accent stripes on one side of a card, no thick borders on rounded cards, no emoji or glyph icons: icons are the line set in `RR.svg(name)` (now, map, seat, me, door, board, qr, sim, bell, in).
 
 ## Tokens
 
-| Token | Use |
-|---|---|
-| `--rr-bg` | Page ground |
-| `--rr-panel`, `--rr-panel-2` | Sign panels and cards; raised rows, inputs and zone cells |
-| `--rr-line` | Outlines and dividers (3:1 or more on every surface) |
-| `--rr-ink`, `--rr-muted` | Main text; secondary text and reasons |
-| `--rr-signal`, `--rr-on-signal` | Primary action, focus ring, urgent strip; text on yellow |
-| `--rr-free`, `--rr-filling`, `--rr-full`, `--rr-on-status` | Status fills; text on any status fill |
-| `--rr-access` | Accessibility seats and step-free routes |
-| `--rr-font-sign`, `--rr-font-body`, `--rr-font-code` | Barlow Condensed for labels and numbers, Barlow for reading, IBM Plex Mono for claim codes |
-| `--rr-t-xs` to `--rr-t-3xl` | Type scale: 13, 15, 17, 22, 30, 44, 72px |
-| `--rr-s1` to `--rr-s7` | Spacing: 4, 8, 12, 16, 24, 32, 48px |
-| `--rr-r1`, `--rr-r2` | Radius: 2px for signs and chips, 6px for buttons and panels |
+| Token | Value | Use | Contrast |
+|---|---|---|---|
+| `--rr-bg` | #f4f5f6 | Page ground | |
+| `--rr-panel` / `--rr-panel-2` | #ffffff / #eceef1 | Cards / inset rows, inputs | |
+| `--rr-ink` | #15181b | Text | 16.3:1 on ground |
+| `--rr-muted` | #4d5660 | Secondary text | 6.4:1 or more |
+| `--rr-line` | #868f98 | Control borders | 3.0:1 on ground |
+| `--rr-hair` | #dde1e5 | Quiet separators only | |
+| `--rr-action` / `--rr-on-action` | #1b2a4a / #fff | Primary buttons, selected state | 14:1 |
+| `--rr-focus` | #1a5fb4 | Focus ring | 5.8:1 |
+| `--rr-signal` / `--rr-signal-edge` / `--rr-accent-ink` | #ffcc00 / #8f6b00 / #7a5600 | You-are-here, urgent; its outline; yellow-family text | edge 4.5:1, text 6.1:1 |
+| `--rr-free` / `--rr-on-free` | #1a5fb4 / #fff | Seats free | 6.3:1 |
+| `--rr-filling` / `--rr-on-filling` | #e59a00 / #15181b | Filling | 7.6:1 |
+| `--rr-full` / `--rr-on-full` | #b8122f / #fff | Full | 6.6:1 |
+| `--rr-access` | #5b34b8 | Step-free, accessible seats | 7.3:1 |
+| `--rr-font-sign` / `--rr-font-body` | Atkinson Hyperlegible Next | Everything | |
+| `--rr-font-code` | Atkinson Hyperlegible Mono | Claim codes | |
+| `--rr-t-xs` … `--rr-t-3xl` | 13, 15, 17, 20, 26, 36, 56px | Type scale | |
+| `--rr-s1` … `--rr-s7` | 4, 8, 12, 16, 24, 32, 48px | Spacing | |
+| `--rr-r1` / `--rr-r2` | 8px / 14px | Small controls / cards and buttons | |
+| `--rr-tap` / `--rr-tap-xl` | 56px / 72px | Attendee buttons / staff steppers | |
 
-Contrast, checked: ink on ground 16.8:1, muted on the darkest panel 6.3:1, text on yellow 12.1:1, text on the status fills 5.9:1 to 10:1, outlines 3:1 or more on every surface.
-
-One theme only, by choice: dark signage reads well on phones at a door and on the big screen.
+Why ink navy instead of yellow buttons: yellow on white is 1.5:1, so a yellow button can't separate from the page without an outline, and white-on-yellow text is unreadable. Ink navy gives 14:1 with white text and reads as a trustworthy product; yellow keeps its wayfinding job as the "you are here" and urgent highlight.
 
 ## Components
 
-| Class | Screens |
+| Class / helper | Used for |
 |---|---|
-| `.rr-screen`, `.rr-sign`, `.rr-eyebrow`, `.rr-panel` | Every screen |
-| `.rr-btn`, `.rr-btn--ghost`, `.rr-btn--full`, `.rr-btn--plain`, `.rr-btn-stack` | Every screen |
-| `.rr-status`, `.rr-count`, `.rr-label` | A3, A4, A5, S2, D1 |
-| `.rr-position` | A3, A5 |
-| `.rr-route`, `.rr-why`, `.rr-access` | A5 redirect |
-| `.rr-offer`, `.rr-code` | A5 seat offer and claimed state |
-| `.rr-zones` | A6 check-in, S2 zone fill |
-| `.rr-counter` | S2 count correction for walk-ins who didn't scan |
-| `.rr-announce` | A7, S1 |
-| `.rr-sr` | Screen-reader-only text anywhere |
+| `RR.nav()` (automatic), `RR.here(text)` | App shell, "You're at …" in the top bar |
+| `.rr-screen`, `--wide`, `--split`, `.rr-aside`, `.rr-sign`, `.back` | Page frame, two-column and sticky-header laptop layouts, page header |
+| `.rr-btn`, `--ghost`, `--full`, `--plain`, `.rr-btn-stack` | Actions |
+| `.rr-status`, `.rr-count`, `.rr-label`, `.rr-position` | State, live counts, data honesty, queue position |
+| `.rr-route`, `.rr-why`, `.rr-access` | Redirect suggestion with reasons |
+| `.rr-offer`, `.rr-offer__timer`, `.rr-code` | Seat offer (the one authored moment) and claim code |
+| `.rr-zones` | 3 × 3 seat picker ("Adjust seat") |
+| `.rr-more` | Everything secondary, one tap away |
+| `.step`, `.rr-counter`, `.chips` | Steppers and pickers |
+| `.rr-announce`, `.notice-badge`, `.rr-dialog` | Announcements and the notice pop-up |
+| `.rr-panel`, `.talk`, `.tile`, `.fl-*`, `.slot` | Cards, list rows, floor board, time slots |
+| `.rr-skel`, `RR.toast`, `RR.undo`, `RR.showError` | Loading, feedback, undo, errors with retry |
+
+## App install
+
+`public/manifest.webmanifest` (name RightRoom, standalone, theme #1b2a4a, background #f4f5f6, start `/`) and `public/icons/` (SVG, 192, 512, maskable 512, apple-touch-icon) let people add RightRoom to their home screen and open it without browser chrome. Every page carries the manifest link and `apple-mobile-web-app-*` meta tags. No service worker yet.
 
 ## Mobile check
 

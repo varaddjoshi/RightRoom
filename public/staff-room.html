@@ -5,85 +5,65 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Door console · RightRoom</title>
 <link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RightRoom">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>
-  .seg button { min-width: 64px; padding: 0 var(--rr-s3); }
+  .hero { display: grid; gap: var(--rr-s2); }
+  .hero .rr-count { font-size: 4rem; }
+  .act { display: grid; gap: var(--rr-s3); }
+  .step { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; gap: var(--rr-s2); align-items: center; text-align: center; }
+  .step button { min-height: 56px; border: 1.5px solid var(--rr-line); border-radius: var(--rr-r2); background: var(--rr-panel); color: var(--rr-ink); font: 800 var(--rr-t-xl)/1 var(--rr-font-sign); cursor: pointer; }
+  .step output { font: 800 var(--rr-t-2xl)/1 var(--rr-font-sign); }
+  .zones-row { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--rr-s2); }
-  .pair select, .pair input { width: 100%; min-height: 52px; padding: 0 var(--rr-s3); background: var(--rr-panel-2); color: var(--rr-ink); border: 2px solid var(--rr-line); border-radius: var(--rr-r2); font: 400 var(--rr-t-md)/1 var(--rr-font-body); }
-  .counter-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) 64px; gap: var(--rr-s3); align-items: center; text-align: center; }
-  .counter-row button { min-height: 64px; border: 0; border-radius: var(--rr-r2); background: var(--rr-panel-2); color: var(--rr-ink); font: 800 var(--rr-t-2xl)/1 var(--rr-font-sign); cursor: pointer; }
-  .counter-row button:last-child { background: var(--rr-signal); color: var(--rr-on-signal); }
-  .counter-row output { font: 800 var(--rr-t-xl)/1 var(--rr-font-sign); font-variant-numeric: tabular-nums; }
   .err { color: var(--rr-full); margin: 0; }
   .q span:last-child { text-align: right; }
-  .cmt { display: flex; justify-content: space-between; align-items: center; gap: var(--rr-s2); border-top: 1px solid var(--rr-line); padding-top: var(--rr-s2); }
+  .cmt { display: flex; justify-content: space-between; align-items: center; gap: var(--rr-s2); border-top: 1px solid var(--rr-hair); padding-top: var(--rr-s2); }
   .cmt p { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-  .cmt button { min-height: 44px; min-width: 64px; }
-  @media (min-width: 960px) { .cmt button { width: auto; flex: none; } }
+  .cmt button { width: auto; flex: none; min-height: 44px; }
+  @media (min-width: 960px) { #primary, #hero { grid-column: 1; } #qsec { grid-column: 2; grid-row: 2 / span 2; } }
 </style>
 </head>
 <body>
+<!-- Door console: the essentials on one screen. The count runs itself; staff get one primary action that changes
+     with the room's state (confirm Full, or release empty seats). Everything else sits behind "More". -->
 <main class="rr-screen rr-screen--wide" aria-busy="true">
-  <header class="rr-sign">
-    <span class="rr-eyebrow" id="eyebrow">Staff · Room</span>
-    <h1 id="title">Door console</h1>
-    <div class="line"><span id="st"></span><span id="countline" class="muted"></span></div>
-  </header>
+  <a class="back rr-span" href="/sessions">&larr; Board</a>
+  <header class="rr-sign rr-span"><span class="rr-eyebrow" id="eyebrow">Door</span><h1 id="title">Door console</h1></header>
 
-  <div class="rr-offer" id="confirm" hidden>
-    <span class="rr-eyebrow" role="alert" id="confirm-msg">This room looks full</span>
-    <div id="confirm-count"></div>
-    <p class="m0">Confirm to show Full and start sending people to other rooms. No answer in <b id="confirm-secs">30</b> seconds confirms it.</p>
-    <button class="rr-btn rr-btn--full rr-btn--plain" type="button" id="confirm-yes">Confirm room is full</button>
-    <div class="pair">
-      <div class="fld"><label for="ny-n">Seats free</label><input id="ny-n" type="number" min="1" value="2" inputmode="numeric"></div>
-      <div class="fld"><label for="ny-zone">Where</label><select id="ny-zone"></select></div>
-    </div>
-    <button class="rr-btn rr-btn--ghost" type="button" id="confirm-no">Not yet, seats are free</button>
-  </div>
+  <section class="rr-panel hero" id="hero" aria-label="Live count"><div class="line" id="st"></div><div id="count"></div></section>
+  <section class="rr-panel act" id="primary" aria-live="polite"></section>
 
-  <section class="rr-panel" aria-labelledby="h-count">
-    <h2 class="rr-eyebrow" id="h-count">Count</h2>
-    <div class="line" id="count"></div>
-    <p class="note">The count runs itself from scans. Only correct it for someone who walked in without scanning (+) or left without tapping "I'm leaving" (&minus;).</p>
-    <div class="counter-row">
-      <button type="button" id="minus" aria-label="Remove one person who left without tapping">&minus;</button>
-      <div><output id="corr" aria-live="polite">0</output><div class="small muted">correction</div></div>
-      <button type="button" id="plus" aria-label="Add one person who walked in without scanning">+</button>
-    </div>
-    <div class="pair">
-      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="force-full">Mark full</button>
-      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="clear">Clear override</button>
-    </div>
-  </section>
-
-  <section class="rr-panel" aria-labelledby="h-rel">
-    <h2 class="rr-eyebrow" id="h-rel">Release seats to the queue</h2>
-    <div class="pair">
-      <div class="fld"><label for="rel-n">How many</label><input id="rel-n" type="number" min="1" value="2" inputmode="numeric"></div>
-      <div class="fld"><label for="rel-zone">Where</label><select id="rel-zone"></select></div>
-    </div>
-    <p class="note" id="rel-cap"></p>
-    <button class="rr-btn" type="button" id="release">Offer seats to the queue</button>
-  </section>
-
-  <section class="rr-panel" aria-labelledby="h-q">
+  <section class="rr-panel" id="qsec" aria-labelledby="h-q">
     <h2 class="rr-eyebrow" id="h-q">Queue at the door</h2>
-    <div id="queue"></div>
+    <div id="queue"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
   </section>
 
-  <section class="rr-panel" aria-labelledby="h-fl">
-    <div class="line" style="justify-content:space-between"><h2 class="rr-eyebrow" id="h-fl">Floor map</h2>
-      <div class="seg" role="group" aria-label="View"><button type="button" aria-pressed="true" data-mode="map">Map</button><button type="button" aria-pressed="false" data-mode="list">List</button></div></div>
-    <div class="board" id="board"></div>
-  </section>
-
-  <section class="rr-panel" aria-labelledby="h-c">
-    <h2 class="rr-eyebrow" id="h-c">Comments on this room</h2>
-    <div id="comments"><p class="note">No comments yet.</p></div>
-  </section>
-
-  <p class="err" id="err" role="alert" hidden></p>
-  <button class="rr-btn rr-btn--ghost" type="button" id="leave">Leave this door</button>
+  <details class="rr-more rr-span" id="more">
+    <summary><span>More options <span class="muted small">count, map, comments, leave</span></span></summary>
+    <div>
+      <div class="act">
+        <h3 class="rr-eyebrow">Correct the count</h3>
+        <p class="note">The count runs itself from scans. Only correct it for someone who walked in without scanning (+) or left without tapping "I'm leaving" (&minus;).</p>
+        <div class="step"><button type="button" id="minus" aria-label="Remove one person who left without tapping">&minus;</button><output id="corr" aria-live="polite">0</output><button type="button" id="plus" aria-label="Add one person who walked in without scanning">+</button></div>
+        <div class="pair"><button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="force-full">Mark full</button><button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="clear">Clear override</button></div>
+      </div>
+      <div class="act">
+        <div class="line" style="justify-content:space-between"><h3 class="rr-eyebrow">Floor map</h3>
+          <div class="seg" role="group" aria-label="View"><button type="button" aria-pressed="true" data-mode="map">Map</button><button type="button" aria-pressed="false" data-mode="list">List</button></div></div>
+        <div class="board" id="board"></div>
+      </div>
+      <div class="act"><h3 class="rr-eyebrow">Comments on this room</h3><div id="comments"><p class="note">No comments yet.</p></div></div>
+      <button class="rr-btn rr-btn--ghost" type="button" id="leave">Leave this door</button>
+    </div>
+  </details>
+  <p class="err rr-span" id="err" role="alert" hidden></p>
 </main>
 <script src="/app.js"></script>
 <script>
@@ -92,58 +72,95 @@
   const $ = (id) => document.getElementById(id);
   const err = $('err');
   const me = await RR.requireLogin('staff');
+  RR.remember('rr-door', room);
   const ZONES = ['front-left', 'front-centre', 'front-right', 'middle-left', 'middle-centre', 'middle-right', 'back-left', 'back-centre', 'back-right'];
-  for (const s of [$('rel-zone'), $('ny-zone')]) s.innerHTML = '<option value="">Any seat</option>' + ZONES.map((z) => `<option value="${z}">${RR.zoneName(z)}</option>`).join('');
-  let mode = 'map', v = null, ticker = null, notices = [];
+  let mode = 'map', v = null, ticker = null, notices = [], n = 1, zone = RR.recall(`rr-zone-${room}`), confirmUntil = 0;
 
   const act = async (path, body) => {
     err.hidden = true;
     try { await RR.api(path, { method: 'POST', body }); await refresh(); } catch (e) { RR.showError(err, e); }
   };
+  // Zone defaults to the last zone staff freed here, else the emptiest zone.
+  const bestZone = (s) => zone || Object.entries(s.zoneFill || {}).sort((a, b) => a[1] - b[1])[0]?.[0] || null;
+  const zoneChips = (sel) => `<div class="chips zones-row" role="group" aria-label="Where are the free seats?">${ZONES.map((z) => `<button type="button" data-z="${z}" aria-pressed="${z === sel}">${RR.esc(RR.zoneName(z))}</button>`).join('')}</div>`;
+  const stepper = (max) => `<div class="step"><button type="button" id="n-" aria-label="One fewer seat">&minus;</button><output id="n" aria-live="polite">${n}</output><button type="button" id="n+" aria-label="One more seat">+</button></div>
+    <p class="note">${max ? `Up to ${max} can be released.` : ''}</p>`;
+  function wireStepper(max) {
+    $('n-').addEventListener('click', () => { n = Math.max(1, n - 1); primary(); });
+    $('n+').addEventListener('click', () => { n = Math.min(Math.max(1, max), n + 1); primary(); });
+    $('primary').querySelectorAll('[data-z]').forEach((b) => b.addEventListener('click', () => { zone = b.dataset.z; RR.remember(`rr-zone-${room}`, zone); primary(); }));
+  }
 
-  function showConfirm(secs) {
-    $('confirm').hidden = false;
-    $('confirm-count').innerHTML = RR.count(v.taken, v.capacity) + ' ' + RR.label('live');
-    let left = secs;
-    $('confirm-secs').textContent = left;
-    clearInterval(ticker);
-    ticker = setInterval(() => { left = Math.max(0, left - 1); $('confirm-secs').textContent = left; if (!left) { clearInterval(ticker); refresh(); } }, 1000);
+  // The one action that matters right now.
+  function primary() {
+    const s = v; if (!s) return;
+    const waiting = s.queue.filter((q) => q.status === 'waiting').length;
+    const held = s.queue.filter((q) => q.status !== 'waiting').length;
+    const cap = Math.max(0, s.taken - held);
+    const z = bestZone(s);
+    const el = $('primary');
+    if (s.pendingConfirm != null) {
+      const left = Math.max(0, Math.ceil((confirmUntil - Date.now()) / 1000));
+      el.innerHTML = `<h2 class="rr-eyebrow" role="alert">This room looks full</h2>
+        <p class="m0">Confirm to show Full and send people to other rooms. No answer in <b id="confirm-secs">${left}</b> seconds confirms it.</p>
+        <button class="rr-btn rr-btn--full" type="button" id="yes">Confirm full</button>
+        <details class="rr-why"><summary>Not yet, some seats are free</summary><div class="act">${stepper(cap)}${zoneChips(z)}
+          <button class="rr-btn rr-btn--ghost" type="button" id="no">Not yet · ${n} free in ${RR.esc(RR.zoneName(z))}</button></div></details>`;
+      $('yes').addEventListener('click', () => act(`/staff/spaces/${room}/confirm`, { answer: 'full' }).then(() => RR.toast('Marked full')));
+      $('no').addEventListener('click', () => act(`/staff/spaces/${room}/confirm`, { answer: 'not_yet', n, zone: z }));
+      wireStepper(cap);
+      return;
+    }
+    if (s.status === 'full' && waiting && cap) {
+      el.innerHTML = `<h2 class="rr-eyebrow">${waiting} waiting at the door</h2><p class="m0">Seen empty seats? Release them and the queue gets offers in order.</p>
+        ${stepper(cap)}${zoneChips(z)}
+        <button class="rr-btn" type="button" id="release">Release ${n} ${n === 1 ? 'seat' : 'seats'} · ${RR.esc(RR.zoneName(z))}</button>`;
+      $('release').addEventListener('click', () => { const k = n; act(`/staff/spaces/${room}/release`, { n: k, zone: z }).then(() => RR.toast(`Released ${k} ${k === 1 ? 'seat' : 'seats'}`)); n = 1; });
+      wireStepper(cap);
+      return;
+    }
+    el.innerHTML = `<h2 class="rr-eyebrow">Nothing to do right now</h2><p class="m0 note">The count runs itself from scans. You'll get a prompt here when the room fills.</p>`;
   }
 
   async function refresh() {
     try {
       const [s, floors] = await Promise.all([RR.api(`/staff/spaces/${encodeURIComponent(room)}`), RR.api('/floors')]);
       v = s;
-      document.title = `Room ${s.id} door · RightRoom`;
-      $('eyebrow').textContent = `Staff · Room ${s.id} · Floor ${s.floor}`;
+      const where = `${RR.roomName(s)} · Floor ${s.floor}`;
+      document.title = `${RR.roomName(s)} door · RightRoom`;
+      $('eyebrow').textContent = `Door · ${where}`;
+      RR.here(where);
       $('title').textContent = s.title;
-      $('st').innerHTML = RR.status(s.status);
-      $('countline').textContent = `${s.taken} of ${s.capacity}`;
-      $('count').innerHTML = RR.count(s.taken, s.capacity) + RR.label('live') + (s.standIn ? ` <span class="rr-label">${Number(s.standIn)} STAND-IN</span>` : '');
+      $('st').innerHTML = RR.status(s.status) + RR.label('live') + (s.standIn ? RR.label(`${Number(s.standIn)} stand-in`) : '');
+      $('count').innerHTML = RR.count(s.taken, s.capacity);
       $('corr').textContent = (s.correction > 0 ? '+' : '') + s.correction;
-      const held = s.queue.filter((q) => q.status !== 'waiting').length;
-      const cap = Math.max(0, s.taken - held);
-      $('rel-n').max = cap;
-      $('rel-cap').textContent = `Up to ${cap} can be released: the people counted inside, not seats already offered.`;
       $('queue').innerHTML = s.queue.length
         ? s.queue.map((q, i) => `<div class="q"><span>#${i + 1} ${RR.esc(q.handle)}${q.needs?.length ? ` <span class="rr-access">&#9855; ${RR.esc(q.needs.join(', '))}</span>` : ''}</span><span>${q.code ? `<span class="rr-code sm">${RR.esc(q.code)}</span> ${RR.esc(RR.zoneName(q.zone))}` : `<span class="muted">${RR.esc(q.status)}</span>`}</span></div>`).join('')
         : '<p class="note">Nobody is waiting.</p>';
       const cs = (s.comments || []).filter((c) => !c.hidden);
       $('comments').innerHTML = cs.length ? cs.map((c) => `<div class="cmt"><p>${RR.esc(c.text)}</p><button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" data-hide="${Number(c.id)}" aria-label="Hide this comment">Hide</button></div>`).join('') : '<p class="note">No comments yet.</p>';
       $('comments').querySelectorAll('[data-hide]').forEach((b) => b.addEventListener('click', () => act(`/staff/comments/${b.dataset.hide}/hide`)));
-      RR.floorBoard($('board'), floors, { role: me.role, mode, notices, onPick: (id) => { if (id !== room) location.href = `/staff/room/${encodeURIComponent(id)}`; } });
-      if (s.pendingConfirm != null) showConfirm(s.pendingConfirm); else { $('confirm').hidden = true; clearInterval(ticker); }
+      if ($('more').open) RR.floorBoard($('board'), floors, { role: me.role, mode, notices, onPick: (id) => { if (id !== room) location.href = `/staff/room/${encodeURIComponent(id)}`; } });
+      if (s.pendingConfirm != null) { if (!confirmUntil || confirmUntil < Date.now()) confirmUntil = Date.now() + s.pendingConfirm * 1000; startTicker(); } else { confirmUntil = 0; clearInterval(ticker); }
+      // Don't redraw the action while someone is using its stepper or zone chips.
+      if (!$('primary').contains(document.activeElement)) primary();
       document.querySelector('main').removeAttribute('aria-busy');
     } catch (e) { RR.showError(err, e); }
+  }
+  function startTicker() {
+    clearInterval(ticker);
+    ticker = setInterval(() => {
+      const left = Math.max(0, Math.ceil((confirmUntil - Date.now()) / 1000));
+      if ($('confirm-secs')) $('confirm-secs').textContent = left;
+      if (!left) { clearInterval(ticker); refresh(); }
+    }, 1000);
   }
 
   $('plus').addEventListener('click', () => act(`/staff/spaces/${room}/count`, { delta: 1 }));
   $('minus').addEventListener('click', () => act(`/staff/spaces/${room}/count`, { delta: -1 }));
   $('force-full').addEventListener('click', () => act(`/staff/spaces/${room}/override`, { mode: 'full' }));
   $('clear').addEventListener('click', () => act(`/staff/spaces/${room}/override`, { mode: 'clear' }));
-  $('release').addEventListener('click', () => act(`/staff/spaces/${room}/release`, { n: Number($('rel-n').value), zone: $('rel-zone').value || null }));
-  $('confirm-yes').addEventListener('click', () => act(`/staff/spaces/${room}/confirm`, { answer: 'full' }));
-  $('confirm-no').addEventListener('click', () => act(`/staff/spaces/${room}/confirm`, { answer: 'not_yet', n: Number($('ny-n').value), zone: $('ny-zone').value || null }));
+  $('more').addEventListener('toggle', refresh);
   $('leave').addEventListener('click', async () => {
     try { await RR.api(`/staff/spaces/${room}/console`, { method: 'POST', body: { action: 'leave' } }); location.href = me.role === 'organiser' ? '/staff/setup' : '/sessions'; } catch (e) { RR.showError(err, e); }
   });
@@ -158,7 +175,7 @@
   await refresh();
   const myFloor = (await RR.api('/floors').catch(() => [])).find((f) => f.rooms.some((r) => r.id === room))?.floor ?? null;
   RR.watchNotices({ floor: myFloor, onChange: (a) => { notices = [a, ...notices]; refresh(); } });
-  RR.live(room, { status: refresh, position: refresh, offer_passed: refresh, confirm: (d) => { refresh().then(() => showConfirm(d.seconds)); } });
+  RR.live(room, { status: refresh, position: refresh, offer_passed: refresh, confirm: (d) => { confirmUntil = Date.now() + d.seconds * 1000; refresh(); } });
 })();
 </script>
 </body>
