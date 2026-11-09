@@ -6,9 +6,6 @@
 <title>Schedule · RightRoom</title>
 <link rel="stylesheet" href="/rr.css">
 <style>
-  .nav { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
-  .nav a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--rr-s3); color: var(--rr-ink); text-decoration: none; border: 2px solid var(--rr-line); border-radius: var(--rr-r1); font: 700 var(--rr-t-sm)/1 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.06em; }
-  .nav a[aria-current] { border-color: var(--rr-signal); color: var(--rr-signal); }
   .seg { display: grid; grid-template-columns: 1fr 1fr; gap: var(--rr-s2); }
   .seg button { min-height: 48px; border: 2px solid var(--rr-line); border-radius: var(--rr-r2); background: var(--rr-panel-2); color: var(--rr-ink); font: 700 var(--rr-t-md)/1 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--rr-signal); border-color: var(--rr-signal); color: var(--rr-on-signal); }
@@ -20,7 +17,6 @@
 </head>
 <body>
 <main class="rr-screen rr-screen--wide" id="main">
-  <nav class="nav" aria-label="Pages"><a href="/event">Event</a><a href="/sessions" aria-current="page">Schedule</a><a href="/me">Me</a></nav>
   <div class="rr-sign"><span class="rr-eyebrow" id="now">Now</span><h1>Schedule</h1></div>
   <div class="seg" role="group" aria-label="View"><button type="button" data-mode="map" aria-pressed="true">Map</button><button type="button" data-mode="list" aria-pressed="false">List</button></div>
   <div id="view" aria-live="polite"></div>

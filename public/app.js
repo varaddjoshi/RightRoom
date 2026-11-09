@@ -46,7 +46,7 @@
 
   const status = (st, word) => `<span class="rr-status" data-status="${esc(st)}">${esc(word || WORD[st] || st)}</span>`;
   const count = (n, cap) => `<div class="rr-count" aria-label="${Number(n)} of ${Number(cap)} seats taken">${Number(n)}<small>/ ${Number(cap)}</small></div>`;
-  const label = (kind) => `<span class="rr-label"${kind === 'live' ? ' data-kind="live"' : ''}>${esc(String(kind).toUpperCase())}</span>`;
+  const label = (kind) => `<span class="rr-label"${kind === 'live' ? ' data-kind="live"' : ''}>${esc(String(kind).replace(/^./, (c) => c.toUpperCase()))}</span>`;
   const zoneName = (z) => (z ? z.replace('-', ' ').replace(/^./, (c) => c.toUpperCase()) : 'Any seat');
 
   // Announcements (GET /api/announcements, SSE 'announcement'): shown inside the floor views, not on a separate tab.
@@ -110,7 +110,7 @@
       const seats = f.rooms.reduce((s, r) => s + r.free, 0);
       const mine = forFloor(opts.notices, f.floor);
       const here = f.rooms.some((r) => r.id === opts.here) ? `<span class="here">You are here · Floor ${Number(f.floor)}</span>` : '';
-      const head = `<div class="fl-h"><b>FLOOR ${Number(f.floor)}</b>${here}${list ? '' : badge(mine, f.floor, `Floor ${Number(f.floor)}`)}<span>${f.rooms.length} rooms · ${seats} seats free</span></div>${list ? mine.map(notice).join('') : ''}`;
+      const head = `<div class="fl-h"><b>Floor ${Number(f.floor)}</b>${here}${list ? '' : badge(mine, f.floor, `Floor ${Number(f.floor)}`)}<span>${f.rooms.length} rooms · ${seats} seats free</span></div>${list ? mine.map(notice).join('') : ''}`;
       const body = list
         ? f.rooms.map((r) => `<div class="talk${needs(r) ? ' alert' : ''}"><div><b>Room ${esc(r.id)} · ${esc(r.title)}</b><span>${r.taken} of ${r.capacity} · ${access(r)}</span>${extra(r).replace(/tile-m|tile-x/g, '')}</div>${status(r.status)}</div>`).join('')
         : `<div class="fl-rooms">${f.rooms.map((r, i) => `<button type="button" class="tile${needs(r) ? ' needs' : ''}" data-room="${esc(r.id)}" data-status="${esc(r.status)}" style="--cap:${Number(r.capacity)};--i:${Math.min(i, 4)}">
@@ -166,5 +166,61 @@
     el.hidden = false;
   }
 
-  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion };
+  // Remembers the last room a person used, so "My seat" and staff "Door" are one tap from anywhere.
+  // shortcut: device-only memory; a per-user "my room" API would make it follow people across devices.
+  const remember = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
+  const recall = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+
+  // Line icons, one stroke weight (24px grid).
+  const ICON = {
+    now: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    map: '<path d="M4 6.5 9 4l6 2.5L20 4v13.5L15 20l-6-2.5L4 20z"/><path d="M9 4v13.5M15 6.5V20"/>',
+    seat: '<path d="M7 4v8h10V4M5 12h14l-1.5 4H6.5zM7.5 16v4M16.5 16v4"/>',
+    me: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1.2-3.6 4-5 7-5s5.8 1.4 7 5"/>',
+    door: '<path d="M6 20V4h12v16M4 20h16"/><circle cx="14.5" cy="12" r="1"/>',
+    board: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+    qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/>',
+    sim: '<path d="M8 5.5v13l10-6.5z"/>',
+    in: '<path d="M10 17l5-5-5-5M15 12H4M14 4h5v16h-5"/>',
+  };
+  const svg = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
+
+  // One persistent nav per persona: phone tab bar, laptop top bar. Pages opt out with <body class="rr-nonav">.
+  let meCache;
+  const whoami = () => (meCache ??= api('/me').catch(() => null));
+  async function nav() {
+    if (document.body.classList.contains('rr-nonav') || document.querySelector('.rr-nav')) return;
+    const me = await whoami();
+    const room = recall('rr-room'), door = recall('rr-door') || '204';
+    const tabs = !me ? [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['me', 'Sign in', `/login?next=${encodeURIComponent(location.pathname)}`]]
+      : me.role === 'organiser' ? [['board', 'Board', '/staff/setup'], ['door', 'Door', `/staff/room/${door}`], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']]
+      : me.role === 'staff' ? [['door', 'Door', `/staff/room/${door}`], ['map', 'Schedule', '/sessions'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']]
+      : [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['seat', 'My seat', room ? `/r/${room}` : '/sessions'], ['me', 'Me', '/me']];
+    const path = location.pathname;
+    const on = (href) => { const p = href.split('?')[0]; return p === path || (p.startsWith('/r/') && path.startsWith('/r/')) || (p.startsWith('/staff/room/') && path.startsWith('/staff/room/')); };
+    const n = document.createElement('nav');
+    n.className = 'rr-nav';
+    n.setAttribute('aria-label', 'Main');
+    n.innerHTML = `<span class="rr-nav-brand"><i aria-hidden="true"></i>RightRoom</span>${tabs.map(([ic, text, href]) => `<a href="${esc(href)}"${on(href) ? ' aria-current="page"' : ''}>${svg(ic)}<span>${esc(text)}</span></a>`).join('')}<span class="rr-here" id="rr-here"></span>`;
+    document.body.prepend(n);
+  }
+  // Laptop top bar shows where you are ("Room 204 · Floor 2"); phones show it in the page header.
+  const here = (text) => { const el = document.getElementById('rr-here'); if (el) el.textContent = text ? `You're at ${text}` : ''; };
+
+  // Undo instead of a confirm dialog: the action runs after `ms` unless Undo is pressed.
+  function undo(message, run, ms = 5000) {
+    document.querySelector('.rr-toast')?.remove();
+    const t = document.createElement('div');
+    t.className = 'rr-toast';
+    t.setAttribute('role', 'status');
+    t.innerHTML = `<p>${esc(message)}</p><button type="button">Undo</button>`;
+    document.body.append(t);
+    const timer = setTimeout(() => { t.remove(); run(); }, ms);
+    t.querySelector('button').addEventListener('click', () => { clearTimeout(timer); t.remove(); });
+    t.querySelector('button').focus({ preventScroll: true });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', nav); else nav();
+
+  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami };
 })();
