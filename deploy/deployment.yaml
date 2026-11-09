@@ -37,6 +37,12 @@ spec:
             - secretRef:
                 name: app-credentials
                 optional: true
+            # Browser monitoring token (DASH0_BROWSER_TOKEN, src/rum.js). Its own Secret, so adding or changing it
+            # never touches app-credentials: re-applying a partial app-credentials in Radar could delete its other
+            # keys. Created by hand, never committed (docs/deploy.md). optional: monitoring is simply off without it.
+            - secretRef:
+                name: browser-credentials
+                optional: true
           # Listed here so they win over the same names in the Secret.
           env:
             - name: PORT
