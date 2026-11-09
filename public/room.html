@@ -19,6 +19,23 @@
   .ask { display: grid; gap: var(--rr-s3); }
   .ask .line .rr-btn { flex: 1; width: auto; }
   .guest { font-size: var(--rr-t-sm); color: var(--rr-muted); }
+  /* In-page QR scanner: camera view stays dark, the rest uses the app's tokens. */
+  .scan-ov { width: min(94vw, 480px); max-height: 94dvh; overflow: auto; }
+  .scan-top { display: flex; justify-content: space-between; align-items: center; gap: var(--rr-s3); }
+  .scan-top h2 { font-size: var(--rr-t-lg); }
+  .scan-top .rr-btn, .scan-actions .rr-btn { width: auto; flex: none; padding: 0 var(--rr-s4); }
+  .scan-ov .view { position: relative; width: 100%; aspect-ratio: 1; max-height: 56dvh; border-radius: var(--rr-r2); overflow: hidden; background: #000; }
+  .scan-ov .view video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .scan-ov .frame { position: absolute; inset: 16%; border: 3px solid var(--rr-signal); border-radius: var(--rr-r1); box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45); }
+  .scan-ov .frame::after { content: ""; position: absolute; left: 6%; right: 6%; top: 50%; height: 2px; background: var(--rr-signal); opacity: 0.8; animation: sweep 2.4s ease-in-out infinite alternate; }
+  @keyframes sweep { from { top: 10%; } to { top: 90%; } }
+  @media (prefers-reduced-motion: reduce) { .scan-ov .frame::after { animation: none; } }
+  .scan-ov .msg p { margin: 0; line-height: 1.5; }
+  .scan-ov .paste { display: grid; gap: var(--rr-s2); }
+  .scan-ov .paste input { min-height: 48px; padding: 0 var(--rr-s3); font: 400 var(--rr-t-md)/1.4 var(--rr-font-body); color: var(--rr-ink); background: var(--rr-panel); border: 1px solid var(--rr-line); border-radius: var(--rr-r1); }
+  .scan-ov #status { margin: 0; min-height: 1.5em; color: var(--rr-muted); }
+  .scan-actions { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
+  .scan-actions:not(:has(:not([hidden]))) { display: none; }
 </style>
 </head>
 <body>
@@ -34,7 +51,27 @@
   <p class="rr-sr" aria-live="polite" id="sr"></p>
   <p class="rr-panel m0" id="err" role="alert" hidden></p>
 </main>
+<!-- "I'm in the room" / "I'm in my seat" open this: scan the in-room code and check in without leaving the page. -->
+<dialog class="rr-dialog scan-ov" id="scanner" aria-labelledby="scan-h">
+  <div class="scan-top"><h2 id="scan-h">Scan the code in the room</h2><button type="button" class="rr-btn rr-btn--ghost rr-btn--plain" id="close">Close</button></div>
+  <p class="m0 muted">It's on the sign by the door and on the screen. Scanning counts you in, so the room's status stays right for everyone outside.</p>
+  <div class="view" data-state="scanning asking"><video id="video" playsinline muted aria-label="Camera view"></video><div class="frame" aria-hidden="true"></div></div>
+  <div class="msg" data-state="denied" hidden><p><strong>Camera access is off.</strong> Open your phone's camera app, point it at the code in the room and open the link it shows. That checks you in on its own. Or allow the camera for this site and try again.</p></div>
+  <div class="msg" data-state="nocamera" hidden><p><strong>No camera here.</strong> Use your phone's camera app on the code in the room, or paste the link below.</p></div>
+  <div class="msg" data-state="insecure" hidden><p><strong>The camera only works on a secure (https) page.</strong> Use your phone's camera app on the code in the room, or paste the link below.</p></div>
+  <form class="paste" id="paste" data-state="denied nocamera insecure" hidden>
+    <label for="link">Or paste the link from the code</label>
+    <input id="link" type="url" inputmode="url" autocomplete="off" placeholder="https://…/r/210/in?k=…">
+    <button class="rr-btn" type="submit">Check me in</button>
+  </form>
+  <p id="status" role="status" aria-live="polite"></p>
+  <div class="scan-actions">
+    <button type="button" class="rr-btn rr-btn--ghost rr-btn--plain" id="torch" aria-pressed="false" hidden data-state="scanning">Torch</button>
+    <button type="button" class="rr-btn rr-btn--ghost rr-btn--plain" id="retry" data-state="denied nocamera" hidden>Try again</button>
+  </div>
+</dialog>
 <script src="/app.js"></script>
+<script src="/scan.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
   const id = decodeURIComponent(location.pathname.split('/')[2] || '');
@@ -47,9 +84,50 @@
   const KEY = `rr-k-${id}`;
   const key = () => RR.recall(KEY) || '';
   const withKey = (body = {}) => (key() ? { ...body, k: key() } : body);
-  const scanPrompt = (r) => `<div class="rr-panel"><p class="m0"><b>Scan the code inside ${RR.esc(RR.roomName(r))}</b> to check in. It's on the sign by the door and on the screen.</p></div>
-    <a class="rr-btn" href="/scan">Scan the code in the room</a>
-    <p class="note">Or point your phone's camera at the code. Scanning counts you in, so the room's status stays right for everyone outside.</p>`;
+  let me0 = null, crowdCache = null, scanZone = null;
+
+  // ---- Scanner -----------------------------------------------------------------------------------
+  // Always the way in: the in-room code proves you're here (decision 36). This room's code checks in on the spot;
+  // any other RightRoom code opens its own page, like /scan.
+  function openScanner(zone) {
+    scanZone = zone;
+    $('err').hidden = true;
+    $('scanner').showModal();
+    RRScan.open();
+  }
+  RRScan.wire((path) => {
+    const u = new URL(path, location.origin), k = u.searchParams.get('k');
+    if (u.pathname !== `/r/${enc(id)}/in` || !k) { location.href = path; return; }
+    RR.remember(KEY, k);
+    $('scanner').close();
+    checkIn(scanZone);
+  });
+  $('scanner').addEventListener('close', () => RRScan.stop());
+  $('close').addEventListener('click', () => $('scanner').close());
+
+  // ---- Crowd-sourced data and fit (RR.insights / RR.whyForYou from app.js) ----------------------------
+  // Cached for 30 s so live status updates don't refetch it; cleared after you post a comment or a reading.
+  async function crowd() {
+    if (crowdCache && Date.now() - crowdCache.at < 30000) return crowdCache;
+    const from = RR.recall('rr-room');
+    const [wifi, comments, heat, floors] = await Promise.all([
+      RR.api('/wifi').catch(() => null), RR.api(`/spaces/${enc(id)}/comments`).catch(() => ({ topics: [] })),
+      RR.api(`/heat?room=${enc(id)}`).catch(() => null), from ? RR.api(`/floors?from=${enc(from)}`).catch(() => null) : null,
+    ]);
+    const walk = floors?.flatMap((f) => f.rooms).find((x) => x.id === id)?.walk;
+    crowdCache = { at: Date.now(), wifi: wifi?.rooms?.[id] || null, comments, heat, walk };
+    return crowdCache;
+  }
+  async function insightsBlock(r) {
+    if (!RR.insights) return '';
+    const c = await crowd();
+    return RR.insights(r, { wifi: c.wifi, topics: c.comments.topics, heat: c.heat });
+  }
+  async function whyBlock(r) {
+    if (!RR.whyForYou) return '';
+    const c = await crowd();
+    return RR.whyForYou({ ...r, wifiStats: c.wifi }, me0, { minutes: c.walk }).html;
+  }
 
   // ---- In the room -------------------------------------------------------------------------------
   // A rough 1-second speed test against this server.
@@ -80,13 +158,14 @@
         $('wg-fill').style.setProperty('--rr-scale', Math.min(1, p));
       });
       wifi = await RR.api(`/spaces/${enc(id)}/wifi`, { method: 'POST', body: { zone, ...result } });
+      crowdCache = null;
       RR.toast(`Added to ${RR.roomName(id)}'s Wi-Fi map`);
       render();
     } catch { $('wg')?.remove(); /* optional extra */ }
   }
   async function commentsBlock() {
     // `comments` (a count) is optional: older servers only send topics.
-    const t = await RR.api(`/spaces/${enc(id)}/comments`).catch(() => ({ topics: [] }));
+    const t = (await crowd()).comments;
     const n = typeof t.comments === 'number' ? t.comments : null;
     const summary = t.topics?.length ? `<div class="chips static">${t.topics.map((x) => `<span>${RR.esc(x)}</span>`).join('')}</div>`
       : n ? `<p class="note">${n} ${n === 1 ? 'comment' : 'comments'}</p>` : n === 0 || !t.topics?.length ? '<p class="note">No comments yet.</p>' : '';
@@ -137,8 +216,9 @@
       if (id !== 'venue') { if (me.queue || me.claimed || me.checkedIn) RR.remember('rr-room', id); else if (RR.recall('rr-room') === id) RR.remember('rr-room', ''); }
       // Keep an offer that's already on screen, so its alert isn't announced again and the countdown keeps going.
       if (me.queue?.status === 'offered' && $('claim')?.dataset.offer === me.queue.offer?.id) return;
-      // Don't redraw under someone typing a comment or reading the open seat picker.
-      if (document.activeElement?.id === 'c1' || $('adjust')?.open) return;
+      // Don't redraw under someone typing a comment, reading the open seat picker or scanning.
+      if (document.activeElement?.id === 'c1' || $('adjust')?.open || $('scanner').open) return;
+      if (me.queue?.status !== 'offered') $('sr').textContent = ''; // the offer announcement is stale once it's claimed or gone
       clearInterval(timer);
 
       if (id === 'venue') {
@@ -159,6 +239,7 @@
           ${consent() == null ? `<div class="rr-panel ask"><p class="m0">Share a 1-second Wi-Fi test from your seat? It helps everyone see where signal is weak.</p>
               <div class="line"><button class="rr-btn rr-btn--plain" type="button" id="wy">Share</button><button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="wn">No thanks</button></div></div>` : ''}
           <div id="wslot">${wifi ? `<div class="rr-panel"><span class="rr-eyebrow">Your Wi-Fi reading</span><div class="line"><b class="big">${Number(wifi.mbps)}</b><span>Mbps · ${Number(wifi.ms)} ms</span><span class="wifi-band" data-band="${band(wifi.mbps)}">${RR.BAND[band(wifi.mbps)]}</span>${RR.label('live')}</div><p class="m0 muted">Added to ${RR.esc(RR.roomName(id))}'s Wi-Fi map.${wifi.median != null ? ` Room median ${Number(wifi.median)} Mbps.` : ''}</p></div>` : ''}</div>
+          ${await insightsBlock(r)}
           <section class="rr-panel" aria-labelledby="h-heat"><h2 class="rr-eyebrow" id="h-heat">Around the room</h2><div id="heat" data-layer="crowd"></div></section>
           ${await commentsBlock()}
           <button class="rr-btn rr-btn--ghost" type="button" id="leave">I'm leaving</button>`;
@@ -174,16 +255,18 @@
           <a class="rr-btn" href="/event">What's on next</a>${await commentsBlock()}<p class="note">You can still comment for 24 hours.</p>`;
       } else if (me.claimed) {
         body.innerHTML = `<div class="rr-panel"><span class="rr-eyebrow">Show this at the door</span><div class="rr-code">${RR.esc(me.claimed.code)}</div><p class="m0 muted">${RR.esc(RR.zoneName(me.claimed.zone))} · hold until ${time(me.claimed.scanBy)}</p></div>
-          ${key() ? '<button class="rr-btn" type="button" id="in">I\'m in my seat</button>' : scanPrompt(r)}`;
-        $('in')?.addEventListener('click', () => checkIn(me.claimed.zone));
+          <button class="rr-btn" type="button" id="in">I'm in my seat</button>
+          <p class="note">Scan the code in the room to count yourself in.</p>${await insightsBlock(r)}`;
+        $('in').addEventListener('click', () => openScanner(me.claimed.zone));
       } else if (me.queue?.status === 'offered' && me.queue.offer) {
         body.innerHTML = offerView(me.queue.offer);
         startCountdown(me.queue.offer);
-        $('claim').addEventListener('click', (e) => act(async () => { await RR.api(`/offers/${enc(e.target.dataset.offer)}/claim`, { method: 'POST', body: {} }); RR.toast('Seat claimed'); }));
+        $('claim').addEventListener('click', (e) => act(async () => { await RR.api(`/offers/${enc(e.target.dataset.offer)}/claim`, { method: 'POST', body: {} }); $('sr').textContent = ''; RR.toast('Seat claimed'); }));
       } else if (me.queue?.status === 'waiting') {
         body.innerHTML = `${passed ? '<p class="rr-panel m0">You missed the last offer, so it went to the next person. You are back in the queue.</p>' : ''}
           <div class="rr-panel rr-position"><span class="rr-eyebrow">Your place for the next seat</span><strong>#${Number(me.queue.position)}</strong><p>${RR.esc(me.queue.reason)} Keep this page open; your phone shows the seat when it's yours.</p></div>
-          <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="leaveq">Leave the queue</button>`;
+          <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="leaveq">Leave the queue</button>
+          ${await whyBlock(r)}${await insightsBlock(r)}`;
         $('leaveq').addEventListener('click', () => act(() => RR.api(`/spaces/${enc(id)}/queue`, { method: 'DELETE' })));
       } else if (r.status === 'full') {
         redirect ??= await RR.api(`/spaces/${enc(id)}/redirect`).catch(() => null);
@@ -202,15 +285,17 @@
           : `<div class="rr-panel"><p class="m0"><b>This room is full</b>, and no other room has free seats right now. You can wait for a seat here.</p></div>`)
           + `<div class="rr-btn-stack"><button class="rr-btn ${s ? 'rr-btn--ghost' : ''}" type="button" id="joinq">Wait for a seat in this room</button>
             ${d ? `<a class="rr-btn rr-btn--ghost" href="/r/${enc(d.room)}">Something different: ${RR.esc(d.title)}</a>` : ''}
-            ${o?.url || o?.stream_url ? `<a class="rr-btn rr-btn--ghost rr-btn--plain" href="${RR.esc(o.url || o.stream_url)}">Watch the stream</a>` : o ? `<p class="note">A stream of this session is planned (${RR.esc(o.title || o.space_name || 'overflow')}); the link shows here when it's live.</p>` : ''}</div>`;
+            ${o?.url || o?.stream_url ? `<a class="rr-btn rr-btn--ghost rr-btn--plain" href="${RR.esc(o.url || o.stream_url)}">Watch the stream</a>` : o ? `<p class="note">A stream of this session is planned (${RR.esc(o.title || o.space_name || 'overflow')}); the link shows here when it's live.</p>` : ''}</div>
+          ${await whyBlock(r)}${await insightsBlock(r)}`;
         $('joinq').addEventListener('click', () => act(async () => { await RR.api(`/spaces/${enc(id)}/queue`, { method: 'POST', body: {} }); RR.toast("You're in the queue"); }));
       } else {
         body.innerHTML = `<div class="rr-panel"><p class="m0"><b>${Number(r.free)} seats free.</b> ${RR.esc(r.rule)}</p></div>
-          ${key() ? `<button class="rr-btn" type="button" id="in">I'm in the room</button>
-          <p class="note">One tap counts you in, so the room's status stays right for everyone outside. You can adjust your seat after.</p>` : scanPrompt(r)}`;
-        $('in')?.addEventListener('click', () => checkIn(null));
+          <button class="rr-btn" type="button" id="in">I'm in the room</button>
+          <p class="note">Scan the code in the room to count yourself in. You can adjust your seat after.</p>
+          ${await whyBlock(r)}${await insightsBlock(r)}`;
+        $('in').addEventListener('click', () => openScanner(null));
       }
-      $('post')?.addEventListener('click', () => act(async () => { await RR.api(`/spaces/${enc(id)}/comments`, { method: 'POST', body: { text: $('c1').value } }); RR.toast('Comment posted'); }));
+      $('post')?.addEventListener('click', () => act(async () => { await RR.api(`/spaces/${enc(id)}/comments`, { method: 'POST', body: { text: $('c1').value } }); crowdCache = null; RR.toast('Comment posted'); }));
     } catch (x) { RR.showError($('err'), x); }
   }
   // Zone defaults to the claimed seat, else the server's middle-centre; "Adjust seat" changes it after.
@@ -228,6 +313,7 @@
     let me = await RR.whoami();
     if (!me) { me = await RR.api('/guest', { method: 'POST', body: {} }).catch(() => null); if (!me) { location.href = `/login?from=qr&next=${enc(location.pathname + location.search)}`; return; } location.reload(); return; }
     if (me.role === 'guest') $('guest').hidden = false;
+    me0 = me;
     const q = new URLSearchParams(location.search);
     if (q.get('k')) RR.remember(KEY, q.get('k'));
     if (q.has('k') || q.has('in')) history.replaceState(null, '', `/r/${enc(id)}`); // keep the key out of shared links
