@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Door console · RightRoom</title>
 <link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RightRoom">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>
   .hero { display: grid; gap: var(--rr-s2); }
   .hero .rr-count { font-size: 4rem; }
@@ -26,6 +34,7 @@
 <!-- Door console: the essentials on one screen. The count runs itself; staff get one primary action that changes
      with the room's state (confirm Full, or release empty seats). Everything else sits behind "More". -->
 <main class="rr-screen rr-screen--wide" aria-busy="true">
+  <a class="back rr-span" href="/sessions">&larr; Board</a>
   <header class="rr-sign rr-span"><span class="rr-eyebrow" id="eyebrow">Door</span><h1 id="title">Door console</h1></header>
 
   <section class="rr-panel hero" id="hero" aria-label="Live count"><div class="line" id="st"></div><div id="count"></div></section>
@@ -33,7 +42,7 @@
 
   <section class="rr-panel" id="qsec" aria-labelledby="h-q">
     <h2 class="rr-eyebrow" id="h-q">Queue at the door</h2>
-    <div id="queue"></div>
+    <div id="queue"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
   </section>
 
   <details class="rr-more rr-span" id="more">
@@ -97,7 +106,7 @@
         <button class="rr-btn rr-btn--full" type="button" id="yes">Confirm full</button>
         <details class="rr-why"><summary>Not yet, some seats are free</summary><div class="act">${stepper(cap)}${zoneChips(z)}
           <button class="rr-btn rr-btn--ghost" type="button" id="no">Not yet · ${n} free in ${RR.esc(RR.zoneName(z))}</button></div></details>`;
-      $('yes').addEventListener('click', () => act(`/staff/spaces/${room}/confirm`, { answer: 'full' }));
+      $('yes').addEventListener('click', () => act(`/staff/spaces/${room}/confirm`, { answer: 'full' }).then(() => RR.toast('Marked full')));
       $('no').addEventListener('click', () => act(`/staff/spaces/${room}/confirm`, { answer: 'not_yet', n, zone: z }));
       wireStepper(cap);
       return;
@@ -106,7 +115,7 @@
       el.innerHTML = `<h2 class="rr-eyebrow">${waiting} waiting at the door</h2><p class="m0">Seen empty seats? Release them and the queue gets offers in order.</p>
         ${stepper(cap)}${zoneChips(z)}
         <button class="rr-btn" type="button" id="release">Release ${n} ${n === 1 ? 'seat' : 'seats'} · ${RR.esc(RR.zoneName(z))}</button>`;
-      $('release').addEventListener('click', () => { act(`/staff/spaces/${room}/release`, { n, zone: z }); n = 1; });
+      $('release').addEventListener('click', () => { const k = n; act(`/staff/spaces/${room}/release`, { n: k, zone: z }).then(() => RR.toast(`Released ${k} ${k === 1 ? 'seat' : 'seats'}`)); n = 1; });
       wireStepper(cap);
       return;
     }

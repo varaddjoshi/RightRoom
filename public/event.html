@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Now · RightRoom</title>
 <link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RightRoom">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>
   .seat { display: flex; align-items: center; justify-content: space-between; gap: var(--rr-s3); }
   .seat .rr-btn { width: auto; min-width: 120px; }
@@ -17,8 +25,8 @@
 <!-- "Now": the attendee home. It adapts to where you are in the day: register, your seat, then what's on now and next. -->
 <main class="rr-screen rr-screen--wide" id="main">
   <div class="rr-sign rr-span"><span class="rr-eyebrow">Venue · Hall A</span><h1 id="title">KubeCon hack day</h1></div>
-  <section id="home" class="rr-btn-stack" aria-live="polite"></section>
-  <section id="upcoming" class="rr-btn-stack" aria-labelledby="h-up"><h2 class="rr-sr" id="h-up">What's on</h2></section>
+  <section id="home" class="rr-btn-stack" aria-live="polite"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></section>
+  <section id="upcoming" class="rr-btn-stack" aria-label="What's on"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></section>
   <p class="rr-panel rr-span m0" id="err" role="alert" hidden></p>
 </main>
 <script src="/app.js"></script>
@@ -78,7 +86,7 @@
       const risk = Object.fromEntries((fc.sessions || []).map((s) => [s.room, s.risk]));
       $('title').textContent = entry?.status === 'admitted' ? "Here's what's on" : entry?.status === 'waiting' ? "You're on the waitlist" : 'KubeCon hack day';
       $('home').innerHTML = seat + registration(entry, venue);
-      $('upcoming').innerHTML = `<h2 class="rr-sr" id="h-up">What's on</h2>${upcoming(rooms, risk)}`;
+      $('upcoming').innerHTML = upcoming(rooms, risk);
       $('reg')?.addEventListener('click', register);
       $('notify')?.addEventListener('click', async () => { await Notification.requestPermission(); render(); });
       return entry;
@@ -86,11 +94,14 @@
   }
   async function register() {
     $('err').hidden = true;
-    try { await RR.api('/event/register', { method: 'POST' }); render(); } catch (x) { RR.showError($('err'), x); }
+    try { await RR.api('/event/register', { method: 'POST' }); RR.toast('Registered'); render(); } catch (x) { RR.showError($('err'), x); }
   }
 
   (async () => {
     me = await RR.whoami();
+    // Home by role: organisers land on the board, door staff on their door (or a door picker).
+    if (me?.role === 'organiser') return location.replace('/staff/setup');
+    if (me?.role === 'staff') { const d = RR.recall('rr-door'); return location.replace(d ? `/staff/room/${encodeURIComponent(d)}` : '/sessions?pick=door'); }
     RR.here('Hall A');
     let last = (await render())?.status;
     let t;

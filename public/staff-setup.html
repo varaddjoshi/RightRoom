@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Venue board · RightRoom</title>
 <link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RightRoom">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>
   .seg button { min-width: 64px; padding: 0 var(--rr-s3); }
   /* Laptop-first: board on the left, setup and insights on the right; one column under 720px. */
@@ -45,7 +53,7 @@
       <div class="line" style="justify-content:space-between"><h2 class="rr-eyebrow" id="h-board">All rooms · tap a room to edit it</h2>
         <div class="seg" role="group" aria-label="View"><button type="button" aria-pressed="true" data-mode="map">Map</button><button type="button" aria-pressed="false" data-mode="list">List</button></div></div>
       <p class="board-sum" id="sum"></p>
-      <div class="board" id="board"></div>
+      <div class="board" id="board"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
     </section>
 
     <div class="side">
@@ -151,6 +159,7 @@
       await RR.api('/announcements', { method: 'POST', body: { text: $('ann-text').value, floor: $('ann-floor').value || null, urgency } });
       $('ann-text').value = '';
       $('ann-ok').hidden = false;
+      RR.toast('Announcement posted');
     } catch (err) { RR.showError($('ann-err'), err); }
   });
   document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
@@ -192,6 +201,9 @@
   RR.watchNotices({ pop: false, onChange: (a) => { notices = [a, ...notices]; refreshBoard().catch(() => {}); } });
 })();
   document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { const el = document.getElementById(b.dataset.go); el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' }); el.focus({ preventScroll: true }); }));
+  // Tabs Rooms (#edit) and Announce (#ann) land on their form, ready to type.
+  const goHash = () => { const f = { '#edit': 'cap', '#ann': 'ann-text' }[location.hash]; if (f) { const el = document.getElementById(f); el.scrollIntoView({ block: 'center' }); el.focus({ preventScroll: true }); } };
+  addEventListener('hashchange', goHash); setTimeout(goHash, 300);
 </script>
 </body>
 </html>

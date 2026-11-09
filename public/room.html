@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Room · RightRoom</title>
 <link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RightRoom">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>
   .you { display: flex; align-items: center; justify-content: space-between; gap: var(--rr-s3); }
   .you b { font-size: var(--rr-t-lg); }
@@ -18,9 +26,10 @@
      /r/:room/in (the "I'm in the room" QR) lands here with ?in=1 and checks you in with zero taps. -->
 <main class="rr-screen rr-screen--split" id="main">
   <div class="rr-aside">
+    <a class="back" href="/sessions">&larr; Schedule</a>
     <div class="rr-sign"><span class="rr-eyebrow" id="eyebrow">Room</span><h1 id="title">Loading</h1><div class="line" id="state"></div></div>
   </div>
-  <section id="body" class="rr-btn-stack"></section>
+  <section id="body" class="rr-btn-stack"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></section>
   <p class="guest" id="guest" hidden>You're using RightRoom as a guest. <a href="/login">Sign in</a> to keep your place across devices.</p>
   <p class="rr-sr" aria-live="polite" id="sr"></p>
   <p class="rr-panel m0" id="err" role="alert" hidden></p>
@@ -155,7 +164,7 @@
       } else if (me.queue?.status === 'offered' && me.queue.offer) {
         body.innerHTML = offerView(me.queue.offer);
         startCountdown(me.queue.offer);
-        $('claim').addEventListener('click', (e) => act(() => RR.api(`/offers/${enc(e.target.dataset.offer)}/claim`, { method: 'POST', body: {} })));
+        $('claim').addEventListener('click', (e) => act(async () => { await RR.api(`/offers/${enc(e.target.dataset.offer)}/claim`, { method: 'POST', body: {} }); RR.toast('Seat claimed'); }));
       } else if (me.queue?.status === 'waiting') {
         body.innerHTML = `${passed ? '<p class="rr-panel m0">You missed the last offer, so it went to the next person. You are back in the queue.</p>' : ''}
           <div class="rr-panel rr-position"><span class="rr-eyebrow">Your place for the next seat</span><strong>#${Number(me.queue.position)}</strong><p>${RR.esc(me.queue.reason)} Keep this page open; your phone shows the seat when it's yours.</p></div>
@@ -168,18 +177,18 @@
           ${s ? `<a class="rr-btn" href="/r/${enc(s.room)}">Go to ${RR.esc(RR.roomName(s.room))}</a>` : ''}
           <button class="rr-btn ${s ? 'rr-btn--ghost' : ''}" type="button" id="joinq">Wait for a seat here</button>
           ${d || redirect?.overflow ? `<p class="note">${d ? `Or something different: <a href="/r/${enc(d.room)}">${RR.esc(d.title)}</a>. ` : ''}${redirect?.overflow ? `Overflow: ${RR.esc(redirect.overflow.title)}.` : ''}</p>` : ''}`;
-        $('joinq').addEventListener('click', () => act(() => RR.api(`/spaces/${enc(id)}/queue`, { method: 'POST', body: {} })));
+        $('joinq').addEventListener('click', () => act(async () => { await RR.api(`/spaces/${enc(id)}/queue`, { method: 'POST', body: {} }); RR.toast("You're in the queue"); }));
       } else {
         body.innerHTML = `<div class="rr-panel"><p class="m0"><b>${Number(r.free)} seats free.</b> ${RR.esc(r.rule)}</p></div>
           <button class="rr-btn" type="button" id="in">I'm in the room</button>
           <p class="note">One tap counts you in, so the room's status stays right for everyone outside. You can adjust your seat after.</p>`;
         $('in').addEventListener('click', () => checkIn(null));
       }
-      $('post')?.addEventListener('click', () => act(() => RR.api(`/spaces/${enc(id)}/comments`, { method: 'POST', body: { text: $('c1').value } })));
+      $('post')?.addEventListener('click', () => act(async () => { await RR.api(`/spaces/${enc(id)}/comments`, { method: 'POST', body: { text: $('c1').value } }); RR.toast('Comment posted'); }));
     } catch (x) { RR.showError($('err'), x); }
   }
   // Zone defaults to the claimed seat, else the server's middle-centre; "Adjust seat" changes it after.
-  const checkIn = (zone) => act(() => RR.api(`/spaces/${enc(id)}/checkin`, { method: 'POST', body: zone ? { zone } : {} }));
+  const checkIn = (zone) => act(async () => { await RR.api(`/spaces/${enc(id)}/checkin`, { method: 'POST', body: zone ? { zone } : {} }); RR.toast("You're checked in"); });
   async function act(fn) {
     $('err').hidden = true;
     try { await fn(); passed = false; await render(); } catch (x) { RR.showError($('err'), x); render(); }

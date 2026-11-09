@@ -164,10 +164,26 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
   new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; noticeChanges(); }); } })
     .observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['data-status', 'hidden'] });
 
-  // Shows an error next to a form instead of failing silently.
-  function showError(el, e) {
+  // Shows an error next to a form instead of failing silently, with a way to try again.
+  function showError(el, e, retry) {
     el.textContent = e.message || String(e);
+    if (e.status !== 400 && e.status !== 403 && e.status !== 409) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'rr-retry'; b.textContent = 'Try again';
+      b.addEventListener('click', () => (retry ? (el.hidden = true, retry()) : location.reload()));
+      el.append(' ', b);
+    }
     el.hidden = false;
+  }
+  // Short confirmation after an action ("Seat claimed", "Posted").
+  function toast(message) {
+    document.querySelector('.rr-toast')?.remove();
+    const t = document.createElement('div');
+    t.className = 'rr-toast rr-toast--ok';
+    t.setAttribute('role', 'status');
+    t.innerHTML = `<p>${esc(message)}</p>`;
+    document.body.append(t);
+    setTimeout(() => t.remove(), 2600);
   }
 
   // Remembers the last room a person used, so "My seat" and staff "Door" are one tap from anywhere.
@@ -177,6 +193,7 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
 
   // Line icons, one stroke weight (24px grid).
   const ICON = {
+    bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
     now: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
     map: '<path d="M4 6.5 9 4l6 2.5L20 4v13.5L15 20l-6-2.5L4 20z"/><path d="M9 4v13.5M15 6.5V20"/>',
     seat: '<path d="M7 4v8h10V4M5 12h14l-1.5 4H6.5zM7.5 16v4M16.5 16v4"/>',
@@ -189,24 +206,45 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
   };
   const svg = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
 
-  // One persistent nav per persona: phone tab bar, laptop top bar. Pages opt out with <body class="rr-nonav">.
+  // App shell: a top app bar (brand, where you are, user menu) on every page, plus persona tabs:
+  // a fixed bottom tab bar on phones, inline in the top bar on laptops. Pages opt out with <body class="rr-nonav">.
   let meCache;
   const whoami = () => (meCache ??= api('/me').catch(() => null));
-  async function nav() {
-    if (document.body.classList.contains('rr-nonav') || document.querySelector('.rr-nav')) return;
-    const me = await whoami();
+  const tabsFor = (me) => {
     const room = recall('rr-room'), door = recall('rr-door');
-    const tabs = !me ? [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['me', 'Sign in', `/login?next=${encodeURIComponent(location.pathname)}`]]
-      : me.role === 'organiser' ? [['board', 'Board', '/staff/setup'], ['door', 'Door', door ? `/staff/room/${door}` : '/staff/setup'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']]
-      : me.role === 'staff' ? [['door', 'Door', door ? `/staff/room/${door}` : '/sessions'], ['map', 'Schedule', '/sessions'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']]
-      : [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['seat', 'My seat', room ? `/r/${room}` : '/sessions'], ['me', 'Me', '/me']];
-    const path = location.pathname;
-    const on = (href) => { const p = href.split('?')[0]; return p === path || (p.startsWith('/r/') && path.startsWith('/r/')) || (p.startsWith('/staff/room/') && path.startsWith('/staff/room/')); };
-    const n = document.createElement('nav');
-    n.className = 'rr-nav';
-    n.setAttribute('aria-label', 'Main');
-    n.innerHTML = `<span class="rr-nav-brand"><i aria-hidden="true"></i>RightRoom</span>${tabs.map(([ic, text, href]) => `<a href="${esc(href)}"${on(href) ? ' aria-current="page"' : ''}>${svg(ic)}<span>${esc(text)}</span></a>`).join('')}<span class="rr-here" id="rr-here"></span>`;
-    document.body.prepend(n);
+    if (!me) return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['me', 'Sign in', `/login?next=${encodeURIComponent(location.pathname)}`]];
+    if (me.role === 'organiser') return [['board', 'Board', '/staff/setup'], ['door', 'Rooms', '/staff/setup#edit'], ['bell', 'Announce', '/staff/setup#ann'], ['qr', 'QR codes', '/staff/qr']];
+    if (me.role === 'staff') return [['door', 'Door', door ? `/staff/room/${encodeURIComponent(door)}` : '/sessions?pick=door'], ['board', 'Board', '/sessions'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']];
+    return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['seat', 'My seat', room ? `/r/${encodeURIComponent(room)}` : '/sessions'], ['me', 'Me', '/me']];
+  };
+  const ROLE = { attendee: 'Attendee', guest: 'Guest', staff: 'Door staff', organiser: 'Organiser' };
+  async function nav() {
+    if (document.body.classList.contains('rr-nonav') || document.querySelector('.rr-bar')) return;
+    const me = await whoami();
+    const tabs = tabsFor(me);
+    const path = location.pathname, hash = location.hash;
+    // Exactly one current tab: an exact path+hash match wins, then the same section (any room, any door).
+    const score = (href) => { const [p, h = ''] = href.split('?')[0].split('#'); if (p === path && `#${h}` === (hash || '#')) return 3; if (p === path && !h) return 2; if (p.startsWith('/r/') && path.startsWith('/r/')) return 1; if (p.startsWith('/staff/room/') && path.startsWith('/staff/room/')) return 1; return 0; };
+    const best = Math.max(...tabs.map(([, , h]) => score(h)));
+    const link = ([ic, text, href]) => `<a href="${esc(href)}"${best && score(href) === best ? ' aria-current="page"' : ''}>${svg(ic)}<span>${esc(text)}</span></a>`;
+    const home = tabs[0][2];
+    const user = me ? `<details class="rr-user"><summary aria-label="Account: ${esc(me.handle)}"><span class="rr-avatar" aria-hidden="true">${esc(String(me.handle).slice(0, 1).toUpperCase())}</span><span class="rr-user-name">${esc(me.handle)}</span></summary>
+        <div class="rr-user-menu"><p><b>${esc(me.handle)}</b><br><span class="muted">${esc(ROLE[me.role] || me.role)}</span></p>${me.role === 'attendee' ? '<a href="/me">Profile and interests</a>' : ''}<button type="button" id="rr-signout">Sign out</button></div></details>`
+      : `<a class="rr-signin" href="/login?next=${encodeURIComponent(location.pathname)}">Sign in</a>`;
+    const bar = document.createElement('header');
+    bar.className = 'rr-bar';
+    bar.innerHTML = `<a class="rr-nav-brand" href="${esc(home)}"><i aria-hidden="true"></i>RightRoom</a><nav class="rr-nav rr-nav--top" aria-label="Main">${tabs.map(link).join('')}</nav><span class="rr-here" id="rr-here"></span>${user}`;
+    const tabbar = document.createElement('nav');
+    tabbar.className = 'rr-nav rr-nav--tabs';
+    tabbar.setAttribute('aria-label', 'Main');
+    tabbar.innerHTML = tabs.map(link).join('');
+    document.body.prepend(bar);
+    document.body.append(tabbar);
+    document.getElementById('rr-signout')?.addEventListener('click', async () => {
+      await api('/logout', { method: 'POST' }).catch(() => {});
+      location.href = '/login';
+    });
+    addEventListener('hashchange', () => { bar.remove(); tabbar.remove(); nav(); });
   }
   // Laptop top bar shows where you are ("Room 204 · Floor 2"); phones show it in the page header.
   const here = (text) => { const el = document.getElementById('rr-here'); if (el) el.textContent = text ? `You're at ${text}` : ''; };
@@ -226,5 +264,5 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', nav); else nav();
 
-  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, roomName };
+  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, roomName, toast };
 })();
