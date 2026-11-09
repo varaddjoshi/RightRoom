@@ -14,3 +14,12 @@ test('room comment topics are phrases, not filler words', async () => {
   const t204 = (await (await fetch(`${base}/api/spaces/204/comments`)).json()).topics;
   assert.ok(t204.includes('slides too small'), JSON.stringify(t204));
 });
+
+test('a room with a single comment still gets topics and a comment count', async () => {
+  const store = require('../src/store');
+  store.db.comments = store.db.comments.filter((c) => c.space !== '310');
+  store.db.comments.push({ id: ++store.db.seq, space: '310', text: 'Helm chart linting demo was excellent', at: Date.now(), hidden: false });
+  const body = await (await fetch(`${base}/api/spaces/310/comments`)).json();
+  assert.equal(body.comments, 1);
+  assert.ok(body.topics.length > 0, JSON.stringify(body));
+});

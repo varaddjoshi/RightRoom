@@ -2,7 +2,7 @@
 const express = require('express');
 const auth = require('../auth');
 const stream = require('../stream');
-const { topTerms } = require('../topics');
+const { topTerms, frequentTerms } = require('../topics');
 const { ZONES } = require('../mock/seed');
 
 function api({ store, engine }) {
@@ -85,8 +85,11 @@ function api({ store, engine }) {
     const id = sid(req);
     const shown = db().comments.filter((c) => !c.hidden);
     // shortcut: topics.js stands in for the Elasticsearch significant_text topics.
-    const top = topTerms(shown.filter((c) => c.space === id).map((c) => c.text), shown.map((c) => c.text));
-    return { topics: top.map((t) => t.term) };
+    const own = shown.filter((c) => c.space === id).map((c) => c.text);
+    let top = topTerms(own, shown.map((c) => c.text));
+    // Too few comments to compare against the rest: fall back to the room's own most frequent terms.
+    if (!top.length && own.length) top = frequentTerms(own, 3);
+    return { topics: top.map((t) => t.term), comments: own.length };
   }));
   r.post('/spaces/:id/comments', h((req) => {
     signedIn(req);
