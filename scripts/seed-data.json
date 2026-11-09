@@ -1,0 +1,45 @@
+{
+  "_note": "Stand-in data for the demo. Session times are minutes relative to when the seed runs, so a session is always on. Every document is labelled stand_in.",
+  "event": { "id": "cnh-2026", "name": "Cloud Native Hackathon 2026" },
+  "venue": {
+    "id": "venue",
+    "name": "Venue entrance",
+    "capacity": 180,
+    "taken": 162,
+    "rule": "Admitted in order of registration. People who state an access need are admitted first, and this priority is shown publicly."
+  },
+  "rooms": [
+    { "id": "r101", "name": "Hall A", "floor": 1, "x": 0, "capacity": 120, "taken": 90, "access_seats": 6, "step_free": true, "captions": true, "overflow_space_id": "r301" },
+    { "id": "r104", "name": "Room 104", "floor": 1, "x": 3, "capacity": 40, "taken": 34, "access_seats": 0, "step_free": false, "captions": false, "overflow_space_id": "r101" },
+    { "id": "r204", "name": "Room 204", "floor": 2, "x": 0, "capacity": 50, "taken": 50, "access_seats": 3, "step_free": true, "captions": false, "overflow_space_id": "r101" },
+    { "id": "r210", "name": "Room 210", "floor": 2, "x": 2, "capacity": 60, "taken": 51, "access_seats": 3, "step_free": true, "captions": true, "overflow_space_id": "r101" },
+    { "id": "r215", "name": "Room 215", "floor": 2, "x": 4, "capacity": 30, "taken": 30, "access_seats": 2, "step_free": true, "captions": false, "overflow_space_id": "r101" },
+    { "id": "r301", "name": "Room 301", "floor": 3, "x": 1, "capacity": 80, "taken": 70, "access_seats": 4, "step_free": true, "captions": true, "overflow_space_id": "r101" },
+    { "id": "r310", "name": "Room 310", "floor": 3, "x": 4, "capacity": 25, "taken": 10, "access_seats": 2, "step_free": true, "captions": false, "overflow_space_id": "r101" }
+  ],
+  "rule_room": "Seats go first come, first served at the door. Accessibility seats only go to people who stated that need.",
+  "slots": [
+    { "id": "a", "start_min": -10, "duration_min": 45 },
+    { "id": "b", "start_min": 40, "duration_min": 45 }
+  ],
+  "sessions": [
+    { "room": "r101", "slot": "a", "title": "Paved roads: platform engineering at scale", "track": "Platform", "level": "intro", "tags": ["platform-engineering", "developer-experience", "kubernetes"], "abstract": "How a platform team builds golden paths so hundreds of developers ship to Kubernetes without learning every knob, and how to measure whether the platform helps." },
+    { "room": "r104", "slot": "a", "title": "Securing the software supply chain with Sigstore and SLSA", "track": "Security", "level": "intermediate", "tags": ["security", "supply-chain", "sigstore"], "abstract": "Sign every container image, record provenance, and verify it at admission time. A practical path to SLSA level 3 for a small team." },
+    { "room": "r204", "slot": "a", "title": "eBPF deep dive: tracing the kernel without patches", "track": "Observability", "level": "advanced", "tags": ["ebpf", "observability", "linux", "tracing"], "abstract": "Attach eBPF programs to kernel and user-space probes to trace latency, syscalls and network flows in production with almost no overhead." },
+    { "room": "r210", "slot": "a", "title": "Observability at scale with OpenTelemetry", "track": "Observability", "level": "intermediate", "tags": ["observability", "opentelemetry", "tracing", "metrics"], "abstract": "Collecting traces, metrics and logs from thousands of services with OpenTelemetry: sampling, collector pipelines and keeping costs down." },
+    { "room": "r215", "slot": "a", "title": "Running LLM inference on Kubernetes GPUs", "track": "AI", "level": "intermediate", "tags": ["ai", "gpu", "scheduling", "kubernetes"], "abstract": "Scheduling GPU workloads, batching requests and autoscaling model servers for large language model inference on Kubernetes." },
+    { "room": "r301", "slot": "a", "title": "Prometheus SLOs that people actually read", "track": "Observability", "level": "intro", "tags": ["observability", "slo", "prometheus", "reliability"], "abstract": "Turning raw Prometheus metrics into service level objectives and error budgets that product teams understand and act on." },
+    { "room": "r310", "slot": "a", "title": "Policy as code with Kyverno", "track": "Security", "level": "intro", "tags": ["security", "policy", "kubernetes"], "abstract": "Write Kubernetes admission policies as YAML, test them in CI, and roll them out without breaking existing workloads." },
+    { "room": "r101", "slot": "b", "title": "GitOps with Argo CD: from one cluster to fifty", "track": "Platform", "level": "intermediate", "tags": ["gitops", "argo-cd", "multi-cluster"], "abstract": "Managing fifty clusters from Git: app-of-apps, progressive sync, drift detection and what broke along the way." },
+    { "room": "r104", "slot": "b", "title": "Zero-trust networking with Cilium", "track": "Security", "level": "advanced", "tags": ["ebpf", "networking", "security", "cilium"], "abstract": "Identity-aware network policy, transparent encryption and observability of every flow using Cilium and eBPF." },
+    { "room": "r204", "slot": "b", "title": "Continuous profiling in production", "track": "Observability", "level": "intermediate", "tags": ["observability", "profiling", "performance"], "abstract": "Always-on CPU and memory profiling with low overhead, and how profiles join traces to find the slow line of code." },
+    { "room": "r210", "slot": "b", "title": "Event-driven autoscaling with KEDA", "track": "Platform", "level": "intro", "tags": ["autoscaling", "keda", "kubernetes"], "abstract": "Scale workloads on queue length, cron schedules or custom metrics, including down to zero, with KEDA." },
+    { "room": "r215", "slot": "b", "title": "Vector search on Elasticsearch for RAG", "track": "AI", "level": "intermediate", "tags": ["ai", "search", "elasticsearch", "rag"], "abstract": "Semantic search, hybrid ranking and chunking strategies for retrieval-augmented generation with Elasticsearch." },
+    { "room": "r301", "slot": "b", "title": "Chaos engineering game day", "track": "Reliability", "level": "intro", "tags": ["reliability", "chaos-engineering", "incident-response"], "abstract": "Run a game day: break things on purpose in a safe way, practise incident response, and learn where your system is fragile." },
+    { "room": "r310", "slot": "b", "title": "Accessible developer portals with Backstage", "track": "Platform", "level": "intro", "tags": ["platform-engineering", "accessibility", "backstage"], "abstract": "Building a Backstage developer portal that works with a screen reader and a keyboard, and why accessibility is part of developer experience." }
+  ],
+  "queues": [
+    { "space": "r204", "handles": ["teal-heron", "amber-fox", "quiet-lynx", "brave-koala"], "needs": { "amber-fox": ["step_free"] } },
+    { "space": "venue", "handles": ["silver-moth", "lucky-wren", "red-panda"], "needs": {} }
+  ]
+}
