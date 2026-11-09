@@ -242,20 +242,36 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
     board: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
     qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/>',
     sim: '<path d="M8 5.5v13l10-6.5z"/>',
+    cal: '<rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
     in: '<path d="M10 17l5-5-5-5M15 12H4M14 4h5v16h-5"/>',
   };
   const svg = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
+
+  // Event times, always in the event's own timezone (an event in another city must never read in local time).
+  const inTz = (tz, t, o) => new Intl.DateTimeFormat('en-GB', { timeZone: tz, ...o }).format(new Date(t));
+  const evTime = (tz, t) => inTz(tz, t, { hour: '2-digit', minute: '2-digit' });
+  const evDay = (tz, t) => inTz(tz, t, { weekday: 'long', day: 'numeric', month: 'long' });
+  function eventWhen(e) {
+    const zone = new Intl.DateTimeFormat('en-US', { timeZone: e.timezone, timeZoneName: 'short' }).format(new Date(e.start)).split(' ').pop();
+    const d = (t) => inTz(e.timezone, t, { weekday: 'short', day: 'numeric', month: 'short' });
+    return d(e.start) === d(e.end)
+      ? `${d(e.start)} ${inTz(e.timezone, e.start, { year: 'numeric' })} · ${evTime(e.timezone, e.start)} to ${evTime(e.timezone, e.end)} ${zone}`
+      : `${d(e.start)} to ${d(e.end)} ${inTz(e.timezone, e.end, { year: 'numeric' })} · ${zone}`;
+  }
 
   // App shell: a top app bar (brand, where you are, user menu) on every page, plus persona tabs:
   // a fixed bottom tab bar on phones, inline in the top bar on laptops. Pages opt out with <body class="rr-nonav">.
   let meCache;
   const whoami = () => (meCache ??= api('/me').catch(() => null));
+  // Name of the live event the live pages (/event, /sessions, /r/*, My seat) belong to, so they say which event.
+  let eventCache;
+  const liveEvent = () => (eventCache ??= api('/event').then((e) => ({ name: e.name, slug: e.slug })).catch(() => ({ name: null, slug: null })));
   const tabsFor = (me) => {
     const room = recall('rr-room'), door = recall('rr-door');
-    if (!me) return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['me', 'Sign in', `/login?next=${encodeURIComponent(location.pathname)}`]];
+    if (!me) return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['cal', 'Events', '/events'], ['me', 'Sign in', `/login?next=${encodeURIComponent(location.pathname)}`]];
     if (me.role === 'organiser') return [['board', 'Board', '/staff/setup'], ['door', 'Rooms', '/staff/setup#edit'], ['bell', 'Announce', '/staff/setup#ann'], ['qr', 'QR codes', '/staff/qr']];
     if (me.role === 'staff') return [['door', 'Door', door ? `/staff/room/${encodeURIComponent(door)}` : '/sessions?pick=door'], ['board', 'Board', '/sessions'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']];
-    return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['seat', 'My seat', room ? `/r/${encodeURIComponent(room)}` : '/seat.html'], ['me', 'Me', '/me']];
+    return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['cal', 'Events', '/events'], ['seat', 'My seat', room ? `/r/${encodeURIComponent(room)}` : '/seat.html'], ['me', 'Me', '/me']];
   };
   const ROLE = { attendee: 'Attendee', guest: 'Guest', staff: 'Door staff', organiser: 'Organiser' };
   async function nav() {
@@ -264,7 +280,7 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
     const tabs = tabsFor(me);
     const path = location.pathname, hash = location.hash;
     // Exactly one current tab: an exact path+hash match wins, then the same section (any room, any door).
-    const score = (href) => { const [p, h = ''] = href.split('?')[0].split('#'); if (p === path && `#${h}` === (hash || '#')) return 3; if (p === path && !h) return 2; if (p.startsWith('/r/') && path.startsWith('/r/')) return 1; if (p.startsWith('/staff/room/') && path.startsWith('/staff/room/')) return 1; return 0; };
+    const score = (href) => { const [p, h = ''] = href.split('?')[0].split('#'); if (p === path && `#${h}` === (hash || '#')) return 3; if (p === path && !h) return 2; if (p.startsWith('/r/') && path.startsWith('/r/')) return 1; if (p === '/events' && path.startsWith('/e/')) return 1; if (p.startsWith('/staff/room/') && path.startsWith('/staff/room/')) return 1; return 0; };
     const best = Math.max(...tabs.map(([, , h]) => score(h)));
     const link = ([ic, text, href]) => `<a href="${esc(href)}"${best && score(href) === best ? ' aria-current="page"' : ''}>${svg(ic)}<span>${esc(text)}</span></a>`;
     const home = tabs[0][2];
@@ -305,5 +321,5 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', nav); else nav();
 
-  window.RR = { nearbyFree, heat, suggestZones, wifiChip, BAND, api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, roomName, toast };
+  window.RR = { nearbyFree, heat, suggestZones, wifiChip, BAND, api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, liveEvent, eventWhen, evTime, evDay, roomName, toast };
 })();

@@ -126,7 +126,8 @@
     try {
       const r = await RR.api(`/spaces/${enc(id)}`);
       const where = id === 'venue' ? 'Venue entrance' : `${RR.roomName(r)} · Floor ${r.floor}`;
-      $('eyebrow').textContent = where;
+      const ev = await RR.liveEvent();
+      $('eyebrow').textContent = ev.name ? `${ev.name} · ${where}` : where;
       RR.here(where);
       $('title').textContent = r.title;
       document.title = `${r.title} · RightRoom`;

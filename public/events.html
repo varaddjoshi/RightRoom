@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Events · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RightRoom">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<style>
+  .ev-list { display: grid; gap: var(--rr-s4); }
+  .ev-card { display: grid; gap: var(--rr-s2); padding: 0 0 var(--rr-s4); overflow: hidden; color: inherit; text-decoration: none; background: var(--rr-panel); border: 1px solid var(--rr-hair); border-radius: var(--rr-r2); box-shadow: var(--rr-shadow); }
+  .ev-card:hover { border-color: var(--rr-line); }
+  .ev-card > :not(.ev-cover) { margin: 0 var(--rr-s4); }
+  .ev-card h3 { font: 700 var(--rr-t-lg)/1.25 var(--rr-font-sign); }
+  .ev-cover { height: 72px; background: linear-gradient(135deg, var(--rr-action), var(--rr-free)); }
+  .ev-cover[data-cover="violet"] { background: linear-gradient(135deg, var(--rr-action), var(--rr-access)); }
+  .ev-meta { display: flex; flex-wrap: wrap; gap: var(--rr-s2); align-items: center; color: var(--rr-muted); font-size: var(--rr-t-sm); }
+  .ev-next { padding: var(--rr-s3); background: var(--rr-panel-2); border-radius: var(--rr-r1); font-size: var(--rr-t-sm); }
+  @media (min-width: 960px) { .ev-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+<main class="rr-screen rr-screen--wide" id="main">
+  <div class="rr-sign rr-span"><span class="rr-eyebrow">Live and upcoming</span><h1>Events</h1></div>
+  <section id="mine" class="rr-span" aria-labelledby="h-mine" hidden></section>
+  <section class="rr-span" aria-labelledby="h-all"><h2 id="h-all">All events</h2><div id="all" class="ev-list"><div class="rr-skel" aria-hidden="true"><i></i><i></i></div></div></section>
+  <p class="note rr-span">Stand-in event data for the demo.</p>
+  <p class="rr-panel rr-span m0" id="err" role="alert" hidden></p>
+</main>
+<script src="/app.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const enc = encodeURIComponent;
+  document.querySelector('.note.rr-span').innerHTML = `${RR.label('stand-in')} event data for the demo. Seat and registration counts for the live event are ${RR.label('live')}.`;
+  const badge = (e) => RR.label(e.status === 'live' ? 'live' : e.status);
+  const card = (e, extra = '') => `<a class="ev-card" href="/e/${enc(e.slug)}"><div class="ev-cover" data-cover="${RR.esc(e.cover)}" aria-hidden="true"></div>
+    <div class="ev-meta">${badge(e)}<span>${RR.esc(e.city)}</span></div>
+    <h3 class="m0">${RR.esc(e.name)}</h3>
+    <span class="ev-meta">${RR.esc(RR.eventWhen(e))}</span>
+    <span class="ev-meta">${RR.esc(e.venue.name)} · ${Number(e.going)} of ${Number(e.capacity)} ${e.eventId ? 'registered' : 'going'} · ${Number(e.sessionCount)} sessions</span>${extra}</a>`;
+
+  // My events: each one with its own status and my next session in that event, in that event's timezone. Never one
+  // merged "next" list, since events can be in different cities on different days.
+  const myStatus = (e) => {
+    const m = e.me || {};
+    if (m.status === 'waitlist') return `Waitlist #${Number(m.position)}`;
+    if (m.status === 'waiting') return `Waitlist #${Number(m.position)}`;
+    return e.eventId ? 'Registered' : 'Going';
+  };
+  const when = (e) => (e.status === 'live' ? 'Live now' : e.status === 'past' ? 'Past' : e.daysUntil <= 1 ? 'Starts within a day' : `In ${Number(e.daysUntil)} days`);
+  const next = (e) => {
+    const s = e.next;
+    if (!s) return `<span class="ev-next">No more sessions in ${RR.esc(e.name)}.</span>`;
+    const room = s.roomName || RR.roomName(s.room);
+    return `<span class="ev-next"><b>${s.now ? 'On now' : 'Your next session'} at ${RR.esc(e.name)}${s.forYou ? ' · For you' : ''}</b><br>${RR.esc(s.title)}<br>${RR.esc(RR.evDay(e.timezone, s.start))}, ${RR.esc(RR.evTime(e.timezone, s.start))} ${RR.esc(e.city)} time · ${RR.esc(room)}</span>`;
+  };
+
+  (async () => {
+    try {
+      const me = await RR.whoami();
+      const [all, mine] = await Promise.all([RR.api('/events'), me && me.role !== 'guest' ? RR.api('/events/mine').catch(() => []) : []]);
+      if (me && me.role !== 'guest') {
+        $('mine').hidden = false;
+        $('mine').innerHTML = `<h2 id="h-mine">My events</h2>${mine.length
+          ? `<div class="ev-list">${mine.map((e) => card(e, `<span class="ev-meta"><b>${RR.esc(when(e))}</b> · ${RR.esc(myStatus(e))}</span>${next(e)}`)).join('')}</div>`
+          : '<p class="note">You haven\'t registered or RSVP\'d for an event yet.</p>'}`;
+      }
+      $('all').innerHTML = all.map((e) => card(e)).join('') || '<p class="note">No events listed yet.</p>';
+    } catch (x) { RR.showError($('err'), x); }
+  })();
+</script>
+</body>
+</html>

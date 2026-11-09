@@ -84,6 +84,9 @@
   (async () => {
     const me = await RR.whoami();
     role = me?.role || 'attendee';
+    // Say which event this live board belongs to (decision: live pages are the live event's, never mixed).
+    const ev = await RR.liveEvent();
+    if (ev.name && !pickDoor) $('now').textContent = `${ev.name} · ${$('now').textContent}`;
     if (pickDoor) { document.querySelector('.rr-sign h1').textContent = 'Pick your door'; $('now').textContent = 'Tap the room you are covering'; }
     const rooms = await RR.api('/sessions').catch(() => []);
     // Where the person is checked in, for "you are here" and walking times; topics come from each room's comments.

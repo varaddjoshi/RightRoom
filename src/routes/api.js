@@ -54,7 +54,9 @@ function api({ store, engine }) {
   }));
 
   // Venue (A3)
-  r.get('/event', h((req) => ({ venue: engine.view(engine.space('venue')), me: req.user ? engine.myVenue(req.user.handle) : null })));
+  // `slug` links A3 to the event's details page (/e/:slug, src/routes/events.js).
+  const details = require('../mock/events').EVENTS.find((e) => e.eventId === store.EVENT_ID);
+  r.get('/event', h((req) => ({ venue: engine.view(engine.space('venue')), me: req.user ? engine.myVenue(req.user.handle) : null, slug: details?.slug || null, name: details?.name || null })));
   r.post('/event/register', h((req) => {
     const u = signedIn(req);
     if (u.role === 'guest') fail('Create an account to register.', 403);
