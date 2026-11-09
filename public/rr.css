@@ -282,7 +282,7 @@ body {
   background: var(--rr-panel-2);
   color: var(--rr-ink);
 }
-.rr-counter .rr-count { font-size: clamp(var(--rr-t-2xl), 14vw, var(--rr-t-3xl)); }
+.rr-counter .rr-count { font-size: var(--rr-t-2xl); } /* 44px fits between the buttons from 300px up */
 .rr-counter button:last-child { background: var(--rr-signal); color: var(--rr-on-signal); }
 
 /* Announcement strip */
