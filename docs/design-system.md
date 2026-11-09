@@ -59,6 +59,6 @@ One theme only, by choice: dark signage reads well on phones at a door and on th
 | `.rr-route`, `.rr-why`, `.rr-access` | A5 redirect |
 | `.rr-offer`, `.rr-code` | A5 seat offer and claimed state |
 | `.rr-zones` | A6 check-in, S2 zone fill |
-| `.rr-counter` | S2 staff counter |
+| `.rr-counter` | S2 count correction for walk-ins who didn't scan |
 | `.rr-announce` | A7, S1 |
 | `.rr-sr` | Screen-reader-only text anywhere |
