@@ -1,6 +1,7 @@
 // Server-sent events. Each event carries the server time so /api/ack can measure delivery on the server's own clock (SLO 1).
 // shortcut: subscribers live in this process only; run exactly one replica.
 const { recordDelivery } = require('./metrics');
+const slo2 = require('./slo2');
 const HEARTBEAT_MS = 10_000;
 const subs = new Set();
 const sent = new Map(); // event id -> { at: server time, type }, for /api/ack
@@ -23,6 +24,7 @@ function publish(type, data, to = {}) {
   const ev = { ...data, event_id: ++nextId, at: Date.now() };
   sent.set(ev.event_id, { at: ev.at, type, ackedBy: new Set() });
   if (sent.size > 5000) sent.delete(sent.keys().next().value);
+  slo2.observe(type, data, to); // SLO 2 timing and the Full / accessible-seat counters (src/slo2.js); never throws
   const line = `id: ${ev.event_id}\nevent: ${type}\ndata: ${JSON.stringify(ev)}\n\n`;
   for (const s of subs) {
     const forSpace = to.space && (s.space === '*' || s.space === to.space);

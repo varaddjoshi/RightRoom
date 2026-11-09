@@ -143,6 +143,7 @@ const MAPPINGS = {
     start: date,
     end: date,
     policy, // per-session override of the event default; organisers only
+    host_handles: keyword, // handles of the talk's hosts, set by organisers (P2); hosts edit only their talks
     // Title + abstract + tags, embedded by Elasticsearch, used by the redirect query.
     topic: semanticField,
   },
