@@ -2,6 +2,7 @@
 const express = require('express');
 const auth = require('../auth');
 const stream = require('../stream');
+const { topTerms } = require('../topics');
 const { ZONES } = require('../mock/seed');
 
 function api({ store, engine }) {
@@ -82,11 +83,10 @@ function api({ store, engine }) {
   }));
   r.get('/spaces/:id/comments', h((req) => {
     const id = sid(req);
-    const words = db().comments.filter((c) => c.space === id && !c.hidden).flatMap((c) => c.text.toLowerCase().match(/[a-z][a-z-]{3,}/g) || []);
-    const counts = {};
-    for (const w of words) if (!STOP.has(w)) counts[w] = (counts[w] || 0) + 1;
-    // shortcut: word counts stand in for the Elasticsearch significant_text topics.
-    return { topics: Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([w]) => w) };
+    const shown = db().comments.filter((c) => !c.hidden);
+    // shortcut: topics.js stands in for the Elasticsearch significant_text topics.
+    const top = topTerms(shown.filter((c) => c.space === id).map((c) => c.text), shown.map((c) => c.text));
+    return { topics: top.map((t) => t.term) };
   }));
   r.post('/spaces/:id/comments', h((req) => {
     signedIn(req);
@@ -216,6 +216,5 @@ function removeTestRoom(db, id, { guests = false } = {}) {
   return { removed: true, guests: removedGuests };
 }
 
-const STOP = new Set(['this', 'that', 'with', 'from', 'have', 'were', 'there', 'their', 'about', 'would', 'could', 'should', 'very', 'really', 'just', 'too', 'the']);
 
 module.exports = { api, rush };
