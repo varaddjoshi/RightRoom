@@ -143,6 +143,19 @@ Existing indexes gain a few fields: `spaces` gets zones and a status-confirmatio
 
 Cut from the top when behind: team finder, forecast, saved-need alerts, tables, comments and topics, zone map with Wi-Fi readings. The zone map and Wi-Fi are built together and cut last.
 
-## Open item
+## Open items
 
-project.md still says "attendees only ever have a random handle" and "data deleted after each session". Decisions 4 and 12 replace both lines; update project.md to match.
+project.md is out of date with these decisions. Update it to match:
+
+| project.md says | Replace with | Decision |
+|---|---|---|
+| "Doorway" in tracks, demo and judge answers | RightRoom | 1 |
+| "Attendees only ever have a random handle" and "No real names are stored" | GitHub or Google sign-in storing the provider user ID and a chosen public handle; guest handle for room QR scans | 4, 5 |
+| "Data deleted after each session" | Check-ins deleted after each session; comments and Wi-Fi readings kept without the handle; accounts and interests kept until the user deletes them | 12 |
+| Personas: attendees and event staff | Attendee, organiser and room host, with different roles and screens | 2 |
+| Musts list | Add sign-in, registration (a queue entry on the venue space) and interests | 6, 13 |
+| Host "room full" switch | The app suggests Full; the host confirms or says "not yet"; auto-confirm after 30 seconds or straight away with no host; the switch stays as an override | 14, 15 |
+| Host releases empty seats | Released seats go to the queue first, never past the organiser's capacity, and return to "Seats free" if the queue is empty | 17, 18, 19 |
+| Proof it works (Dash0) | Add the host override rate | 16 |
+| Extras: zone map and Wi-Fi separate, Wi-Fi third in the cut order | Zone map and Wi-Fi built together as the first Extra and cut last; comments and topics added as the next Extra | 8, 13 |
+| Data model | Add `users`, `comments` and `wifi_readings`; add zones to `spaces` and a zone to `checkins` | Data section above |
