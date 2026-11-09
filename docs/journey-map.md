@@ -7,7 +7,7 @@ Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, regi
 1. The product is called RightRoom. "Doorway" in project.md is old text.
 2. There are two personas: Attendee and Event staff. Staff splits into organiser and door staff, who share one console with different tabs.
 3. Access needs are a row in the attendee journey, stated as preferences ("step-free", "near captions").
-4. Everyone signs in with GitHub or Google. We store the provider's user ID and a public handle the person picks. Names and emails never appear on a public screen.
+4. Everyone signs in with a username and password; the username is the public handle. Passwords are hashed with scrypt, and no email, name or phone is stored. Roles are attendee, staff and organiser; staff and organiser usernames come from allowlists in `.env`. (revised: password login)
 5. QR scans at a room ("I'm at the door", "I'm in the room") also work as a one-tap guest, so the demo never stops at a login page.
 6. Registering for the event means joining the venue space's queue. The allocation engine gives the result: admitted, waitlisted with a position and reason, or remote only.
 7. Talks are not booked in advance. Attendees star talks; stars shape redirects and next-event interest counts. Room seats are first come, within accessibility fit, on the day.
@@ -65,7 +65,7 @@ Eleven screens. One screen is one URL; the states listed are what the screen sho
 
 | ID | Screen | URL | Who | States |
 |---|---|---|---|---|
-| A1 | Sign in | `/login` | Attendee, staff | GitHub or Google; "Continue as guest" only when arriving from a room QR |
+| A1 | Sign in | `/login` | Attendee, staff | Username and password; create an account; "Continue as guest" only when arriving from a room QR |
 | A2 | Profile and interests | `/me` | Attendee | First-run handle and interest picker (session tags plus up to 3 free tags); starred talks; delete account |
 | A3 | Event home and registration | `/event` | Attendee | Live capacity "162 of 180 in" and the rule; Register; waitlisted "#12, admitted in order of arrival"; admitted, with "scan in at the venue door within 30 minutes (of doors opening, or of being admitted if later)"; admission expired; remote only with stream link; public priority list; "Allow notifications" prompt |
 | A4 | Schedule | `/sessions` | Attendee | Each talk with room status in words (Full, Filling, Seats free), star, crowd-sourced Wi-Fi median, top comment topics |
