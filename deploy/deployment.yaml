@@ -53,8 +53,10 @@ spec:
             - name: STATE_INDEX
               value: "rr_engine_state"
             # Demo clock (src/clock.js): the app's "now" starts at Tuesday 11:45 at KubeCon (when most real talks run)
-            # and ticks forward from there. It restarts at 11:45 on every restart or deploy. Not a secret. Delete these
-            # two lines after judging to go back to real time. A value that is not a valid time stops the app starting.
+            # and ticks forward from there. It restarts at 11:45 on every restart or deploy. Not a secret. Screens show
+            # a "Demo clock" badge while it is set. Check-in QR codes (src/presence.js) use the REAL day, so printed
+            # sheets are not affected by turning this on or off. To go back to real time, delete this entry. A value
+            # that is not a valid time stops the app starting.
             - name: DEMO_CLOCK
               value: "2026-11-10T11:45:00-07:00"
           resources:

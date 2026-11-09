@@ -136,7 +136,7 @@ Each code is also an image at `/qr/:room.svg?kind=door|in|staff` (staff codes ne
 ## Notes
 
 - Scope for the hackathon demo: one event day. The real KubeCon schedule is imported into Elasticsearch.
-- **The live demo runs on a demo clock.** Our hackathon day has almost no real talks, so the cluster sets `DEMO_CLOCK=2026-11-10T11:45:00-07:00` (a Tuesday at KubeCon, 11:45) and which sessions are still to come is judged from that time. It is only used for schedule logic: the SLO numbers in Dash0 use real elapsed time, never the demo clock. The clock restarts at 11:45 whenever the app restarts.
+- **The live demo runs on a demo clock.** Our hackathon day has almost no real talks, so the cluster sets `DEMO_CLOCK=2026-11-10T11:45:00-07:00` (a Tuesday at KubeCon, 11:45) and which sessions are still to come is judged from that time. Every screen shows a "Demo clock" badge with the stand-in time while it is set. It is only used for schedule logic: the SLO numbers in Dash0 use real elapsed time, and the check-in QR codes use the real day, so printed sheets do not change when it is turned on or off. The clock restarts at 11:45 whenever the app restarts.
 - Everyone on the team can explain the architecture ([docs/architecture.md](docs/architecture.md)).
 - No personal data, tokens or keys are in the repo or the demo: `.env` is gitignored, and no real names are asked for or stored (people use a handle).
 
