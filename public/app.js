@@ -326,7 +326,10 @@ if (typeof document !== 'undefined') for (const src of ['/rum.js', '/demo-clock.
     if (!me) return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['cal', 'Events', '/events'], ['me', 'Sign in', `/login?mode=login&next=${encodeURIComponent(location.pathname)}`]];
     if (me.role === 'organiser') return [['board', 'Board', '/staff/setup'], ['door', 'Rooms', '/staff/setup#edit'], ['bell', 'Announce', '/staff/setup#ann'], ['qr', 'QR codes', '/staff/qr']];
     if (me.role === 'staff') return [['door', 'Door', door ? `/staff/room/${encodeURIComponent(door)}` : '/sessions?pick=door'], ['board', 'Board', '/sessions'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']];
-    return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['cal', 'Events', '/events'], ['seat', 'My seat', room ? `/r/${encodeURIComponent(room)}` : '/seat.html'], ['me', 'Me', '/me']];
+    const tabs = [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['cal', 'Events', '/events'], ['seat', 'My seat', room ? `/r/${encodeURIComponent(room)}` : '/seat.html'], ['me', 'Me', '/me']];
+    // Hosting is a capability, not a role: anyone listed on a talk (GET /api/me `hosting`) gets the host page.
+    if (me.hosting?.length) tabs.splice(4, 0, ['board', 'My talks', '/host']);
+    return tabs;
   };
   const ROLE = { attendee: 'Attendee', guest: 'Guest', staff: 'Door staff', organiser: 'Organiser' };
   async function nav() {
