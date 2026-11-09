@@ -79,7 +79,7 @@ body {
 .rr-sign {
   background: var(--rr-panel);
   border-top: 6px solid var(--rr-signal);
-  border-radius: var(--rr-r1);
+  border-radius: 0; /* square, like a real sign; a radius fights the yellow top band */
   padding: var(--rr-s4);
   display: grid;
   gap: var(--rr-s2);
@@ -154,7 +154,7 @@ body {
 /* Data honesty label: Live, Real, Stand-in */
 .rr-label {
   display: inline-block;
-  padding: 0 var(--rr-s2);
+  padding: 2px var(--rr-s2);
   border: 1px solid var(--rr-line);
   border-radius: var(--rr-r1);
   font: 600 var(--rr-t-xs)/1.6 var(--rr-font-code);
