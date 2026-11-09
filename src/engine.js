@@ -309,6 +309,27 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now, pol
     return { ...v, me: { queue: q && q.status !== 'claimed' ? entryView(q) : null, claimed, checkedIn: c ? { zone: c.zone } : null } };
   }
 
+  // Every place one person holds, across all rooms (decision 34: seated in one room, queued in others), plus the venue.
+  // Guests are matched by device too (decision 28). Offers and claims sort first: they expire.
+  const URGENCY = { offered: 0, claimed: 1, checkedIn: 2, waiting: 3 };
+  function myPlaces(handle, device) {
+    const rooms = [];
+    for (const sp of db().spaces.values()) {
+      if (sp.type !== 'room' || sp.test) continue;
+      const base = { room: sp.id, title: sp.title, floor: sp.floor };
+      const c = inside(sp).get(handle);
+      if (c) { rooms.push({ ...base, status: 'checkedIn', zone: c.zone }); continue; }
+      const q = db().queue.find((x) => x.space === sp.id && ['waiting', 'offered', 'claimed'].includes(x.status) && (x.handle === handle || (device && x.device === device)));
+      if (!q) continue;
+      const o = q.offer && db().offers.get(q.offer);
+      if (q.status === 'waiting') rooms.push({ ...base, status: 'waiting', position: position(q).position, of: waiting(sp).length });
+      else if (q.status === 'offered') rooms.push({ ...base, status: 'offered', zone: o?.zone ?? null, offerExpiresAt: o?.heldUntil });
+      else rooms.push({ ...base, status: 'claimed', zone: o?.zone ?? null, code: o?.code, scanBy: o?.scanBy ?? null });
+    }
+    rooms.sort((a, b) => URGENCY[a.status] - URGENCY[b.status] || (a.position || 0) - (b.position || 0));
+    return { venue: myVenue(handle), rooms };
+  }
+
   function staffView(spaceId) {
     const sp = room(spaceId);
     const queue = db().queue.filter((q) => q.space === sp.id && ['waiting', 'offered', 'claimed'].includes(q.status)).sort((a, b) => a.at - b.at)
@@ -344,7 +365,7 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now, pol
 
   const api = {
     space, view, taken, status, update, joinQueue, leaveQueue, claim, checkin, leave, correct, release, override, setConsole, confirm,
-    register, myVenue, sweep, endSession, roomForUser, staffView, floors, walk, wifiMedian, waiting,
+    register, myVenue, myPlaces, sweep, endSession, roomForUser, staffView, floors, walk, wifiMedian, waiting,
     redirect: (spaceId, user) => redirect({ db: db(), engine: api, from: room(spaceId), user, now: now() }),
   };
   return api;

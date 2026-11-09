@@ -84,6 +84,9 @@ function api({ store, engine }) {
   r.get('/staff/spaces/:id/presence-key', requireRole('staff'), h((req) => ({ space: sid(req), k: presence.roomKey(sid(req)) })));
   r.post('/spaces/:id/leave', h((req) => engine.leave(sid(req), signedIn(req).handle)));
 
+  // My places (A3 Now page, My seat): every room I'm seated, holding or queued in, with my # in each line.
+  r.get('/me/places', h((req) => engine.myPlaces(signedIn(req).handle, req.device)));
+
   // Extras on A6: crowd-sourced Wi-Fi and comments (stored without a handle).
   r.post('/spaces/:id/wifi', h((req) => {
     signedIn(req);

@@ -20,13 +20,32 @@
   .risk { font-size: var(--rr-t-xs); font-weight: 700; color: var(--rr-full); }
   .go { font-size: var(--rr-t-sm); font-weight: 700; color: var(--rr-free); }
   #details { justify-self: start; min-height: 44px; display: inline-flex; align-items: center; font-weight: 700; }
-  @media (min-width: 960px) { #home { grid-column: 1; } #upcoming { grid-column: 2; grid-row: 2 / span 4; } }
+  /* Announcement strip: its own band above everything else, urgent first. */
+  #news { display: grid; gap: var(--rr-s2); }
+  #news[hidden] { display: none; }
+  .ann { grid-template-columns: 1fr auto; align-items: start; column-gap: var(--rr-s2); padding-right: var(--rr-s1); box-shadow: var(--rr-shadow); }
+  .ann:not([data-urgency]) { background: var(--rr-panel); }
+  .ann p { font-size: var(--rr-t-md); line-height: 1.35; overflow-wrap: anywhere; }
+  .ann-x { width: 44px; height: 44px; display: grid; place-items: center; margin: calc(-1 * var(--rr-s2)) 0; padding: 0; border: 0; border-radius: var(--rr-r1); background: none; color: inherit; cursor: pointer; }
+  .ann-x:hover { background: rgb(21 24 27 / 0.08); }
+  .ann-x svg { width: 20px; height: 20px; }
+  .ann-all { justify-self: start; min-height: 44px; display: inline-flex; align-items: center; font-weight: 700; font-size: var(--rr-t-sm); }
+  /* You're in: the session you're sitting in, named in full. */
+  .inroom h2 { margin: 0; font: 800 var(--rr-t-lg)/1.2 var(--rr-font-sign); overflow-wrap: anywhere; }
+  .inroom dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px var(--rr-s3); font-size: var(--rr-t-sm); }
+  .inroom dt { color: var(--rr-muted); }
+  .inroom dd { margin: 0; font-weight: 600; }
+  .place b { font-variant-numeric: tabular-nums; }
+  .place .open { flex: none; font-size: var(--rr-t-sm); font-weight: 700; color: var(--rr-action); }
+  body.rr-dark .place .open { color: var(--rr-ink); }
+  @media (min-width: 960px) { #home { grid-column: 1; } #upcoming { grid-column: 2; grid-row: span 4; } }
 </style>
 </head>
 <body>
 <!-- "Now": the attendee home. It adapts to where you are in the day: register, your seat, then what's on now and next. -->
 <main class="rr-screen rr-screen--wide" id="main">
   <div class="rr-sign rr-span"><span class="rr-eyebrow" id="where">Venue · Hall A</span><h1 id="title">Now</h1><a id="details" href="/events" class="note">Event details and full agenda</a></div>
+  <section id="news" class="rr-span" aria-label="Announcements" hidden></section>
   <section id="home" class="rr-btn-stack" aria-live="polite"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></section>
   <section id="upcoming" class="rr-btn-stack" aria-label="What's on"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></section>
   <p class="rr-panel rr-span m0" id="err" role="alert" hidden></p>
@@ -47,24 +66,69 @@
     if (me.role === 'guest') return `<div class="rr-panel"><p class="m0">You're browsing as a guest. Room doors work; registering for the venue needs an account.</p></div><a class="rr-btn rr-btn--ghost" href="/login?next=/event">Create an account</a>`;
     if (!entry) return `<div class="rr-panel venue"><div><b>${venue.taken} of ${venue.capacity}</b> registered · ${RR.esc(venue.rule)}</div>${RR.status(venue.status)}</div><button class="rr-btn" type="button" id="reg">Register for the day</button>`;
     if (entry.status === 'waiting') return `<div class="rr-panel rr-position"><span class="rr-eyebrow">Your place on the waitlist</span><strong>#${Number(entry.position)}</strong><p>${RR.esc(entry.reason)} This page updates when you're admitted.</p></div>${notifyBtn()}`;
-    if (entry.status === 'admitted' && entry.scannedIn) return '';
-    if (entry.status === 'admitted') return `<div class="rr-panel">${RR.status('free', "You're in")}<p class="m0">Scan in at the venue door by <b>${time(entry.expiresAt)}</b> to keep your place.</p></div><a class="rr-btn rr-btn--ghost" href="/r/venue">I'm at the venue door</a>`;
+    // "You're in" only once scanned in at the venue door; before that you're admitted, with a deadline.
+    if (entry.status === 'admitted' && entry.scannedIn) return seatedRoom ? '' : `<div class="rr-panel">${RR.status('free', "You're in")}<p class="m0">Scanned in at the venue. Pick a talk below; your seat shows here once you scan into a room.</p></div>`;
+    if (entry.status === 'admitted') return `<div class="rr-panel">${RR.status('free', "You're admitted")}<p class="m0">Scan in at the venue door by <b>${time(entry.expiresAt)}</b> to keep your place.</p></div><a class="rr-btn rr-btn--ghost" href="/r/venue">I'm at the venue door</a>`;
     if (entry.status === 'expired') return `<div class="rr-panel">${RR.status('full', 'Admission expired')}<p class="m0">Nobody scanned in for this place in time, so it went to the waitlist.</p></div><button class="rr-btn" type="button" id="reg">Join the waitlist again</button>`;
     return '';
   }
-  const notifyBtn = () => ('Notification' in window && Notification.permission === 'default') ? `<button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="notify">Tell me when I'm in</button>` : '';
+  const notifyBtn = () => ('Notification' in window && Notification.permission === 'default') ? `<button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="notify">Tell me when I'm admitted</button>` : '';
 
-  // "My seat": whatever you're doing in a room right now, one tap away.
-  async function mySeat() {
-    const room = RR.recall('rr-room');
-    if (!me || !room) return '';
-    const r = await RR.api(`/spaces/${enc(room)}`).catch(() => null);
-    const m = r?.me || {};
-    const what = m.checkedIn ? `You're in · ${RR.zoneName(m.checkedIn.zone)}` : m.claimed ? `Seat claimed · code ${m.claimed.code}` : m.queue?.status === 'offered' ? 'A seat is waiting for you' : m.queue?.status === 'waiting' ? `In the queue · #${m.queue.position}` : '';
-    if (!what) return '';
-    const urgent = m.queue?.status === 'offered' || m.claimed;
-    return `<div class="rr-panel seat"><div><span class="rr-eyebrow">${RR.esc(RR.roomName(r))} · ${RR.esc(r.title)}</span><div><b>${RR.esc(what)}</b></div></div><a class="rr-btn${urgent ? '' : ' rr-btn--ghost'}" href="/r/${enc(r.id)}">${urgent ? 'Open' : 'View'}</a></div>`;
+  // "My seat" and "My places" come from GET /api/me/places, so they follow you across devices: the room you're
+  // sitting in, and every queue, offer and claimed seat you hold elsewhere (decision 34).
+  let seatedRoom = null;
+  const clockS = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: tz });
+  // The agenda slot of a room's current talk ("11:30 to 12:30"), when this event's agenda has it.
+  function slotFor(room) {
+    const list = (ev?.sessions || []).filter((s) => s.room === room);
+    const s = list.find((x) => x.live) || list.find((x) => Date.parse(x.start) <= nowMs && Date.parse(x.end) > nowMs);
+    return s ? `${time(s.start)} to ${time(s.end)}` : '';
   }
+  const where = (p) => `${RR.esc(RR.roomName(p.room))} · Floor ${Number(p.floor)}`;
+  function seated(p, eventName) {
+    if (!p) return '';
+    const rows = [['Event', eventName], ['Room', `${RR.roomName(p.room)}, floor ${p.floor}`], ['Seat area', RR.zoneName(p.zone)], ['Time', slotFor(p.room)]].filter(([, v]) => v);
+    return `<div class="rr-panel inroom">${RR.status('free', "You're in")}<h2>${RR.esc(p.title)}</h2>
+      <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${RR.esc(v)}</dd>`).join('')}</dl>
+      <a class="rr-btn rr-btn--ghost" href="/r/${enc(p.room)}">Open ${RR.esc(RR.roomName(p.room))}</a></div>`;
+  }
+  function placeRow(p) {
+    const urgent = p.status === 'offered' || p.status === 'claimed';
+    const what = p.status === 'offered' ? `Seat offered · claim by ${clockS(p.offerExpiresAt)}`
+      : p.status === 'claimed' ? `Seat held · code ${p.code}${p.scanBy ? ` · scan in by ${time(p.scanBy)}` : ''}`
+      : `#${Number(p.position)} of ${Number(p.of)} in line`;
+    return `<a class="talk place${urgent ? ' alert' : ''}" href="/r/${enc(p.room)}"><div><b>${RR.esc(what)}</b><span>${where(p)} · ${RR.esc(p.title)}</span></div><span class="open">${urgent ? 'Claim or scan in' : 'View'}</span></a>`;
+  }
+  function places(data, eventName) {
+    const rooms = data?.rooms || [];
+    seatedRoom = rooms.find((p) => p.status === 'checkedIn') || null;
+    const rest = rooms.filter((p) => p !== seatedRoom);
+    const list = rest.length ? `<div class="slot" id="places"><h2>My places <small>${rest.length} ${rest.length === 1 ? 'room' : 'rooms'}</small></h2>${rest.map(placeRow).join('')}</div>` : '';
+    // A seat offer expires in a minute, so it goes above the room you're already in.
+    return rest.some((p) => p.status !== 'waiting') ? list + seated(seatedRoom, eventName) : seated(seatedRoom, eventName) + list;
+  }
+
+  // Announcements as their own strip at the top: urgent first, then newest; each one can be dismissed on this device.
+  const GONE = 'rr-news-dismissed';
+  const dismissed = () => { try { return JSON.parse(localStorage.getItem(GONE) || '[]'); } catch { return []; } };
+  const X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+  async function news() {
+    const all = await RR.api('/announcements').catch(() => []);
+    const gone = dismissed();
+    const shown = all.filter((a) => !gone.includes(a.id)).sort((a, b) => (b.urgency === 'urgent') - (a.urgency === 'urgent') || b.at - a.at).slice(0, 2); // two at most, so the strip never pushes your seat off the first screen
+    $('news').hidden = !shown.length;
+    $('news').innerHTML = shown.map((a) => `<div class="rr-announce ann"${a.urgency === 'urgent' ? ' data-urgency="urgent" role="alert"' : ''}>
+        <div><span class="rr-eyebrow">${a.urgency === 'urgent' ? 'Urgent' : 'Info'} · ${a.floor == null ? 'All floors' : `Floor ${Number(a.floor)}`} · ${time(a.at)}</span><p class="m0">${RR.esc(a.text)}</p></div>
+        <button class="ann-x" type="button" data-id="${Number(a.id)}" aria-label="Dismiss announcement: ${RR.esc(a.text)}">${X}</button></div>`).join('')
+      + `<a class="ann-all" href="/news">All announcements${all.length > shown.length ? ` · ${all.length}` : ''}</a>`;
+  }
+  $('news').addEventListener('click', async (e) => {
+    const b = e.target.closest('.ann-x');
+    if (!b) return;
+    try { localStorage.setItem(GONE, JSON.stringify([...dismissed(), Number(b.dataset.id)])); } catch { /* private mode: it comes back on reload */ }
+    await news();
+    $('news').querySelector('.ann-x, .ann-all')?.focus(); // keep keyboard focus in the strip
+  });
 
   // Now / Up next / Later today. "Now" is live; later slots use each room's `next` session (title, startsAt) when
   // the schedule data has it. shortcut: the in-memory demo has no session times, so those slots stay empty there.
@@ -85,18 +149,19 @@
     const soon = nexts.filter(([, s]) => new Date(s.startsAt) <= slot(90));
     const later = nexts.filter((x) => !soon.includes(x));
     return `<div class="slot"><h2>Happening now <small>${time(slot(0))} ${RR.label('live')}</small></h2>${order(rooms).map((r) => row(r, r, true)).join('') || '<p class="note">Nothing is running right now.</p>'}</div>
-      <div class="slot"><h2>Up next</h2>${soon.map(([r, s]) => row(r, s, false)).join('') || '<p class="note">The next sessions show here once the day\'s schedule is loaded.</p>'}</div>
+      <div class="slot"><h2>Up next</h2>${soon.map(([r, s]) => row(r, s, false)).join('') || `<p class="note">${later.length ? `Nothing in the next 90 minutes. Next: ${RR.esc(later[0][1].title)} at ${time(later[0][1].startsAt)}, ${name(later[0][0])}.` : ev ? 'No more talks today.' : 'The next sessions show here once the day\'s schedule is loaded.'}</p>`}</div>
       ${later.length ? `<details class="rr-more"><summary>Later today · ${later.length}</summary><div>${later.map(([r, s]) => row(r, s, false)).join('')}</div></details>` : ''}`;
   }
 
   async function render() {
     try {
-      const [{ venue, me: entry, slug, name }, rooms, fc, seat] = await Promise.all([RR.api('/event'), RR.api('/sessions'), RR.api('/forecast').catch(() => ({ sessions: [] })), mySeat()]);
+      const [{ venue, me: entry, slug, name }, rooms, fc, mine] = await Promise.all([RR.api('/event'), RR.api('/sessions'), RR.api('/forecast').catch(() => ({ sessions: [] })), me ? RR.api('/me/places').catch(() => null) : null]);
       if (slug && !ev) { ev = await RR.api(`/events/${enc(slug)}`).catch(() => null); tz = ev?.timezone; $('details').href = `/e/${enc(slug)}`; }
       if (ev) nowMs = Date.parse(ev.now);
       $('where').textContent = `${name || 'Venue'} · ${ev ? `${ev.city} · ` : ''}Hall A`;
       const risk = Object.fromEntries((fc.sessions || []).map((s) => [s.room, s.risk]));
       $('title').textContent = entry?.status === 'admitted' ? "Here's what's on" : entry?.status === 'waiting' ? "You're on the waitlist" : (name || 'Now');
+      const seat = places(mine, name);
       $('home').innerHTML = seat + registration(entry, venue);
       $('upcoming').innerHTML = upcoming(rooms, risk);
       $('reg')?.addEventListener('click', register);
@@ -124,14 +189,18 @@
     if (me?.role === 'organiser') return location.replace('/staff/setup');
     if (me?.role === 'staff') { const d = RR.recall('rr-door'); return location.replace(d ? `/staff/room/${encodeURIComponent(d)}` : '/sessions?pick=door'); }
     RR.here('Hall A');
+    news();
     let last = (await render())?.status;
     let t;
     const soon = () => { clearTimeout(t); t = setTimeout(render, 300); };
     RR.live('*', {
       status: soon,
+      offer: soon,
+      offer_passed: soon,
+      announcement: news,
       position: async () => {
         const entry = await render();
-        if (last === 'waiting' && entry?.status === 'admitted' && 'Notification' in window && Notification.permission === 'granted') new Notification("You're in at RightRoom", { body: `Scan in at the venue door by ${time(entry.expiresAt)}.` });
+        if (last === 'waiting' && entry?.status === 'admitted' && 'Notification' in window && Notification.permission === 'granted') new Notification("You're admitted at RightRoom", { body: `Scan in at the venue door by ${time(entry.expiresAt)}.` });
         last = entry?.status;
       },
     });
