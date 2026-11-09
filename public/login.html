@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sign in · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+</head>
+<body>
+<main class="rr-screen" id="main">
+  <div class="rr-sign"><span class="rr-eyebrow">RightRoom · KubeCon day</span><h1>Sign in</h1></div>
+  <p class="note" id="why" hidden>That page needs a staff or organiser account.</p>
+  <form id="f" class="rr-btn-stack" novalidate>
+    <div class="fld"><label for="handle">Username (your public handle)</label><input id="handle" name="handle" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+    <div class="fld"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
+    <p class="rr-panel m0" id="err" role="alert" hidden></p>
+    <button class="rr-btn" type="submit" data-mode="login">Sign in</button>
+    <button class="rr-btn rr-btn--ghost" type="submit" data-mode="signup">Create an account</button>
+  </form>
+  <button class="rr-btn rr-btn--ghost" type="button" id="guest" hidden>Continue as guest</button>
+  <p class="note">No email or name is stored. Your username is the only thing other people see.</p>
+</main>
+<script src="/app.js"></script>
+<script>
+  const q = new URLSearchParams(location.search);
+  // Only same-site paths, so a crafted link can't send people elsewhere after sign-in.
+  const next = /^\/(?!\/)/.test(q.get('next') || '') ? q.get('next') : '/event';
+  const err = document.getElementById('err');
+  if (q.get('role')) document.getElementById('why').hidden = false;
+  if (q.get('from') === 'qr') document.getElementById('guest').hidden = false;
+
+  let mode = 'login';
+  document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { mode = b.dataset.mode; }));
+  document.getElementById('f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    err.hidden = true;
+    const handle = document.getElementById('handle').value.trim();
+    const password = document.getElementById('password').value;
+    if (!handle || !password) return RR.showError(err, 'Enter a username and a password.');
+    try {
+      await RR.api(mode === 'signup' ? '/signup' : '/login', { method: 'POST', body: { handle, password } });
+      location.href = next;
+    } catch (x) { RR.showError(err, x); }
+  });
+  document.getElementById('guest').addEventListener('click', async () => {
+    try { await RR.api('/guest', { method: 'POST' }); location.href = next; } catch (x) { RR.showError(err, x); }
+  });
+</script>
+</body>
+</html>

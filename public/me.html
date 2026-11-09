@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your profile · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<style>
+  .nav { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
+  .nav a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--rr-s3); color: var(--rr-ink); text-decoration: none; border: 2px solid var(--rr-line); border-radius: var(--rr-r1); font: 700 var(--rr-t-sm)/1 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.06em; }
+  .nav a[aria-current] { border-color: var(--rr-signal); color: var(--rr-signal); }
+</style>
+</head>
+<body>
+<main class="rr-screen" id="main">
+  <nav class="nav" aria-label="Pages"><a href="/event">Event</a><a href="/sessions">Schedule</a><a href="/news">News</a><a href="/me" aria-current="page">Me</a></nav>
+  <div class="rr-sign"><span class="rr-eyebrow" id="who">Your profile</span><h1>What are you here for?</h1></div>
+  <section class="rr-panel" aria-labelledby="h-int">
+    <h2 class="rr-eyebrow m0" id="h-int">Interests</h2>
+    <div class="chips" role="group" aria-labelledby="h-int" id="interests"></div>
+    <p class="note">Interests only shape suggestions. They never decide who gets a seat.</p>
+  </section>
+  <section class="rr-panel" aria-labelledby="h-need">
+    <h2 class="rr-eyebrow m0" id="h-need">Access preferences</h2>
+    <div class="chips" role="group" aria-labelledby="h-need" id="needs">
+      <button type="button" data-need="step-free" aria-pressed="false">&#9855; Step-free</button>
+      <button type="button" data-need="captions" aria-pressed="false">Near captions</button>
+    </div>
+    <p class="note">Shown to staff as a preference so accessible seats reach you. Never a diagnosis.</p>
+  </section>
+  <p class="rr-panel m0" id="msg" role="status" hidden></p>
+  <p class="rr-panel m0" id="err" role="alert" hidden></p>
+  <div class="rr-btn-stack">
+    <button class="rr-btn" type="button" id="save">Save</button>
+    <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="out">Sign out</button>
+  </div>
+</main>
+<script src="/app.js"></script>
+<script>
+  const err = document.getElementById('err'), msg = document.getElementById('msg');
+  const toggle = (b) => b.addEventListener('click', () => b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'));
+  (async () => {
+    const me = await RR.requireLogin();
+    document.getElementById('who').textContent = `${me.handle} · ${me.role}`;
+    // Offer the tags the schedule actually uses, plus anything already chosen.
+    const sessions = await RR.api('/sessions').catch(() => []);
+    const tags = [...new Set([...sessions.flatMap((s) => s.tags || []), ...me.interests])].sort();
+    const box = document.getElementById('interests');
+    box.innerHTML = tags.map((t) => `<button type="button" data-tag="${RR.esc(t)}" aria-pressed="${me.interests.includes(t)}">${RR.esc(t.replace(/-/g, ' '))}</button>`).join('');
+    box.querySelectorAll('button').forEach(toggle);
+    document.querySelectorAll('#needs button').forEach((b) => { b.setAttribute('aria-pressed', me.needs.includes(b.dataset.need)); toggle(b); });
+  })();
+
+  const pressed = (sel, key) => [...document.querySelectorAll(`${sel} [aria-pressed="true"]`)].map((b) => b.dataset[key]);
+  document.getElementById('save').addEventListener('click', async () => {
+    err.hidden = msg.hidden = true;
+    try {
+      await RR.api('/me', { method: 'PUT', body: { interests: pressed('#interests', 'tag'), needs: pressed('#needs', 'need') } });
+      msg.textContent = 'Saved.';
+      msg.hidden = false;
+    } catch (x) { RR.showError(err, x); }
+  });
+  document.getElementById('out').addEventListener('click', async () => {
+    await RR.api('/logout', { method: 'POST' }).catch(() => {});
+    location.href = '/login';
+  });
+</script>
+</body>
+</html>
