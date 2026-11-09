@@ -40,7 +40,7 @@ app.use('/api', require('./src/routes/venue').venueRouter({ store, engine }));
 const PAGES = {
   '/login': 'login', '/me': 'me', '/event': 'event', '/sessions': 'sessions', '/news': 'news',
   '/r/:room': 'room', '/r/:room/in': 'in',
-  '/staff/room/:room': 'staff-room', '/staff/setup': 'staff-setup', '/staff/qr': 'staff-qr', '/screen/:room': 'screen', '/sim': 'sim',
+  '/host': 'host', '/staff/room/:room': 'staff-room', '/staff/setup': 'staff-setup', '/staff/qr': 'staff-qr', '/screen/:room': 'screen', '/sim': 'sim',
 };
 for (const [url, page] of Object.entries(PAGES)) {
   app.get(url, (req, res) => res.sendFile(path.join(__dirname, 'public', `${page}.html`), (e) => e && res.status(404).send('Page not built yet.')));
