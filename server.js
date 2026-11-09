@@ -20,6 +20,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'rightroom', version: process.env.APP_VERSION || 'dev' });
 });
 app.use('/api', api({ store, engine }));
+app.use('/api', require('./src/routes/insights').makeRouter({ requireRole: auth.requireRole, db: () => store.db }));
 
 // Screen URLs from docs/journey-map.md, each served by one page in public/.
 const PAGES = {
