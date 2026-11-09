@@ -10,6 +10,7 @@
 //     a free accessibility seat when they need access_seat
 //   - a session whose door window (decision 32) is open now or opens within 20 minutes, and stays open long
 //     enough to claim and scan in: 5 minutes, or 15 for anyone with a stated access need (decision 31)
+//   - the person can walk there before the door closes (walk minutes + scan minutes fit in what is left)
 // Ranking among the rest: topic match to the full room's session, then walking minutes, then free seats.
 // Interests only break ties inside the same topic band; they never decide who gets a seat (rule 5).
 //
@@ -138,6 +139,7 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
     else if (needSet.has('step_free') && !walk.step_free) reason = 'No step-free route';
     else if (needSet.has('captions') && !space.captions) reason = 'No live captions';
     else if (needSet.has('access_seat') && accessFree < groupSize) reason = 'No accessibility seat free';
+    else if (session.door_close_at && walk.minutes + scanMin > minutesBetween(now, session.door_close_at)) reason = 'Door closes before you arrive';
 
     const entry = {
       space_id: space.id,
