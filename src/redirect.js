@@ -8,20 +8,19 @@
 //   - not Full
 //   - step-free route and room when the person needs step_free; live captions when they need captions;
 //     a free accessibility seat when they need access_seat
-//   - a session whose door window (decision 32) is open now or opens within 20 minutes, and stays open long
-//     enough to claim and scan in: 5 minutes, or 15 for anyone with a stated access need (decision 31)
-//   - the person can walk there before the door closes (walk minutes + scan minutes fit in what is left)
+//   - a session that is on now or starts within 20 minutes
+//   - organiser limits (src/policy.js, none by default): the person arrives before the door window closes
+//     (decision 32), and within the claim window when one is set (decision 31)
 // Ranking among the rest: topic match to the full room's session, then walking minutes, then free seats.
 // Interests only break ties inside the same topic band; they never decide who gets a seat (rule 5).
 //
 // This only reads. The engine (P2) reserves the seats as offers for whoever it redirects.
 
 const { es, INDEX, SEMANTIC } = require('./es');
+const { effectivePolicy, doorWindow, claimMinutes, claimDeadline } = require('./policy');
 
 const MIN = 60 * 1000;
 const OPENING_SOON_MIN = 20;
-const SCAN_MIN = 5;
-const SCAN_MIN_ACCESS = 15;
 
 function freeSeats(space) {
   return Math.max(0, (space.capacity || 0) - (space.taken || 0));
@@ -51,10 +50,10 @@ async function currentSession(spaceId, now) {
 }
 
 // Sessions in other rooms that someone could walk into now, scored by topic similarity.
-async function candidateSessions({ spaceId, now, queryText, scanMin }) {
+async function candidateSessions({ spaceId, now, queryText }) {
   const filter = [
-    { range: { door_close_at: { gt: new Date(now.getTime() + scanMin * MIN).toISOString() } } },
-    { range: { door_open_at: { lte: new Date(now.getTime() + OPENING_SOON_MIN * MIN).toISOString() } } },
+    { range: { end: { gt: now.toISOString() } } },
+    { range: { start: { lte: new Date(now.getTime() + OPENING_SOON_MIN * MIN).toISOString() } } },
   ];
   const must_not = [{ term: { room_id: spaceId } }];
   const base = { index: INDEX.sessions, size: 50, _source: { excludes: ['topic'] } };
@@ -86,9 +85,17 @@ function minutesBetween(a, b) {
   return Math.round((new Date(b) - new Date(a)) / MIN);
 }
 
+// The venue's policy is the event-wide default for every session.
+async function eventDefaults(eventId) {
+  const filter = [{ term: { type: 'venue' } }];
+  if (eventId) filter.push({ term: { event_id: eventId } });
+  const res = await es().search({ index: INDEX.spaces, size: 1, query: { bool: { filter } }, _source: ['policy'] });
+  return res.hits.hits[0]?._source?.policy || {};
+}
+
 function timeReason(session, now) {
   const startsIn = minutesBetween(now, session.start);
-  const closesIn = session.door_close_at ? `, door closes in ${minutesBetween(now, session.door_close_at)} min` : '';
+  const closesIn = session.door?.organiser_close ? `, door closes in ${minutesBetween(now, session.door.close)} min` : '';
   if (startsIn > 0) return `Starts in ${startsIn} min${closesIn}`;
   return `On now${closesIn}`;
 }
@@ -106,8 +113,9 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
   const queryText = current
     ? `${current.title}. ${current.abstract || ''} ${(current.tags || []).join(' ')}`
     : [...interestSet].join(' ');
-  const scanMin = needSet.size ? SCAN_MIN_ACCESS : SCAN_MIN;
-  const { method, hits } = await candidateSessions({ spaceId, now, queryText, scanMin });
+  const { method, hits } = await candidateSessions({ spaceId, now, queryText });
+  const eventPolicy = await eventDefaults(from.event_id);
+  const accessNeed = needSet.size > 0;
 
   // One candidate per room: its best-scoring session.
   const byRoom = new Map();
@@ -120,7 +128,13 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
   const spaces = roomIds.length
     ? (await es().mget({ index: INDEX.spaces, ids: roomIds })).docs
     : [];
-  const maxScore = Math.max(0, ...hits.map((h) => h.score));
+  // Scores of the room candidates actually considered (found, type room).
+  const roomScores = spaces
+    .filter((d) => d.found && (!d._source.type || d._source.type === 'room') && byRoom.has(d._id))
+    .map((d) => byRoom.get(d._id).score);
+  const maxScore = roomScores.length ? Math.max(...roomScores) : 0;
+  const minScore = roomScores.length ? Math.min(...roomScores) : 0;
+  const spread = maxScore - minScore;
 
   const eligible = [];
   const rejected = [];
@@ -139,7 +153,18 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
     else if (needSet.has('step_free') && !walk.step_free) reason = 'No step-free route';
     else if (needSet.has('captions') && !space.captions) reason = 'No live captions';
     else if (needSet.has('access_seat') && accessFree < groupSize) reason = 'No accessibility seat free';
-    else if (session.door_close_at && walk.minutes + scanMin > minutesBetween(now, session.door_close_at)) reason = 'Door closes before you arrive';
+    else {
+      const policy = effectivePolicy(eventPolicy, session.policy);
+      const arrival = new Date(now.getTime() + walk.minutes * MIN);
+      const door = doorWindow(session, policy);
+      const hold = claimMinutes(policy, { accessNeed });
+      // If the engine offered the seat now, when would the hold run out? (The clock starts at the door opening.)
+      const deadline = claimDeadline({ claimedAt: now, session, policy, accessNeed });
+      if (now >= door.close) reason = door.organiser_close ? 'Door closed' : 'Session over';
+      else if (arrival >= door.close) reason = door.organiser_close ? 'Door closes before you arrive' : 'Session ends before you arrive';
+      else if (hold !== null && arrival > deadline) reason = `Seat is held ${hold} min, walk is ${walk.minutes} min`;
+      else session.door = door;
+    }
 
     const entry = {
       space_id: space.id,
@@ -160,8 +185,12 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
       continue;
     }
 
-    const rel = maxScore > 0 ? session.score / maxScore : 0;
-    const band = method === 'none' ? 0 : rel >= 0.8 ? 2 : rel >= 0.5 ? 1 : 0;
+    // Semantic (ELSER) scores bunch together and are never 0, so scale between the lowest and highest candidate;
+    // with one candidate or no spread nothing stands out. Keyword (BM25) scores keep their meaning: 0 is no match.
+    const rel = method === 'semantic'
+      ? (spread > 1e-6 ? (session.score - minScore) / spread : 0)
+      : (maxScore > 0 ? session.score / maxScore : 0);
+    const band = method === 'none' ? 0 : rel >= 0.7 ? 2 : rel >= 0.35 ? 1 : 0;
     const matched = (session.tags || []).filter((t) => interestSet.has(String(t).toLowerCase()));
 
     const reasons = [];
