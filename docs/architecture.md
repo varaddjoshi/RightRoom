@@ -106,6 +106,10 @@ Freeze this first so P2 and P3 can build in parallel. P3 can mock any endpoint b
 | `GET /api/sessions` | Anyone | A4 | Sessions with room status and Wi-Fi median |
 | `GET /api/floors` | Anyone (staff and organiser get extra fields) | A4 map view, S2 floor map, S1 venue board, D1 | Rooms grouped by floor: id, title, capacity, taken, status, access note; staff and organiser also get staff on door and queue length |
 | `GET /api/search?q=&floor=&stepFree=&free=&soon=&mine=&status=&limit=` | Anyone (`mine` needs sign-in; staff and organiser get staff on door and queue length) | A4 search, S1 | `{source, query, results: [{room, sessionTitle, floor, status, taken, capacity, free, stepFree, access, startsAt, risk, why[], score}], took}` |
+| `GET /api/heat?room=<id>` | Anyone (no handles) | A4 map, S1 board, S2 | `{room, source: 'elasticsearch'\|'memory', zones: [{zone, crowd: {count, density 0..1, band: quiet\|busy\|packed}, wifi: {mbps, ms, count, band: good\|ok\|weak} \| null}], updatedAt}`; always all 9 zones |
+| `/api/floors` tiles (added fields) | Anyone | A4, S1, S2 | `wifiStats: {mbps, ms, count, band, source} \| null` and `heat: {busiest: {zone, density, band} \| null, weakestWifi: {zone, mbps, band} \| null}`; the old `wifi` number stays |
+| `GET /api/wifi` (added fields) | Anyone | S1 | per room and zone: `mbps, ms, count, last, band` plus the old `readings`; `source` is `elasticsearch` when it came from there |
+| `POST /api/sim/zone-checkins {space, zone, n}`, `POST /api/sim/wifi {space, zone, mbps, ms}` | Staff | `scripts/stage-heat.js` | Stand-in check-ins in one zone; one stand-in Wi-Fi reading |
 | `GET /api/forecast`, `GET /api/forecast/backtest` | Anyone | A4, S1 | Fill forecast per session (expected fill, chance it fills, likely minute, risk, the 3 past talks it is based on); leave-one-out backtest. Stand-in, mounted at /api once Phase 1 lands |
 | `GET /api/wifi` | Anyone | A4, A6, S1 | Wi-Fi medians by room and zone over `db().wifi` (stand-in plus readings posted to `POST /api/spaces/:id/wifi`). Mounted at /api once Phase 1 lands |
 | `GET /api/sessions/:room/topics` | Anyone | A4, A6, S1 | Top 1 to 3 word topics over `db().comments` (comments are posted to `POST /api/spaces/:id/comments`; hidden ones skipped). Mounted at /api once Phase 1 lands |
@@ -116,7 +120,8 @@ Freeze this first so P2 and P3 can build in parallel. P3 can mock any endpoint b
 | `POST /api/spaces/:id/queue` | Attendee or guest | A5 | My position and reason |
 | `GET /api/spaces/:id/redirect` | Attendee or guest | A5 | Suggestion, reasons, rejected options with reasons, something different, overflow |
 | `POST /api/offers/:id/claim` | The offered handle | A5 | Claimed with zone and code, or why not |
-| `POST /api/spaces/:id/checkin` | Attendee or guest | A6 | Checked in, zone |
+| `POST /api/spaces/:id/checkin` | Attendee or guest | A6 | Checked in, zone. Needs `k`, the room's key from its "I'm in the room" QR (`src/presence.js`, signed per room per day; today's and yesterday's accepted), else 403 `{ error, needScan: true }` |
+| `GET /api/staff/spaces/:id/presence-key` | Staff | Scripts | `{ space, k }`: the key the room's in-room code carries |
 | `POST /api/spaces/:id/leave` | Attendee or guest | A6 | "I'm leaving": checked out, seat offered to the queue |
 | `DELETE /api/spaces/:id/queue` | Attendee or guest | A5 | Left the queue |
 | `POST /api/spaces/:id/wifi`, `GET`/`POST /api/spaces/:id/comments` | Signed in | A6 (Extras) | Wi-Fi reading and room median; comment topics |
@@ -137,6 +142,10 @@ Live events on `/api/stream`: `status` (space, taken, capacity, status), `positi
 ## Search
 
 `GET /api/search` (`src/search.js`) runs one hybrid query on P1's sessions index when `ELASTICSEARCH_URL` is set: a `multi_match` on title, tags and abstract (fuzzy) plus a `semantic` query on the `topic` field when semantic search is on, combined in a `bool.should`. Each hit is joined with the live room state (status, free seats, risk from the forecast), then the filters for floor, step-free, free seats, starting soon, status and "my interests" apply. If Elasticsearch is not configured or fails, the same filters run over an in-memory text match on the live rooms. Every result carries `why`, the reasons it matched, so search explains itself like every other decision. Interests are only a filter, never a ranking signal.
+
+## Wi-Fi and zone heatmap
+
+Wi-Fi readings (`src/wifi.js`) go into memory as before and, with `ELASTICSEARCH_URL` set, are also indexed into P1's `wifi_readings` index (no handle; an outage there never fails the request). Per room and per zone summaries (median speed and latency, count, last reading, band: good from 25 Mbps, ok from 8, weak below) come from a terms plus percentiles aggregation there, cached for 30 seconds, or from memory. The zone heatmap (`src/heat.js`) adds crowd density per zone: check-ins per zone over the zone's share of seats (capacity / 9 until zones define seats), banded quiet, busy (from 0.4) and packed (from 0.85). With Elasticsearch on, check-ins are mirrored every 5 seconds into P1's `checkins` index as anonymous docs (hashed ids, no handle) and the crowd comes from an aggregation there; a session ending clears them. `scripts/stage-heat.js [BASE_URL] [--es] [--reset]` stages a believable heatmap for every room of the current venue, read from `/api/floors`.
 
 ## Mock insights
 

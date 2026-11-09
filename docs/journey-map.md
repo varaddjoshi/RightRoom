@@ -39,6 +39,7 @@ Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, regi
 33. Lateness is not recorded: a check-in stores that it happened, not how late it was. (Varad)
 34. While checked in to one session you can keep waiting in another room's queue (Sam sits in Room 210 and waits for Room 204). Checking in cancels any seat offers or claims you hold elsewhere, but not your queue places. If a seat offer arrives while you're seated, claiming it and scanning in moves you: you're checked out of the first room and that seat goes to its queue as an offer. You still hold at most one place per queue. (Hitesh)
 35. Only organisers set the door window, claim window and walking time, as an event-wide default on S1 with an override on any session. Door staff see the settings for their room but can't change them. (Varad)
+36. Checking in needs the room's "I'm in the room" QR code. The code carries a key signed for that room and day, and the server refuses a check-in without it, so nobody can count themselves in from outside. The "I'm in the room" button opens the scanner; the phone's camera app works too. At the venue entrance, the door code is the scan-in and carries the venue's key. (Hitesh)
 
 ## Personas
 

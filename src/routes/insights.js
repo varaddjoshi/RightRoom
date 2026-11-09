@@ -24,9 +24,16 @@ function makeRouter({ requireRole = allow, db } = {}) {
   }));
   r.get('/forecast/backtest', (req, res) => res.json(bt));
   // Medians mix stand-in and live readings; label them by what they contain.
-  r.get('/wifi', (req, res) => {
+  r.get('/wifi', async (req, res) => {
     const w = db().wifi;
-    res.json({ source: w.every(x => x.standIn) ? S : 'mixed', rooms: wifiMedians(w) });
+    const s = await require('../wifi').summary(db());
+    // keep the old per-room fields (readings) next to the new ones (count, band, last)
+    const old = wifiMedians(w);
+    for (const [id, room] of Object.entries(s.rooms)) room.readings ??= old[id]?.readings ?? room.count;
+    // source = backend; label = what the numbers are made of (stand_in, live or mixed), for the on-screen label
+    const kinds = Object.values(s.rooms).map((r) => r.label).filter(Boolean);
+    const label = !kinds.length ? null : new Set(kinds).size > 1 || kinds.includes('mixed') ? 'mixed' : kinds[0];
+    res.json({ source: s.source, label, rooms: s.rooms });
   });
   r.get('/sessions/:room/topics', (req, res) => {
     const t = topicsFor(req.params.room, db().comments, seed.SESSIONS);

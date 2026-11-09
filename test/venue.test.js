@@ -40,11 +40,19 @@ test('organiser: venue layout, add a room, change it, and it shows up live', asy
     assert.equal((await call('GET', `/api/spaces/${id}`)).data.status, 'full');
     assert.equal((await call('GET', `/api/spaces/310/redirect`, null, guest)).status, 200);
 
-    // Not while people are there; fine once it's empty.
+    // Walks go both ways: the other rooms get the reverse entry, and it follows an edit.
+    const room310 = async () => (await call('GET', '/api/staff/venue', null, dana)).data.layout.flatMap((b) => b.floors).flatMap((f) => f.rooms).find((r) => r.id === '310');
+    assert.equal((await room310()).walks.find((w) => w.to === id).minutes, 4);
+    await call('PUT', '/api/staff/venue/rooms/310', { overflow_space_id: id }, dana);
+
+    // Not while people are there; fine once it's empty, and other rooms forget it.
     assert.equal((await call('DELETE', `/api/staff/venue/rooms/${id}`, null, dana)).status, 409);
     await call('POST', '/api/sim/end-session', { space: id }, dana);
     assert.equal((await call('DELETE', `/api/staff/venue/rooms/${id}`, null, dana)).status, 200);
     assert.equal((await call('GET', '/api/staff/venue', null, dana)).data.rooms, 7);
+    const after = await room310();
+    assert.equal(after.overflow_space_id, null);
+    assert.ok(!after.walks.some((w) => w.to === id));
 
     const venue = await call('PUT', '/api/staff/venue', { name: 'Salt Palace', capacity: 9000 }, dana);
     assert.deepEqual([venue.data.name, venue.data.capacity], ['Salt Palace', 9000]);

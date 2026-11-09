@@ -56,6 +56,9 @@ function guest(db) {
   return db.users.get(handle);
 }
 
+// Shared HMAC with the session secret, for other signed values (src/presence.js).
+const hmac = (text) => crypto.createHmac('sha256', SECRET).update(text).digest('base64url');
+
 function sign(handle) {
   const body = `${handle}.${Date.now() + DAY}`;
   return `${body}.${crypto.createHmac('sha256', SECRET).update(body).digest('base64url')}`;
@@ -104,4 +107,4 @@ function publicUser(u) { return u && { handle: u.handle, role: u.role, interests
 
 function bad(message, status = 400) { return Object.assign(new Error(message), { status }); }
 
-module.exports = { signup, login, guest, setSession, clearSession, middleware, requireRole, publicUser, ensureDemoUsers, NEEDS, verify, sign, setSecret };
+module.exports = { signup, login, guest, setSession, clearSession, middleware, requireRole, publicUser, ensureDemoUsers, NEEDS, verify, sign, setSecret, hmac };

@@ -159,6 +159,13 @@ async function writeRoom(db, r, { create = false } = {}) {
   else await es.update({ index: esMod.INDEX.spaces, id: r.id, doc, doc_as_upsert: true, refresh: 'wait_for' });
 }
 
+// Only the named fields of another room, for knock-on changes (reverse walks, a removed overflow room). Its label stays
+// as it is: those rooms' other values are still P1's stand-in estimates.
+async function writeRoomFields(rooms, pick) {
+  if (!esOn()) return;
+  for (const o of rooms) await esMod.es().update({ index: esMod.INDEX.spaces, id: o.id, doc: { ...pick(o), updated_at: clock.now().toISOString() }, refresh: 'wait_for' }, { ignore: [404] });
+}
+
 async function writeVenue(db, v) {
   if (!esOn()) return;
   await esMod.es().update({ index: esMod.INDEX.spaces, id: 'venue', doc: stamp(db, { type: 'venue', name: v.title, capacity: v.capacity, rule: v.rule }), doc_as_upsert: true, refresh: 'wait_for' });
@@ -256,14 +263,29 @@ function applyRoomFields(db, r, b, { creating }) {
   r.access = accessText(r);
 }
 
-// Walking times to and from a new room, the way P1's seed estimates them, until the organiser sets real ones.
+// Walking times from a new room, the way P1's seed estimates them, until the organiser sets real ones.
 function estimateWalks(db, r) {
   const est = (a, b) => Math.max(1, Math.abs((a.pos || 0) - (b.pos || 0)) + 2 * Math.abs(a.floor - b.floor) + (a.building && b.building && a.building !== b.building ? 5 : 0));
   for (const o of db.spaces.values()) {
     if (o.type !== 'room' || o.id === r.id || o.test) continue;
     if (!r.walks.some((w) => w.to === o.id)) r.walks.push({ to: o.id, minutes: est(r, o), step_free: !!o.stepFree });
-    if (Array.isArray(o.walks) && !o.walks.some((w) => w.to === r.id)) o.walks.push({ to: r.id, minutes: est(o, r), step_free: !!r.stepFree });
   }
+}
+
+// Walks go both ways (P1's rule): each room r walks to gets the reverse entry, same minutes. Returns the rooms changed.
+function mirrorWalks(db, r) {
+  const touched = [];
+  for (const w of r.walks) {
+    const o = db.spaces.get(w.to);
+    if (!o || o.type !== 'room') continue;
+    if (!Array.isArray(o.walks)) o.walks = [];
+    const back = o.walks.find((x) => x.to === r.id);
+    if (back && back.minutes === w.minutes && back.step_free === !!r.stepFree) continue;
+    if (back) Object.assign(back, { minutes: w.minutes, step_free: !!r.stepFree });
+    else o.walks.push({ to: r.id, minutes: w.minutes, step_free: !!r.stepFree });
+    touched.push(o);
+  }
+  return touched;
 }
 
 async function createRoom(db, body, engine) {
@@ -278,6 +300,7 @@ async function createRoom(db, body, engine) {
   db.checkins.set(id, new Map());
   if (body.walks === undefined) estimateWalks(db, r);
   await writeRoom(db, r, { create: true });
+  await writeRoomFields(mirrorWalks(db, r), (o) => ({ walks: o.walks }));
   refreshTitles(db);
   engine?.update(r);
   return roomView(r);
@@ -288,6 +311,7 @@ async function updateRoom(db, id, body, engine) {
   if (!r || r.type !== 'room' || r.test) throw bad('No such room.', 404);
   applyRoomFields(db, r, body, { creating: false });
   await writeRoom(db, r);
+  if (body.walks !== undefined || body.step_free !== undefined) await writeRoomFields(mirrorWalks(db, r), (o) => ({ walks: o.walks }));
   engine?.update(r); // a capacity change can offer seats to the queue or flip Full
   return roomView(r);
 }
@@ -300,8 +324,18 @@ async function deleteRoom(db, id) {
   const talks = [...(db.sessions?.values() || [])].filter((s) => s.room_id === id).length;
   if (talks) throw bad(`Room has ${talks} talks; move or delete them first.`, 409);
   dropRoom(db, id);
-  for (const o of db.spaces.values()) if (Array.isArray(o.walks)) o.walks = o.walks.filter((w) => w.to !== id);
+  // Other rooms forget it: no walks to it, and no overflow into it (P1's rule).
+  const touched = [];
+  for (const o of db.spaces.values()) {
+    if (o.type !== 'room') continue;
+    const before = (o.walks || []).length;
+    if (Array.isArray(o.walks)) o.walks = o.walks.filter((w) => w.to !== id);
+    const overflowed = o.overflow === id;
+    if (overflowed) o.overflow = null;
+    if (overflowed || o.walks?.length !== before) touched.push(o);
+  }
   await deleteDoc('spaces', id);
+  await writeRoomFields(touched, (o) => ({ walks: o.walks || [], overflow_space_id: o.overflow || null }));
   return { deleted: id };
 }
 

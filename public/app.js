@@ -48,7 +48,9 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
 
   const status = (st, word) => `<span class="rr-status" data-status="${esc(st)}">${esc(word || WORD[st] || st)}</span>`;
   const count = (n, cap) => `<div class="rr-count" aria-label="${Number(n)} of ${Number(cap)} seats taken">${Number(n)}<small>/ ${Number(cap)}</small></div>`;
-  const label = (kind) => `<span class="rr-label"${kind === 'live' ? ' data-kind="live"' : ''}>${esc(String(kind).toUpperCase())}</span>`;
+  const label = (kind) => `<span class="rr-label"${kind === 'live' ? ' data-kind="live"' : ''}>${esc(String(kind).replace(/^./, (c) => c.toUpperCase()))}</span>`;
+  // Real venues have names ("255 BC"); the demo rooms only have numbers.
+  const roomName = (r) => (r && (r.name || r.displayName)) || (/^\d+$/.test(String(r?.id ?? r)) ? `Room ${r?.id ?? r}` : String(r?.id ?? r));
   const zoneName = (z) => (z ? z.replace('-', ' ').replace(/^./, (c) => c.toUpperCase()) : 'Any seat');
 
   // Announcements (GET /api/announcements, SSE 'announcement'): shown inside the floor views, not on a separate tab.
@@ -111,12 +113,12 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
     el.innerHTML = `<div class="fl-board">${top}${floors.map((f) => {
       const seats = f.rooms.reduce((s, r) => s + r.free, 0);
       const mine = forFloor(opts.notices, f.floor);
-      const here = f.rooms.some((r) => r.id === opts.here) ? `<span class="here">You are here · Floor ${Number(f.floor)}</span>` : '';
-      const head = `<div class="fl-h"><b>FLOOR ${Number(f.floor)}</b>${here}${list ? '' : badge(mine, f.floor, `Floor ${Number(f.floor)}`)}<span>${f.rooms.length} rooms · ${seats} seats free</span></div>${list ? mine.map(notice).join('') : ''}`;
+      const here = f.rooms.some((r) => r.id === opts.here) ? `<span class="here">You are here · Floor ${esc(f.floor)}</span>` : '';
+      const head = `<div class="fl-h"><b>Floor ${esc(f.floor)}</b>${here}${list ? '' : badge(mine, f.floor, `Floor ${f.floor}`)}<span>${f.rooms.length} rooms · ${seats} seats free</span></div>${list ? mine.map(notice).join('') : ''}`;
       const body = list
-        ? f.rooms.map((r) => `<div class="talk${needs(r) ? ' alert' : ''}"><div><b>Room ${esc(r.id)} · ${esc(r.title)}</b><span>${r.taken} of ${r.capacity} · ${access(r)}</span>${extra(r).replace(/tile-m|tile-x/g, '')}</div>${status(r.status)}</div>`).join('')
+        ? f.rooms.map((r) => `<div class="talk${needs(r) ? ' alert' : ''}"><div><b>${esc(roomName(r))} · ${esc(r.title)}</b><span>${r.taken} of ${r.capacity} · ${access(r)}</span>${extra(r).replace(/tile-m|tile-x/g, '')}</div>${status(r.status)}</div>`).join('')
         : `<div class="fl-rooms">${f.rooms.map((r, i) => `<button type="button" class="tile${needs(r) ? ' needs' : ''}" data-room="${esc(r.id)}" data-status="${esc(r.status)}" style="--cap:${Number(r.capacity)};--i:${Math.min(i, 4)}">
-            <span class="tile-top"><span class="tile-n">${esc(r.id)}</span>${status(r.status)}</span>
+            <span class="tile-top"><span class="tile-n">${esc(r.name || r.displayName || r.id)}</span>${status(r.status)}</span>
             <span class="tile-t">${esc(r.title)}</span>
             <span class="meter" aria-hidden="true"><i style="width:${Math.min(100, Math.round((r.taken / r.capacity) * 100))}%"></i></span>
             <span class="tile-m">${r.taken} of ${r.capacity}</span><span class="tile-m">${access(r)}</span>${extra(r)}</button>`).join('')}</div>`;
@@ -162,11 +164,105 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
   new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; noticeChanges(); }); } })
     .observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['data-status', 'hidden'] });
 
-  // Shows an error next to a form instead of failing silently.
-  function showError(el, e) {
+  // Shows an error next to a form instead of failing silently, with a way to try again.
+  function showError(el, e, retry) {
     el.textContent = e.message || String(e);
+    if (e.status !== 400 && e.status !== 403 && e.status !== 409) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'rr-retry'; b.textContent = 'Try again';
+      b.addEventListener('click', () => (retry ? (el.hidden = true, retry()) : location.reload()));
+      el.append(' ', b);
+    }
     el.hidden = false;
   }
+  // Short confirmation after an action ("Seat claimed", "Posted").
+  function toast(message) {
+    document.querySelector('.rr-toast')?.remove();
+    const t = document.createElement('div');
+    t.className = 'rr-toast rr-toast--ok';
+    t.setAttribute('role', 'status');
+    t.innerHTML = `<p>${esc(message)}</p>`;
+    document.body.append(t);
+    setTimeout(() => t.remove(), 2600);
+  }
 
-  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion };
+  // Remembers the last room a person used, so "My seat" and staff "Door" are one tap from anywhere.
+  // shortcut: device-only memory; a per-user "my room" API would make it follow people across devices.
+  const remember = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
+  const recall = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+
+  // Line icons, one stroke weight (24px grid).
+  const ICON = {
+    bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+    now: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    map: '<path d="M4 6.5 9 4l6 2.5L20 4v13.5L15 20l-6-2.5L4 20z"/><path d="M9 4v13.5M15 6.5V20"/>',
+    seat: '<path d="M7 4v8h10V4M5 12h14l-1.5 4H6.5zM7.5 16v4M16.5 16v4"/>',
+    me: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1.2-3.6 4-5 7-5s5.8 1.4 7 5"/>',
+    door: '<path d="M6 20V4h12v16M4 20h16"/><circle cx="14.5" cy="12" r="1"/>',
+    board: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+    qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/>',
+    sim: '<path d="M8 5.5v13l10-6.5z"/>',
+    in: '<path d="M10 17l5-5-5-5M15 12H4M14 4h5v16h-5"/>',
+  };
+  const svg = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
+
+  // App shell: a top app bar (brand, where you are, user menu) on every page, plus persona tabs:
+  // a fixed bottom tab bar on phones, inline in the top bar on laptops. Pages opt out with <body class="rr-nonav">.
+  let meCache;
+  const whoami = () => (meCache ??= api('/me').catch(() => null));
+  const tabsFor = (me) => {
+    const room = recall('rr-room'), door = recall('rr-door');
+    if (!me) return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['me', 'Sign in', `/login?next=${encodeURIComponent(location.pathname)}`]];
+    if (me.role === 'organiser') return [['board', 'Board', '/staff/setup'], ['door', 'Rooms', '/staff/setup#edit'], ['bell', 'Announce', '/staff/setup#ann'], ['qr', 'QR codes', '/staff/qr']];
+    if (me.role === 'staff') return [['door', 'Door', door ? `/staff/room/${encodeURIComponent(door)}` : '/sessions?pick=door'], ['board', 'Board', '/sessions'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']];
+    return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['seat', 'My seat', room ? `/r/${encodeURIComponent(room)}` : '/sessions'], ['me', 'Me', '/me']];
+  };
+  const ROLE = { attendee: 'Attendee', guest: 'Guest', staff: 'Door staff', organiser: 'Organiser' };
+  async function nav() {
+    if (document.body.classList.contains('rr-nonav') || document.querySelector('.rr-bar')) return;
+    const me = await whoami();
+    const tabs = tabsFor(me);
+    const path = location.pathname, hash = location.hash;
+    // Exactly one current tab: an exact path+hash match wins, then the same section (any room, any door).
+    const score = (href) => { const [p, h = ''] = href.split('?')[0].split('#'); if (p === path && `#${h}` === (hash || '#')) return 3; if (p === path && !h) return 2; if (p.startsWith('/r/') && path.startsWith('/r/')) return 1; if (p.startsWith('/staff/room/') && path.startsWith('/staff/room/')) return 1; return 0; };
+    const best = Math.max(...tabs.map(([, , h]) => score(h)));
+    const link = ([ic, text, href]) => `<a href="${esc(href)}"${best && score(href) === best ? ' aria-current="page"' : ''}>${svg(ic)}<span>${esc(text)}</span></a>`;
+    const home = tabs[0][2];
+    const user = me ? `<details class="rr-user"><summary aria-label="Account: ${esc(me.handle)}"><span class="rr-avatar" aria-hidden="true">${esc(String(me.handle).slice(0, 1).toUpperCase())}</span><span class="rr-user-name">${esc(me.handle)}</span></summary>
+        <div class="rr-user-menu"><p><b>${esc(me.handle)}</b><br><span class="muted">${esc(ROLE[me.role] || me.role)}</span></p>${me.role === 'attendee' ? '<a href="/me">Profile and interests</a>' : ''}<button type="button" id="rr-signout">Sign out</button></div></details>`
+      : `<a class="rr-signin" href="/login?next=${encodeURIComponent(location.pathname)}">Sign in</a>`;
+    const bar = document.createElement('header');
+    bar.className = 'rr-bar';
+    bar.innerHTML = `<a class="rr-nav-brand" href="${esc(home)}"><i aria-hidden="true"></i>RightRoom</a><nav class="rr-nav rr-nav--top" aria-label="Main">${tabs.map(link).join('')}</nav><span class="rr-here" id="rr-here"></span>${user}`;
+    const tabbar = document.createElement('nav');
+    tabbar.className = 'rr-nav rr-nav--tabs';
+    tabbar.setAttribute('aria-label', 'Main');
+    tabbar.innerHTML = tabs.map(link).join('');
+    document.body.prepend(bar);
+    document.body.append(tabbar);
+    document.getElementById('rr-signout')?.addEventListener('click', async () => {
+      await api('/logout', { method: 'POST' }).catch(() => {});
+      location.href = '/login';
+    });
+    addEventListener('hashchange', () => { bar.remove(); tabbar.remove(); nav(); });
+  }
+  // Laptop top bar shows where you are ("Room 204 · Floor 2"); phones show it in the page header.
+  const here = (text) => { const el = document.getElementById('rr-here'); if (el) el.textContent = text ? `You're at ${text}` : ''; };
+
+  // Undo instead of a confirm dialog: the action runs after `ms` unless Undo is pressed.
+  function undo(message, run, ms = 5000) {
+    document.querySelector('.rr-toast')?.remove();
+    const t = document.createElement('div');
+    t.className = 'rr-toast';
+    t.setAttribute('role', 'status');
+    t.innerHTML = `<p>${esc(message)}</p><button type="button">Undo</button>`;
+    document.body.append(t);
+    const timer = setTimeout(() => { t.remove(); run(); }, ms);
+    t.querySelector('button').addEventListener('click', () => { clearTimeout(timer); t.remove(); });
+    t.querySelector('button').focus({ preventScroll: true });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', nav); else nav();
+
+  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, roomName, toast };
 })();

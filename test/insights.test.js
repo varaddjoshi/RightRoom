@@ -89,10 +89,13 @@ test('router serves labelled reads over an injected db', async () => {
     for (const p of ['/forecast', '/forecast/backtest', '/wifi', '/sessions/204/topics', '/insights/interests', '/metrics', '/tables', '/alerts', '/team-finder']) {
       const res = await fetch(base + p);
       assert.strictEqual(res.status, 200, p);
-      assert.strictEqual((await res.json()).source, 'stand-in', p);
+      const body = await res.json();
+      // /wifi: source is the backend, label says what the numbers are made of
+      if (p === '/wifi') assert.deepStrictEqual([body.source, body.label], ['memory', 'stand_in'], p);
+      else assert.strictEqual(body.source, 'stand-in', p);
     }
     db.wifi.push({ space: '204', zone: 'back-left', mbps: 9, ms: 40, at: Date.now() }); // a live reading from Phase 1's POST
-    assert.strictEqual((await (await fetch(base + '/wifi')).json()).source, 'mixed');
+    assert.strictEqual((await (await fetch(base + '/wifi')).json()).label, 'mixed');
     assert.strictEqual((await fetch(base + '/wifi', { method: 'POST' })).status, 404, 'writes belong to Phase 1');
   } finally {
     server.close();

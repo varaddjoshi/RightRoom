@@ -5,33 +5,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>RightRoom Wayfinding</title>
   <link rel="stylesheet" href="rr.css">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
   <style>
     .ds-grid { display: grid; gap: var(--rr-s6); max-width: 1040px; margin: 0 auto; padding-block: var(--rr-s6);
       padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
     .ds-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--rr-s5); align-items: start; }
-    .ds-h { margin: 0; font: 700 var(--rr-t-lg)/1.2 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.08em; color: var(--rr-muted); border-bottom: 1px solid var(--rr-line); padding-bottom: var(--rr-s2); }
+    .ds-h { margin: 0; font: 800 var(--rr-t-lg)/1.2 var(--rr-font-sign); color: var(--rr-ink); border-bottom: 1px solid var(--rr-hair); padding-bottom: var(--rr-s2); }
     .ds-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--rr-s3); }
     .ds-sw { border-radius: var(--rr-r1); overflow: hidden; background: var(--rr-panel); font-size: var(--rr-t-xs); }
     .ds-sw div { height: 56px; }
     .ds-sw p { margin: 0; padding: var(--rr-s2); font-family: var(--rr-font-code); color: var(--rr-muted); }
-    .ds-phone { border: 2px solid var(--rr-line); border-radius: 24px; overflow: hidden; }
+    .ds-phone { border: 1px solid var(--rr-hair); border-radius: 24px; overflow: hidden; padding: var(--rr-s3); background: var(--rr-bg); }
     .ds-phone .rr-screen { padding-block: var(--rr-s4); }
   </style>
 </head>
 <body>
 <main class="ds-grid">
   <header class="rr-sign">
-    <span class="rr-eyebrow">Design system · v1 · wayfinding signs</span>
-    <h1>RightRoom Wayfinding</h1>
-    <p style="margin:0;color:var(--rr-muted)">Dark sign panels, signal-yellow actions, and every status written in words with a shape. Built for phones at a door and the big screen across a room.</p>
+    <h1>RightRoom design system</h1>
+    <span class="rr-eyebrow">v2 · daylight wayfinding</span>
+    <p style="margin:0;color:var(--rr-muted)">White cards on a cool grey ground, one highly legible type family, ink-navy actions, and every status written as a word with a drawn shape. Yellow marks where you are and urgent notices. The big screen keeps a dark signage theme.</p>
   </header>
 
   <section class="rr-panel" aria-labelledby="h-color">
     <h2 class="ds-h" id="h-color">Colour</h2>
     <div class="ds-swatches">
-      <div class="ds-sw"><div style="background:var(--rr-bg);border-bottom:1px solid var(--rr-line)"></div><p>--rr-bg</p></div>
+      <div class="ds-sw"><div style="background:var(--rr-bg);border-bottom:1px solid var(--rr-hair)"></div><p>--rr-bg</p></div>
       <div class="ds-sw"><div style="background:var(--rr-panel-2)"></div><p>--rr-panel-2</p></div>
       <div class="ds-sw"><div style="background:var(--rr-ink)"></div><p>--rr-ink</p></div>
+      <div class="ds-sw"><div style="background:var(--rr-action)"></div><p>--rr-action</p></div>
       <div class="ds-sw"><div style="background:var(--rr-signal)"></div><p>--rr-signal</p></div>
       <div class="ds-sw"><div style="background:var(--rr-free)"></div><p>--rr-free</p></div>
       <div class="ds-sw"><div style="background:var(--rr-filling)"></div><p>--rr-filling</p></div>
@@ -60,9 +62,9 @@
       </div>
       <div class="rr-count" aria-label="47 of 50 seats taken">47<small>/ 50</small></div>
       <div style="display:flex;gap:var(--rr-s2);flex-wrap:wrap">
-        <span class="rr-label" data-kind="live">LIVE</span>
-        <span class="rr-label">REAL</span>
-        <span class="rr-label">STAND-IN</span>
+        <span class="rr-label" data-kind="live">Live</span>
+        <span class="rr-label">Real</span>
+        <span class="rr-label">Stand-in</span>
       </div>
       <div class="rr-position">
         <span class="rr-eyebrow">Your place</span>
@@ -80,11 +82,11 @@
           <h1 id="h-door">eBPF deep dive</h1>
           <div style="display:flex;align-items:center;gap:var(--rr-s3)">
             <span class="rr-status" data-status="full">Full</span>
-            <span style="font-variant-numeric:tabular-nums">50 of 50 · <span class="rr-label" data-kind="live">LIVE</span></span>
+            <span style="font-variant-numeric:tabular-nums">50 of 50 · <span class="rr-label" data-kind="live">Live</span></span>
           </div>
         </div>
         <div class="rr-route">
-          <span class="rr-route__arrow" aria-hidden="true">&#9654;</span>
+          <span class="rr-route__arrow" aria-hidden="true"></span>
           <div>
             <div class="rr-route__to">Room 210</div>
             <div class="rr-route__meta">Observability at scale · 9 seats free</div>

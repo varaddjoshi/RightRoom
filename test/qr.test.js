@@ -16,16 +16,17 @@ async function login(handle) {
 }
 const get = (p, cookie) => fetch(base + p, { headers: cookie ? { cookie } : {} });
 // The route encodes the URL with the same library and options, so equal SVGs mean the code holds that URL.
+const { roomKey } = require('../src/presence');
 const svgFor = (url) => QRCode.toString(url, { type: 'svg', margin: 2, errorCorrectionLevel: 'M' });
 
 test('door and in-room codes are public SVGs that point at PUBLIC_URL', async () => {
-  for (const [q, path] of [['', '/r/204'], ['?kind=door', '/r/204'], ['?kind=in', '/r/204/in']]) {
+  for (const [q, path] of [['', '/r/204'], ['?kind=door', '/r/204'], [`?kind=in`, `/r/204/in?k=${roomKey('204')}`]]) {
     const r = await get(`/qr/204.svg${q}`);
     assert.equal(r.status, 200);
     assert.match(r.headers.get('content-type'), /image\/svg\+xml/);
     assert.equal(await r.text(), await svgFor(`https://pantheon.example${path}`));
   }
-  assert.equal(await (await get('/qr/venue.svg')).text(), await svgFor('https://pantheon.example/r/venue'));
+  assert.equal(await (await get('/qr/venue.svg')).text(), await svgFor(`https://pantheon.example/r/venue?k=${roomKey('venue')}`));
 });
 
 test('staff codes need a staff login', async () => {

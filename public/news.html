@@ -5,20 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Announcements · RightRoom</title>
 <link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RightRoom">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>
-  .nav { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
-  .nav a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--rr-s3); color: var(--rr-ink); text-decoration: none; border: 2px solid var(--rr-line); border-radius: var(--rr-r1); font: 700 var(--rr-t-sm)/1 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.06em; }
-  .nav a[aria-current] { border-color: var(--rr-signal); color: var(--rr-signal); }
   @media (min-width: 960px) { #list { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
 </style>
 </head>
 <body>
 <main class="rr-screen rr-screen--wide" id="main">
-  <nav class="nav" aria-label="Pages"><a href="/event">Event</a><a href="/sessions">Schedule</a><a href="/me">Me</a></nav>
   <div class="rr-sign"><span class="rr-eyebrow">Text first, newest on top</span><h1>All announcements</h1></div>
   <div class="chips" role="group" aria-label="Floor" id="floors"></div>
   <div class="chips" role="group" aria-label="Urgency"><button type="button" data-urgent aria-pressed="false">Urgent only</button></div>
-  <section id="list" class="rr-btn-stack rr-span" aria-live="polite"></section>
+  <section id="list" class="rr-btn-stack rr-span" aria-live="polite"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></section>
   <p class="rr-panel rr-span m0" id="err" role="alert" hidden></p>
 </main>
 <script src="/app.js"></script>
