@@ -22,6 +22,10 @@ npm start
 
 Fill in `.env` with your real Elasticsearch and Dash0 values. Never commit `.env`.
 
+`npm start` preloads `src/telemetry-env.js`, which loads `.env` and maps `DASH0_OTLP_ENDPOINT` / `DASH0_TOKEN` to the
+`OTEL_EXPORTER_OTLP_*` variables the OpenTelemetry auto-instrumentation reads. Without them, traces are switched off
+instead of failing. Real environment variables (for example on the host) override `.env`.
+
 ## Notes
 
 - Scope for the hackathon demo: one event day, about 20 sessions, 6 rooms.
