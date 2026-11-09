@@ -21,7 +21,8 @@ Wrap the page content in `<main class="rr-screen">`. Use the classes below and t
 - Positions say why: `.rr-position` holds the number and the published rule in plain words.
 - Access needs use `--rr-access` and the `.rr-access` tag ("♿ Step-free via east lift"). Write them as preferences, never a diagnosis.
 - "Why this?" is a native `<details class="rr-why">`, so it works with a keyboard and screen reader without script. Rejected options get `.rr-rejected` and still say why.
-- Seat offers use `.rr-offer` with `role="alert"` so screen readers announce them, and an `aria-live="polite"` countdown. Set the bar with the `--rr-left` custom property (`100%` to `0%`).
+- Seat offers use `.rr-offer`. Put `role="alert"` on the short static line ("Seat offer · Room 204") so it is announced once. Keep the ticking seconds out of any live region; announce only 30 seconds, 10 seconds and expiry through a separate `.rr-sr` element with `aria-live="polite"`. Set the bar with the `--rr-left` custom property (`100%` to `0%`).
+- The arrow on `.rr-btn` is decorative and left out of the spoken button name.
 - The zone grid is nine real buttons with text labels ("Front left"), using `aria-pressed` for the selected zone; `data-access` marks zones with accessible seats.
 - Urgent announcements are `.rr-announce[data-urgency="urgent"]` (yellow). Others stay on the panel colour.
 - Focus is a 3px yellow ring on every focusable element. Don't remove it.

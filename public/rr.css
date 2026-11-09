@@ -112,7 +112,7 @@ body {
   color: var(--rr-on-signal);
   transition: transform 80ms ease-out, filter 120ms;
 }
-.rr-btn::after { content: "\2192"; font-size: 1.2em; }
+.rr-btn::after { content: "\2192"; content: "\2192" / ""; font-size: 1.2em; } /* "/ ''" keeps the arrow out of the button's spoken name */
 .rr-btn:hover { filter: brightness(1.06); }
 .rr-btn:active { transform: translateY(2px); }
 .rr-btn[disabled], .rr-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; transform: none; }
@@ -268,7 +268,7 @@ body {
 /* Staff counter: huge +/- around the true total */
 .rr-counter {
   display: grid;
-  grid-template-columns: var(--rr-tap-xl) 1fr var(--rr-tap-xl);
+  grid-template-columns: minmax(64px, var(--rr-tap-xl)) minmax(0, 1fr) minmax(64px, var(--rr-tap-xl));
   align-items: center;
   gap: var(--rr-s3);
   text-align: center;
@@ -282,6 +282,7 @@ body {
   background: var(--rr-panel-2);
   color: var(--rr-ink);
 }
+.rr-counter .rr-count { font-size: clamp(var(--rr-t-2xl), 14vw, var(--rr-t-3xl)); }
 .rr-counter button:last-child { background: var(--rr-signal); color: var(--rr-on-signal); }
 
 /* Announcement strip */

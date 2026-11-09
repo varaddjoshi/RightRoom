@@ -112,11 +112,12 @@
 
     <section class="ds-phone" aria-labelledby="h-offer">
       <div class="rr-screen">
-        <div class="rr-offer" role="alert">
-          <span class="rr-eyebrow">Seat offer · Room 204</span>
+        <div class="rr-offer">
+          <span class="rr-eyebrow" role="alert">Seat offer · Room 204</span>
           <h2 class="rr-title" id="h-offer">Front, Left <span class="rr-access">&#9855; Accessible seat</span></h2>
           <div class="rr-offer__timer" aria-hidden="true"><span id="bar"></span></div>
-          <p style="margin:0" aria-live="polite"><strong id="secs">60</strong> seconds to claim. If you don't, it goes to the next person.</p>
+          <p style="margin:0"><strong id="secs">60</strong> seconds to claim. If you don't, it goes to the next person.</p>
+          <p class="rr-sr" aria-live="polite" id="sr-time"></p>
           <button class="rr-btn" type="button" id="claim">Claim my seat</button>
         </div>
         <div class="rr-panel" id="claimed" hidden>
@@ -172,12 +173,13 @@
 <script>
   // Preview only: wire the sample offer, zone grid and counter.
   let left = 60;
-  const bar = document.getElementById('bar'), secs = document.getElementById('secs');
+  const bar = document.getElementById('bar'), secs = document.getElementById('secs'), srTime = document.getElementById('sr-time');
   const tick = setInterval(() => {
     left = Math.max(0, left - 1);
     secs.textContent = left;
     bar.style.setProperty('--rr-left', (left / 60 * 100) + '%');
-    if (!left) clearInterval(tick);
+    if ([30, 10].includes(left)) srTime.textContent = left + ' seconds left to claim your seat.';
+    if (!left) { srTime.textContent = 'Offer expired. It has gone to the next person.'; clearInterval(tick); }
   }, 1000);
   document.getElementById('claim').addEventListener('click', () => {
     clearInterval(tick);
