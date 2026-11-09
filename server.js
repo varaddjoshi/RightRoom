@@ -22,6 +22,7 @@ app.get('/health', (req, res) => {
 app.use(require('./src/rum').router()); // browser monitoring settings and SDK file; off without DASH0_BROWSER_TOKEN
 app.use('/api', api({ store, engine }));
 app.use('/api', require('./src/routes/insights').makeRouter({ requireRole: auth.requireRole, db: () => store.db }));
+app.use('/api', require('./src/routes/search').searchRouter({ engine }));
 app.use(require('./src/routes/qr').qrRouter({ store, requireRole: auth.requireRole }));
 
 // Screen URLs from docs/journey-map.md, each served by one page in public/.
