@@ -19,6 +19,7 @@ app.get('/health', (req, res) => {
   // version is the image's commit (set by the build), so a deploy can be checked from outside.
   res.json({ status: 'ok', service: 'rightroom', version: process.env.APP_VERSION || 'dev', store: store.mode });
 });
+app.use(require('./src/rum').router()); // browser monitoring settings and SDK file; off without DASH0_BROWSER_TOKEN
 app.use('/api', api({ store, engine }));
 app.use('/api', require('./src/routes/insights').makeRouter({ requireRole: auth.requireRole, db: () => store.db }));
 app.use(require('./src/routes/qr').qrRouter({ store, requireRole: auth.requireRole }));

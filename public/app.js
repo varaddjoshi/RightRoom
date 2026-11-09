@@ -1,4 +1,6 @@
 // Shared client helpers for every RightRoom screen. Plain script: exposes window.RR.
+// Browser monitoring: /rum.js starts Dash0 website monitoring when the server has a token (P4 owns rum.js).
+if (typeof document !== 'undefined') document.head.appendChild(Object.assign(document.createElement('script'), { src: '/rum.js', defer: true }));
 (() => {
   const WORD = { free: 'Seats free', filling: 'Filling', full: 'Full' };
 
