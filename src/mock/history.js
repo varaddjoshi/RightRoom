@@ -14,7 +14,7 @@ const TOPICS = [
   { name: 'eBPF', tags: ['ebpf', 'observability'], pull: 1.16 },
   { name: 'Tracing', tags: ['observability', 'kubernetes'], pull: 1.06 },
   { name: 'Kubernetes operators', tags: ['kubernetes', 'platform'], pull: 0.92 },
-  { name: 'Supply chain', tags: ['security', 'kubernetes'], pull: 1.1 },
+  { name: 'Supply chain', tags: ['security', 'kubernetes'], pull: 1.3 },
   { name: 'Rust', tags: ['rust', 'ebpf'], pull: 0.86 },
   { name: 'Helm', tags: ['helm', 'kubernetes'], pull: 0.7 },
   { name: 'Platform teams', tags: ['platform'], pull: 0.78 },
