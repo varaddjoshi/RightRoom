@@ -120,7 +120,8 @@ Freeze this first so P2 and P3 can build in parallel. P3 can mock any endpoint b
 | `POST /api/spaces/:id/queue` | Attendee or guest | A5 | My position and reason |
 | `GET /api/spaces/:id/redirect` | Attendee or guest | A5 | Suggestion, reasons, rejected options with reasons, something different, overflow |
 | `POST /api/offers/:id/claim` | The offered handle | A5 | Claimed with zone and code, or why not |
-| `POST /api/spaces/:id/checkin` | Attendee or guest | A6 | Checked in, zone |
+| `POST /api/spaces/:id/checkin` | Attendee or guest | A6 | Checked in, zone. Needs `k`, the room's key from its "I'm in the room" QR (`src/presence.js`, signed per room per day; today's and yesterday's accepted), else 403 `{ error, needScan: true }` |
+| `GET /api/staff/spaces/:id/presence-key` | Staff | Scripts | `{ space, k }`: the key the room's in-room code carries |
 | `POST /api/spaces/:id/leave` | Attendee or guest | A6 | "I'm leaving": checked out, seat offered to the queue |
 | `DELETE /api/spaces/:id/queue` | Attendee or guest | A5 | Left the queue |
 | `POST /api/spaces/:id/wifi`, `GET`/`POST /api/spaces/:id/comments` | Signed in | A6 (Extras) | Wi-Fi reading and room median; comment topics |
