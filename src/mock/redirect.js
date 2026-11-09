@@ -9,7 +9,7 @@ function redirect({ db, engine, from, user, now }) {
   const options = [];
   const rejected = [];
   for (const sp of db.spaces.values()) {
-    if (sp.type !== 'room' || sp.id === from.id) continue;
+    if (sp.type !== 'room' || sp.id === from.id || sp.test) continue; // never send people to a load test room
     sp.redirectHolds = sp.redirectHolds.filter((h) => h.until > now && h.handle !== user.handle);
     // Rule 3: never send more people than there are free seats.
     const free = sp.capacity - engine.taken(sp) - sp.redirectHolds.length;
