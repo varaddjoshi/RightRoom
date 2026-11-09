@@ -1,6 +1,6 @@
 # RightRoom user journey map
 
-Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, registration, interests, crowd-sourced Wi-Fi, comment topics, staff-confirmed room status, zone map, door staff instead of room hosts). Decisions Q1 to Q28 were agreed in SwarmChat #general. Q29 to Q33 (door staff) and gaps G1 to G8 are drafts with the recommended answers, awaiting Hitesh.
+Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, registration, interests, crowd-sourced Wi-Fi, comment topics, automatic room count from check-ins, zone map, door staff instead of room hosts). Decisions Q1 to Q28 were agreed in SwarmChat #general. Q29 to Q33 (door staff) and gaps G1 to G8 are drafts with the recommended answers, awaiting Hitesh.
 
 ## Decisions this map rests on
 
@@ -16,16 +16,16 @@ Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, regi
 10. Organisers see interest counts for planning the next event. Groups under 5 are hidden and nobody's interests are shown per person.
 11. Organisers and door staff come from allowlists in `.env`. Nobody is assigned to a room. (Q29, draft)
 12. Check-ins are deleted after each session. Comments and Wi-Fi readings are kept without the handle. Accounts and interests stay until the user deletes them from their profile.
-13. Musts: everything in project.md plus sign-in, registration, interests and the "I'm leaving" button (open decision D6 would move the button to Extras). The zone map and Wi-Fi are the first Extras, built together; comments and topics come next.
-14. The count is automatic. Every "I'm in the room" scan adds one person; they drop out when they check in somewhere else, tap "I'm leaving", or the session ends. Nobody has to stand at the door counting. Room status follows from that count (see "Room status rule") and is pushed straight away, including Full. (revised: automatic count)
-15. If a staff member has that room's console open when it reaches capacity, they get "Room looks full, confirm?" and can answer "Not yet, N free" within 30 seconds; with nobody on the console, Full goes out straight away. (revised: automatic count)
+13. Musts: everything in project.md plus sign-in, registration, interests and the "I'm leaving" button (a pending choice in SwarmChat #general, D6: make it an Extra). The zone map and Wi-Fi are the first Extras, built together; comments and topics come next.
+14. The count is automatic. Every "I'm in the room" scan adds one person; they drop out when they check in somewhere else, tap "I'm leaving", or the session ends. Nobody has to stand at the door counting. Room status follows from that count (see "Room status rule") and is pushed straight away, including Full. (Q30, revised: automatic count)
+15. If a staff member has that room's console open when it reaches capacity, they get "Room looks full, confirm?" and can answer "Not yet, N free" within 30 seconds; with nobody on the console, Full goes out straight away. (Q31, revised: automatic count)
 16. Every confirm, "not yet" and auto-confirm is traced to Dash0, giving a third proof number: how often staff overrode the app.
 17. Staff can reopen a Full room: they correct the count for people who left without tapping "I'm leaving", then release those seats. Released seats go to the queue as 60-second offers before the room shows "Seats free" to anyone.
 18. A release is capped at capacity minus seats taken, so seats already held as offers can't be offered again. Only organisers change capacity.
 19. If an offer expires and the queue is empty, the seat returns to "Seats free" for walk-ups.
 20. Any staff member opens a room's console by scanning the staff QR at that door. Staff are optional: they run the queue, check claim codes and correct the count, but the count works without them. A Full stays Full until the session ends or a seat is freed by "I'm leaving" or a release. (Q29, revised: automatic count)
 21. Attendees get an "I'm leaving" button on A6. It checks them out (the count drops by one) and sends their seat to the queue as an offer straight away, so the seat is never counted twice. (Q32, draft)
-22. The +/− counter is an optional correction, not the count: + for people who walked in without scanning, − for people who left without tapping "I'm leaving". Signs at every door say "Scan to count yourself in", and a claimed seat needs the scan within 10 minutes, so most people scan. (revised: automatic count)
+22. The +/− counter is an optional correction, not the count: + for people who walked in without scanning, − for people who left without tapping "I'm leaving". Signs at every door say "Scan to count yourself in", and a claimed seat needs the scan within 10 minutes, so most people scan. (Q33, revised: automatic count)
 23. Updates reach phones through the open page (live updates over server-sent events) plus a browser notification where the person allows it. No SMS, since we store no phone number or email. iPhones only show web notifications from an app added to the home screen, so the open page is the main path. (G1, draft)
 24. A venue admission expires 30 minutes after doors open, or 30 minutes after the person is admitted if that is later, unless they scan "I'm at the door" at the venue entrance. The place then goes to the next person on the waitlist, who gets their own 30 minutes. Each `queue` entry stores its own expiry. (G2, draft)
 25. Organisers import the schedule on S1 as a CSV or JSON file; session embeddings are built on import. (G3, draft)
@@ -87,7 +87,6 @@ Seats taken = check-ins, plus any staff correction, plus seat offers currently h
 |---|---|---|
 | Seats free | Seats taken is under 80% of capacity | Straight away |
 | Filling | 80% or more | Straight away |
-
 | Full | Seats taken reaches capacity, or staff set it | Straight away; if staff have the console open, after they confirm or 30 seconds of silence |
 
 Check-ins can only undercount (one handle counts once), so a room that reads Full from check-ins really is full. People who walk in without scanning are the gap: door signs ask everyone to scan, claimed seats need the scan, and staff can add walk-ins with +. Redirects on A5 start only once Full is pushed. "I'm leaving" and staff seat releases both send seats to the queue first, and both lower the count before the offer is added, so a freed seat is never counted twice.
@@ -99,7 +98,7 @@ Check-ins can only undercount (one handle counts once), so a room that reads Ful
 | Before arriving | A1, A2, A3 | Sign in, pick handle and interests, star talks, press Register | "Will I get in, or am I travelling for nothing?" | Unsure | Waitlisted at the door with no reason | Shows position and the rule straight away; updates the open page, with a browser notification where allowed, when admitted or when remote is the only option, before they travel |
 | Venue door | A5, A3, A7 | Scan "I'm at the door" at the entrance to keep the admission; read announcements | "Am I in? Did I miss something?" | Anxious, then relieved | Announcements missed or heard late | Live capacity and position; places of no-shows go to the waitlist after 30 minutes; floor-tagged announcements in text |
 | Planning the day | A4 | Browse the schedule, see which rooms are filling | "Where is there space right now?" | Curious | No way to see space without walking round | Room status in words on every talk, plus Wi-Fi and topics from people already inside |
-| Room door | A5 | Scan "I'm at the door"; join the queue, or take a redirect | "It says full. Is it actually full?" | Frustrated, then reassured | Turned away with nowhere to go | Full is confirmed by staff at the door; redirect to a similar talk with free seats, reasons shown, never more people sent than seats |
+| Room door | A5 | Scan "I'm at the door"; join the queue, or take a redirect | "It says full. Is it actually full?" | Frustrated, then reassured | Turned away with nowhere to go | Full comes from the automatic count (check-ins only undercount), with staff able to say "not yet"; redirect to a similar talk with free seats, reasons shown, never more people sent than seats |
 | Getting a seat | A5 | Phone buzzes with an offer naming the zone; claim within 60 seconds | "Is this seat really mine, and where is it?" | Hopeful, then pleased | Empty seats while people wait outside | Seats freed by staff or by someone leaving go to the queue in order; a missed offer passes on; never double-booked |
 | In the room | A6, D1 | Scan "I'm in the room"; tap their zone; agree to the Wi-Fi test; comment | "Is the Wi-Fi this bad for everyone?" | Settled | Nobody knows the room's real count | Anonymous check-in updates the big screen; Wi-Fi reading added to the zone and room median |
 | Leaving | A6, A4 | Tap "I'm leaving", or get checked out on the next check-in or at session end; leave a comment within 24h | "Was that worth it? Can someone have my seat?" | Reflective | Seats sit empty after people leave; feedback goes nowhere | Their seat goes to the next person in the queue; comments become topics; starred interests feed the next event |
@@ -148,7 +147,7 @@ The night before, at 8:10 pm, Sam opens the event link and signs in with GitHub 
 
 At 9:20 Sam scans the QR at the venue entrance, which keeps their admission. An urgent Floor 2 announcement on A7 says the west lift is out of service, so they use the east lift.
 
-At 10:55 the schedule (A4) shows "eBPF deep dive · Room 204 · Filling (88%) · Wi-Fi weak at back left · topics: verifier, tracing".
+At 10:55 the schedule (A4) shows "eBPF deep dive · Room 204 · Filling (96%) · Wi-Fi weak at back left · topics: verifier, tracing".
 
 At 11:05 Sam scans "I'm at the door" at Room 204 (A5). Staff have confirmed the room is Full, so Sam gets a suggestion: "Observability at scale, Room 210, 2 minutes, step-free via the east lift, 9 seats free". "Why this?" says it matches Observability, the route is step-free and seats are free. Room 305 was rejected because it is stairs only, and Room 118 because it is 6 minutes away with a less similar topic. The page also offers a Rust panel as something different, and a stream of Room 204. Sam stays in the 204 queue at #3.
 
@@ -209,4 +208,4 @@ project.md is out of date with these decisions. Update it to match:
 | Sessions data owned by P1 with no import path | Organisers import the schedule on S1 | 25 |
 | "Never double-booked" | Also: one queue place per user or device, and a claim code shown at the door | 27, 28 |
 
-Q29 to Q33 and G1 to G8 are drafts. If Hitesh changes an answer, update decisions 11, 15 and 20 to 30 and the rows that cite them.
+Q29 to Q33 and G1 to G8 are drafts. If Hitesh changes an answer, update decisions 11, 14, 15 and 20 to 30 and the rows that cite them.
