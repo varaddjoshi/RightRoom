@@ -157,8 +157,8 @@
   RR.api('/forecast/backtest').then((b) => { $('bt').textContent = `Checked against ${b.talks} past talks: right ${pct(b.accuracy)} of the time, fill off by ${pct(b.meanAbsError)} on average.`; }).catch(() => {});
   soft('/forecast', $('fc'), (f) => {
     $('fc').innerHTML = f.sessions.map((s) => `<details class="fc"><summary><span>Room ${RR.esc(s.room)} · ${RR.esc(s.title)}</span><span class="risk" data-r="${RR.esc(s.risk)}">${RR.esc(s.risk)} risk</span></summary>
-      <p class="m0 small">Expected ${pct(s.expectedFill)} full · ${pct(s.probabilityFull)} chance it fills${s.likelyFullMinute != null ? ` · likely full ${Number(s.likelyFullMinute)} min in` : ''}</p>
-      <ul>${s.because.map((b) => `<li>${RR.esc(b.title)}: ${b.attendance} of ${b.capacity}${b.fullMinute != null ? `, full at ${b.fullMinute} min` : ', never full'}</li>`).join('')}</ul></details>`).join('');
+      <p class="m0 small">Expected ${pct(s.expectedFill)} full · ${pct(s.probabilityFull)} chance it fills${s.likelyFullMinute != null ? ` · likely full ${Math.round(s.likelyFullMinute)} min in` : ''}</p>
+      <ul>${s.because.map((b) => `<li>${RR.esc(b.title)}: ${b.attendance} of ${b.capacity}${b.fullMinute != null ? `, full at ${Math.round(b.fullMinute)} min` : ', never full'}</li>`).join('')}</ul></details>`).join('');
   });
   soft('/metrics', $('met'), (m) => {
     $('met').innerHTML = `<div class="q"><span>People who went where we sent them</span><span>${m.followed} of ${m.redirects} · ${pct(m.redirectSuccessRate)}</span></div>

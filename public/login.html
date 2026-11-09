@@ -24,7 +24,12 @@
 <script>
   const q = new URLSearchParams(location.search);
   // Only same-site paths, so a crafted link can't send people elsewhere after sign-in.
-  const next = /^\/(?!\/)/.test(q.get('next') || '') ? q.get('next') : '/event';
+  const next = (() => {
+    try {
+      const u = new URL(q.get('next') || '/event', location.origin);
+      return u.origin === location.origin ? u.pathname + u.search + u.hash : '/event';
+    } catch { return '/event'; }
+  })();
   const err = document.getElementById('err');
   if (q.get('role')) document.getElementById('why').hidden = false;
   if (q.get('from') === 'qr') document.getElementById('guest').hidden = false;
