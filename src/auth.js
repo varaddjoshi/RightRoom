@@ -73,6 +73,18 @@ function login(db, handle, password) {
   return u;
 }
 
+// Anyone with a password can change it, given the current one (guests have none). The new hash is saved with the rest
+// of the state, so it survives restarts; ensureDemoUsers never overwrites an existing account.
+function changePassword(db, handle, current, next) {
+  const u = db.users.get(String(handle || '').toLowerCase());
+  if (!u?.hash) throw bad('This account has no password to change.', 400);
+  try { login(db, handle, current); } catch { throw bad('Your current password is wrong.', 403); }
+  const pw = String(next || '');
+  if (pw.length < 8 || pw.length > 200) throw bad('Use a new password of 8 to 200 characters.');
+  Object.assign(u, hash(pw));
+  return u;
+}
+
 function guest(db) {
   const handle = `guest-${crypto.randomBytes(3).toString('hex')}`;
   db.users.set(handle, { handle, role: 'guest', interests: [], needs: [], starred: [] });
@@ -130,4 +142,4 @@ function publicUser(u) { return u && { handle: u.handle, role: u.role, interests
 
 function bad(message, status = 400) { return Object.assign(new Error(message), { status }); }
 
-module.exports = { signup, login, guest, setSession, clearSession, middleware, requireRole, publicUser, ensureDemoUsers, NEEDS, SEAT_NEEDS, deleteUser, RESERVED: [...ORGANISERS, ...STAFF, ...DEMO], verify, sign, setSecret, hmac };
+module.exports = { signup, login, changePassword, guest, setSession, clearSession, middleware, requireRole, publicUser, ensureDemoUsers, NEEDS, SEAT_NEEDS, deleteUser, RESERVED: [...ORGANISERS, ...STAFF, ...DEMO], verify, sign, setSecret, hmac };
