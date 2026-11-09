@@ -27,7 +27,8 @@ const localUser = () => { try { return os.userInfo().username; } catch { return 
 const INDEX = (process.env.STATE_INDEX || `${PREFIX}engine_state_local_${localUser()}`).toLowerCase().replace(/[^a-z0-9_.-]/g, '_');
 
 // store.db holds Maps (spaces, offers, users, check-ins per room), which JSON can't carry on its own.
-const toJSON = (db) => JSON.stringify(db, (k, v) => (v instanceof Map ? { $map: [...v] } : v));
+// The talks (db.sessions) are left out: they live in P1's rr_sessions and are loaded from there at start.
+const toJSON = (db) => JSON.stringify(db, (k, v) => (k === 'sessions' && v instanceof Map ? undefined : v instanceof Map ? { $map: [...v] } : v));
 const fromJSON = (s) => JSON.parse(s, (k, v) => (v && typeof v === 'object' && Array.isArray(v.$map) ? new Map(v.$map) : v));
 
 store.mode = 'memory';

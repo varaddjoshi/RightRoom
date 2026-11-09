@@ -10,6 +10,16 @@ const { api } = require('./src/routes/api');
 const PORT = process.env.PORT || 3000;
 const engine = createEngine({ store, redirect, publish: stream.publish });
 auth.ensureDemoUsers(store.db);
+const catalog = require('./src/catalog'); // venue, rooms and talks; organisers and hosts edit them
+catalog.ensureSessions(store.db);
+// "Reset demo" re-seeds the live state; the venue and talks come back from Elasticsearch when it's on.
+const seedReset = store.reset;
+store.reset = (now) => {
+  const db = seedReset(now);
+  if (catalog.esOn()) catalog.loadFromES(db).catch((e) => console.error(`[catalog] Reload after reset failed: ${e.message}`));
+  else catalog.ensureSessions(db);
+  return db;
+};
 
 const app = express();
 app.use(express.json({ limit: '20kb' }));
@@ -24,6 +34,7 @@ app.use('/api', api({ store, engine }));
 app.use('/api', require('./src/routes/insights').makeRouter({ requireRole: auth.requireRole, db: () => store.db }));
 app.use('/api', require('./src/routes/search').searchRouter({ engine }));
 app.use(require('./src/routes/qr').qrRouter({ store, requireRole: auth.requireRole }));
+app.use('/api', require('./src/routes/venue').venueRouter({ store, engine }));
 
 // Screen URLs from docs/journey-map.md, each served by one page in public/.
 const PAGES = {
@@ -42,6 +53,12 @@ async function main() {
   await store.restore();
   auth.setSecret(store.sessionSecret);
   auth.ensureDemoUsers(store.db);
+  // The real venue and talks (P1's rr_spaces / rr_sessions) replace the stand-in rooms when Elasticsearch is on.
+  if (store.mode === 'elasticsearch') {
+    try { await catalog.loadFromES(store.db); } catch (e) { console.error(`[catalog] Could not load the venue from Elasticsearch (${e.message}); keeping the rooms from the saved state.`); }
+  }
+  catalog.ensureSessions(store.db);
+  setInterval(() => catalog.refreshTitles(store.db), 30_000).unref(); // room titles follow the talk on now
   store.startAutosave();
   // The sweeper (rule 2): expires offers and passes them on, times out confirms and venue admissions.
   setInterval(() => engine.sweep(), 2000).unref();

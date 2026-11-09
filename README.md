@@ -109,6 +109,22 @@ curl -b jar -X POST localhost:3000/api/offers/<offer id>/claim  # claim it withi
 curl -N -b jar 'localhost:3000/api/stream?space=310'            # live events: status, position, offer, offer_passed
 ```
 
+### Organisers and hosts
+
+With Elasticsearch on, the venue and its talks are the real KubeCon ones from P1's `rr_spaces` and `rr_sessions`, loaded at start. In memory only, they're the 7 stand-in rooms with one talk each. Organisers edit the venue, and every change is written back to Elasticsearch, so search and redirects see it too. Hosts are people the organiser assigns to a talk. They can edit that talk's details only.
+
+| Who | Call | Does |
+|---|---|---|
+| Organiser | `GET /api/staff/venue` | Venue plus layout: buildings > floors > rooms, with capacity, access seats, step-free, captions, rule, walking times |
+| Organiser | `PUT /api/staff/venue` `{name, capacity, rule}` | Venue details |
+| Organiser | `POST /api/staff/venue/rooms`, `PUT`/`DELETE /api/staff/venue/rooms/:id` `{name, building, floor, capacity, access_seats, step_free, captions, rule, overflow_space_id, walks:[{to, minutes}]}` | Add, change or remove a room. A new room gets estimated walking times. A room with people inside or talks scheduled can't be deleted |
+| Organiser | `GET`/`POST /api/staff/sessions`, `PUT`/`DELETE /api/staff/sessions/:id` `{room_id, start, end, title, …}` | The schedule |
+| Organiser | `PUT /api/staff/sessions/:id/hosts` `{hosts:["alice"]}` | Who hosts a talk (usernames; they can sign up later) |
+| Host | `GET /api/host/sessions`, `PUT /api/host/sessions/:id` `{title, abstract, speakers, tags, track, level}` | Their talks and the talks' details; room and time stay with the organiser |
+| Anyone | `GET /api/talks/:id`; `GET /api/me` → `hosting` | A talk's public details (without its hosts); the talks you host |
+
+A room's title on every screen is the talk on now, using the app's clock (`DEMO_CLOCK`, `src/clock.js`).
+
 ### Settings
 
 | Variable | Default | What it does |
