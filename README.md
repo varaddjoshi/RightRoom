@@ -106,6 +106,12 @@ curl -N -b jar 'localhost:3000/api/stream?space=310'            # live events: s
 
 `npm start` loads `.env`, and real environment variables override it.
 
+## QR codes
+
+Attendees scan printed codes with their phone camera; there is no in-app scanner. Sign in as staff or an organiser and open `/staff/qr` for a printable sheet: one card per space with "I'm at the door" (`/r/:room`), "I'm in the room" (`/r/:room/in`) and "Staff only" (`/staff/room/:room`), plus the venue entrance and the two demo-slide codes for Room 204. Print it from the browser; each space gets its own page.
+
+Each code is also an image at `/qr/:room.svg?kind=door|in|staff` (staff codes need a staff login). Set `PUBLIC_URL` so the codes point at the deployed site, for example `https://pantheon.cnh.radarhq.io`; locally, set it to your LAN address (`http://<your IP>:3000`) so phones on the same Wi-Fi can open them.
+
 ## Notes
 
 - Scope for the hackathon demo: one event day, about 20 sessions, 6 rooms.
@@ -115,3 +121,15 @@ curl -N -b jar 'localhost:3000/api/stream?space=310'            # live events: s
 ## Deploy
 
 RightRoom runs on our hackathon cluster `pantheon` at https://pantheon.cnh.radarhq.io. Merging a PR to `main` builds the image and Argo CD deploys it. One-time steps, credentials and limits: [docs/deploy.md](docs/deploy.md).
+
+## Demo data
+
+`scripts/demo.sh [BASE_URL]` stages the demo story from `docs/journey-map.md` ("Example scenarios") on any running RightRoom server (default `http://localhost:3000`; password from `DEMO_PASSWORD`, default `rightroom-demo`). It **resets the server's state first** (as dana, through `/api/sim/reset`), then:
+
+- fills the venue to 179 of 180, so Sam takes the last place and anyone after Sam joins the waitlist;
+- leaves Rooms 204 and 305 full with people queued at the door, Room 118 filling with stand-ins being offered seats, 220 filling, and 210, 101 and 310 with room;
+- opens Leo's console on the Room 204 door;
+- adds Wi-Fi readings (204 back left is weak) and comments on Room 204 alongside the seeded announcements;
+- sets Sam's interests and step-free preference but leaves Sam unregistered, so the attendee journey can be walked live.
+
+It prints each room's count, status and queue, plus where to start as Sam, Leo and Dana. Rerun it any time to get back to the same state.

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QR codes · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<style>
+  .qr-page { max-width: 1100px; }
+  .cards { display: grid; gap: var(--rr-s5); }
+  .codes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--rr-s4); }
+  .code { margin: 0; display: grid; gap: var(--rr-s2); justify-items: center; text-align: center; padding: var(--rr-s3); background: var(--rr-panel-2); border-radius: var(--rr-r2); }
+  /* QR needs dark modules on a light ground to scan, whatever the page theme. */
+  .code img { width: 100%; max-width: 220px; aspect-ratio: 1; background: #fff; border-radius: var(--rr-r1); }
+  .code figcaption { display: grid; gap: 2px; }
+  .code b { font: 700 var(--rr-t-lg)/1.1 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.04em; }
+  .code span { color: var(--rr-muted); font-size: var(--rr-t-sm); }
+  .slides .code img { max-width: 280px; }
+  @media print {
+    @page { margin: 12mm; }
+    body { background: #fff; color: #000; }
+    .no-print { display: none !important; }
+    .rr-panel, .rr-sign, .code { background: #fff; color: #000; border: 1px solid #000; break-inside: avoid; }
+    .rr-sign { border-top: 6px solid #000; }
+    .rr-eyebrow, .code span, .note { color: #000; }
+    .card { break-after: page; }
+    .codes { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+<main class="rr-screen qr-page">
+  <header class="rr-sign"><span class="rr-eyebrow">Staff · print and stick up</span><h1>QR codes</h1></header>
+  <p class="note no-print">One card per space. Put "I'm at the door" outside, "I'm in the room" inside on the wall or screen, and keep "Staff only" for door staff. Print with your browser (Cmd or Ctrl + P): each space gets its own page. Codes point at the server's <code>PUBLIC_URL</code> when it is set, otherwise at <b id="base"></b>.</p>
+  <p class="note" id="err" role="alert" hidden></p>
+
+  <section class="rr-panel card slides" aria-labelledby="h-slides">
+    <h2 class="rr-eyebrow" id="h-slides">Demo slides · Room 204</h2>
+    <div class="codes">
+      <figure class="code"><img src="/qr/204.svg?kind=in" alt="QR code: I'm in the room, Room 204"><figcaption><b>Audience: I'm in the room</b><span>Scan to count yourself in</span></figcaption></figure>
+      <figure class="code"><img src="/qr/204.svg?kind=door" alt="QR code: I'm at the door, Room 204"><figcaption><b>Judges: I'm at the door</b><span>Room 204 · eBPF deep dive</span></figcaption></figure>
+    </div>
+  </section>
+
+  <div class="cards" id="cards"></div>
+</main>
+<script src="/app.js"></script>
+<script>
+(async () => {
+  await RR.requireLogin('staff');
+  document.getElementById('base').textContent = location.origin;
+  const card = (id, title, kinds) => `<section class="rr-panel card" aria-label="${RR.esc(title)}">
+    <h2 class="rr-eyebrow">${RR.esc(title)}</h2>
+    <div class="codes">${kinds.map(([kind, label, sub]) => `<figure class="code">
+      <img src="/qr/${encodeURIComponent(id)}.svg?kind=${kind}" alt="QR code: ${RR.esc(label)}, ${RR.esc(title)}">
+      <figcaption><b>${RR.esc(label)}</b><span>${RR.esc(sub)}</span></figcaption></figure>`).join('')}</div></section>`;
+  const DOOR = ['door', "I'm at the door", 'Join the queue or find another room'];
+  const IN = ['in', "I'm in the room", 'Scan to count yourself in'];
+  const STAFF = ['staff', 'Staff only', 'Open the door console'];
+  try {
+    const floors = await RR.api('/floors');
+    const rooms = floors.flatMap((f) => f.rooms.map((r) => card(r.id, `Room ${r.id} · Floor ${f.floor} · ${r.title}`, [DOOR, IN, STAFF])));
+    document.getElementById('cards').innerHTML = card('venue', 'Venue entrance', [DOOR, STAFF]) + rooms.join('');
+  } catch (e) { RR.showError(document.getElementById('err'), e); }
+})();
+</script>
+</body>
+</html>
