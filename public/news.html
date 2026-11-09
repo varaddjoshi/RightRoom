@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Announcements · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<style>
+  .nav { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
+  .nav a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--rr-s3); color: var(--rr-ink); text-decoration: none; border: 2px solid var(--rr-line); border-radius: var(--rr-r1); font: 700 var(--rr-t-sm)/1 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.06em; }
+  .nav a[aria-current] { border-color: var(--rr-signal); color: var(--rr-signal); }
+</style>
+</head>
+<body>
+<main class="rr-screen" id="main">
+  <nav class="nav" aria-label="Pages"><a href="/event">Event</a><a href="/sessions">Schedule</a><a href="/news" aria-current="page">News</a><a href="/me">Me</a></nav>
+  <div class="rr-sign"><span class="rr-eyebrow">Text first, newest on top</span><h1>Announcements</h1></div>
+  <div class="chips" role="group" aria-label="Floor" id="floors"></div>
+  <div class="chips" role="group" aria-label="Urgency"><button type="button" data-urgent aria-pressed="false">Urgent only</button></div>
+  <section id="list" class="rr-btn-stack" aria-live="polite"></section>
+  <p class="rr-panel m0" id="err" role="alert" hidden></p>
+</main>
+<script src="/app.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  let items = [], floor = 'all', urgentOnly = false;
+
+  function render() {
+    const shown = items.filter((a) => (floor === 'all' || a.floor == null || String(a.floor) === floor) && (!urgentOnly || a.urgency === 'urgent'));
+    $('list').innerHTML = shown.length
+      ? shown.map((a) => `<div class="rr-announce"${a.urgency === 'urgent' ? ' data-urgency="urgent"' : ''}><span class="rr-eyebrow">${a.urgency === 'urgent' ? 'Urgent' : 'Info'} · ${a.floor == null ? 'All floors' : `Floor ${Number(a.floor)}`} · ${time(a.at)}</span><span>${RR.esc(a.text)}</span></div>`).join('')
+      : '<p class="note">Nothing for this floor right now.</p>';
+  }
+  function chips(floors) {
+    $('floors').innerHTML = ['all', ...floors].map((f) => `<button type="button" data-floor="${f}" aria-pressed="${f === floor}">${f === 'all' ? 'All floors' : `Floor ${f}`}</button>`).join('');
+    $('floors').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      floor = b.dataset.floor;
+      $('floors').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+      render();
+    }));
+  }
+  document.querySelector('[data-urgent]').addEventListener('click', (e) => {
+    urgentOnly = !urgentOnly;
+    e.target.setAttribute('aria-pressed', urgentOnly);
+    render();
+  });
+
+  (async () => {
+    try {
+      const [list, floors] = await Promise.all([RR.api('/announcements'), RR.api('/floors')]);
+      items = list;
+      chips(floors.map((f) => String(f.floor)).sort());
+      render();
+    } catch (x) { RR.showError($('err'), x); }
+    RR.live('*', { announcement: (a) => { items.unshift(a); render(); } });
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Door console · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<style>
+  .seg button { min-width: 64px; padding: 0 var(--rr-s3); }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--rr-s2); }
+  .pair select, .pair input { width: 100%; min-height: 52px; padding: 0 var(--rr-s3); background: var(--rr-panel-2); color: var(--rr-ink); border: 2px solid var(--rr-line); border-radius: var(--rr-r2); font: 400 var(--rr-t-md)/1 var(--rr-font-body); }
+  .counter-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) 64px; gap: var(--rr-s3); align-items: center; text-align: center; }
+  .counter-row button { min-height: 64px; border: 0; border-radius: var(--rr-r2); background: var(--rr-panel-2); color: var(--rr-ink); font: 800 var(--rr-t-2xl)/1 var(--rr-font-sign); cursor: pointer; }
+  .counter-row button:last-child { background: var(--rr-signal); color: var(--rr-on-signal); }
+  .counter-row output { font: 800 var(--rr-t-xl)/1 var(--rr-font-sign); font-variant-numeric: tabular-nums; }
+  .err { color: var(--rr-full); margin: 0; }
+  .q span:last-child { text-align: right; }
+  .cmt { display: flex; justify-content: space-between; align-items: center; gap: var(--rr-s2); border-top: 1px solid var(--rr-line); padding-top: var(--rr-s2); }
+  .cmt p { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .cmt button { min-height: 44px; min-width: 64px; }
+</style>
+</head>
+<body>
+<main class="rr-screen" aria-busy="true">
+  <header class="rr-sign">
+    <span class="rr-eyebrow" id="eyebrow">Staff · Room</span>
+    <h1 id="title">Door console</h1>
+    <div class="line"><span id="st"></span><span id="countline" class="muted"></span></div>
+  </header>
+
+  <div class="rr-offer" id="confirm" hidden>
+    <span class="rr-eyebrow" role="alert" id="confirm-msg">This room looks full</span>
+    <div id="confirm-count"></div>
+    <p class="m0">Confirm to show Full and start sending people to other rooms. No answer in <b id="confirm-secs">30</b> seconds confirms it.</p>
+    <button class="rr-btn rr-btn--full rr-btn--plain" type="button" id="confirm-yes">Confirm room is full</button>
+    <div class="pair">
+      <div class="fld"><label for="ny-n">Seats free</label><input id="ny-n" type="number" min="1" value="2" inputmode="numeric"></div>
+      <div class="fld"><label for="ny-zone">Where</label><select id="ny-zone"></select></div>
+    </div>
+    <button class="rr-btn rr-btn--ghost" type="button" id="confirm-no">Not yet, seats are free</button>
+  </div>
+
+  <section class="rr-panel" aria-labelledby="h-count">
+    <h2 class="rr-eyebrow" id="h-count">Count</h2>
+    <div class="line" id="count"></div>
+    <p class="note">The count runs itself from scans. Only correct it for someone who walked in without scanning (+) or left without tapping "I'm leaving" (&minus;).</p>
+    <div class="counter-row">
+      <button type="button" id="minus" aria-label="Remove one person who left without tapping">&minus;</button>
+      <div><output id="corr" aria-live="polite">0</output><div class="small muted">correction</div></div>
+      <button type="button" id="plus" aria-label="Add one person who walked in without scanning">+</button>
+    </div>
+    <div class="pair">
+      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="force-full">Mark full</button>
+      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="clear">Clear override</button>
+    </div>
+  </section>
+
+  <section class="rr-panel" aria-labelledby="h-rel">
+    <h2 class="rr-eyebrow" id="h-rel">Release seats to the queue</h2>
+    <div class="pair">
+      <div class="fld"><label for="rel-n">How many</label><input id="rel-n" type="number" min="1" value="2" inputmode="numeric"></div>
+      <div class="fld"><label for="rel-zone">Where</label><select id="rel-zone"></select></div>
+    </div>
+    <p class="note" id="rel-cap"></p>
+    <button class="rr-btn" type="button" id="release">Offer seats to the queue</button>
+  </section>
+
+  <section class="rr-panel" aria-labelledby="h-q">
+    <h2 class="rr-eyebrow" id="h-q">Queue at the door</h2>
+    <div id="queue"></div>
+  </section>
+
+  <section class="rr-panel" aria-labelledby="h-fl">
+    <div class="line" style="justify-content:space-between"><h2 class="rr-eyebrow" id="h-fl">Floor map</h2>
+      <div class="seg" role="group" aria-label="View"><button type="button" aria-pressed="true" data-mode="map">Map</button><button type="button" aria-pressed="false" data-mode="list">List</button></div></div>
+    <div class="board" id="board"></div>
+  </section>
+
+  <section class="rr-panel" aria-labelledby="h-c">
+    <h2 class="rr-eyebrow" id="h-c">Comments on this room</h2>
+    <div id="comments"><p class="note">No comments yet.</p></div>
+  </section>
+
+  <p class="err" id="err" role="alert" hidden></p>
+  <button class="rr-btn rr-btn--ghost" type="button" id="leave">Leave this door</button>
+</main>
+<script src="/app.js"></script>
+<script>
+(async () => {
+  const room = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop());
+  const $ = (id) => document.getElementById(id);
+  const err = $('err');
+  const me = await RR.requireLogin('staff');
+  const ZONES = ['front-left', 'front-centre', 'front-right', 'middle-left', 'middle-centre', 'middle-right', 'back-left', 'back-centre', 'back-right'];
+  for (const s of [$('rel-zone'), $('ny-zone')]) s.innerHTML = '<option value="">Any seat</option>' + ZONES.map((z) => `<option value="${z}">${RR.zoneName(z)}</option>`).join('');
+  let mode = 'map', v = null, ticker = null;
+
+  const act = async (path, body) => {
+    err.hidden = true;
+    try { await RR.api(path, { method: 'POST', body }); await refresh(); } catch (e) { RR.showError(err, e); }
+  };
+
+  function showConfirm(secs) {
+    $('confirm').hidden = false;
+    $('confirm-count').innerHTML = RR.count(v.taken, v.capacity) + ' ' + RR.label('live');
+    let left = secs;
+    $('confirm-secs').textContent = left;
+    clearInterval(ticker);
+    ticker = setInterval(() => { left = Math.max(0, left - 1); $('confirm-secs').textContent = left; if (!left) { clearInterval(ticker); refresh(); } }, 1000);
+  }
+
+  async function refresh() {
+    try {
+      const [s, floors] = await Promise.all([RR.api(`/staff/spaces/${encodeURIComponent(room)}`), RR.api('/floors')]);
+      v = s;
+      document.title = `Room ${s.id} door · RightRoom`;
+      $('eyebrow').textContent = `Staff · Room ${s.id} · Floor ${s.floor}`;
+      $('title').textContent = s.title;
+      $('st').innerHTML = RR.status(s.status);
+      $('countline').textContent = `${s.taken} of ${s.capacity}`;
+      $('count').innerHTML = RR.count(s.taken, s.capacity) + RR.label('live') + (s.standIn ? ` <span class="rr-label">${Number(s.standIn)} STAND-IN</span>` : '');
+      $('corr').textContent = (s.correction > 0 ? '+' : '') + s.correction;
+      const held = s.queue.filter((q) => q.status !== 'waiting').length;
+      const cap = Math.max(0, s.taken - held);
+      $('rel-n').max = cap;
+      $('rel-cap').textContent = `Up to ${cap} can be released: the people counted inside, not seats already offered.`;
+      $('queue').innerHTML = s.queue.length
+        ? s.queue.map((q, i) => `<div class="q"><span>#${i + 1} ${RR.esc(q.handle)}${q.needs?.length ? ` <span class="rr-access">&#9855; ${RR.esc(q.needs.join(', '))}</span>` : ''}</span><span>${q.code ? `<span class="rr-code sm">${RR.esc(q.code)}</span> ${RR.esc(RR.zoneName(q.zone))}` : `<span class="muted">${RR.esc(q.status)}</span>`}</span></div>`).join('')
+        : '<p class="note">Nobody is waiting.</p>';
+      const cs = (s.comments || []).filter((c) => !c.hidden);
+      $('comments').innerHTML = cs.length ? cs.map((c) => `<div class="cmt"><p>${RR.esc(c.text)}</p><button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" data-hide="${Number(c.id)}" aria-label="Hide this comment">Hide</button></div>`).join('') : '<p class="note">No comments yet.</p>';
+      $('comments').querySelectorAll('[data-hide]').forEach((b) => b.addEventListener('click', () => act(`/staff/comments/${b.dataset.hide}/hide`)));
+      RR.floorBoard($('board'), floors, { role: me.role, mode, onPick: (id) => { if (id !== room) location.href = `/staff/room/${encodeURIComponent(id)}`; } });
+      if (s.pendingConfirm != null) showConfirm(s.pendingConfirm); else { $('confirm').hidden = true; clearInterval(ticker); }
+      document.querySelector('main').removeAttribute('aria-busy');
+    } catch (e) { RR.showError(err, e); }
+  }
+
+  $('plus').addEventListener('click', () => act(`/staff/spaces/${room}/count`, { delta: 1 }));
+  $('minus').addEventListener('click', () => act(`/staff/spaces/${room}/count`, { delta: -1 }));
+  $('force-full').addEventListener('click', () => act(`/staff/spaces/${room}/override`, { mode: 'full' }));
+  $('clear').addEventListener('click', () => act(`/staff/spaces/${room}/override`, { mode: 'clear' }));
+  $('release').addEventListener('click', () => act(`/staff/spaces/${room}/release`, { n: Number($('rel-n').value), zone: $('rel-zone').value || null }));
+  $('confirm-yes').addEventListener('click', () => act(`/staff/spaces/${room}/confirm`, { answer: 'full' }));
+  $('confirm-no').addEventListener('click', () => act(`/staff/spaces/${room}/confirm`, { answer: 'not_yet', n: Number($('ny-n').value), zone: $('ny-zone').value || null }));
+  $('leave').addEventListener('click', async () => {
+    try { await RR.api(`/staff/spaces/${room}/console`, { method: 'POST', body: { action: 'leave' } }); location.href = me.role === 'organiser' ? '/staff/setup' : '/sessions'; } catch (e) { RR.showError(err, e); }
+  });
+  document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    refresh();
+  }));
+
+  try { await RR.api(`/staff/spaces/${encodeURIComponent(room)}/console`, { method: 'POST', body: { action: 'open' } }); } catch (e) { RR.showError(err, e); }
+  await refresh();
+  RR.live(room, { status: refresh, position: refresh, offer_passed: refresh, confirm: (d) => { refresh().then(() => showConfirm(d.seconds)); } });
+})();
+</script>
+</body>
+</html>
