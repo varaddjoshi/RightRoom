@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  labels:
+    app: app
+spec:
+  # Exactly one replica: the live stream (/api/stream) keeps its open connections
+  # in memory, so a second pod would miss events (docs/architecture.md). Leave it
+  # at 1 and don't turn on the HPA (examples/hpa) until that changes.
+  replicas: 1
+  # One pod means a rolling update must start the new pod before stopping the old.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: app
+  template:
+    metadata:
+      labels:
+        app: app
+    spec:
+      containers:
+        - name: app
+          image: app
+          ports:
+            - name: http
+              containerPort: 8080
+          # Keys (ELASTICSEARCH_URL, ELASTICSEARCH_API_KEY, DASH0_OTLP_ENDPOINT,
+          # DASH0_TOKEN, ...) come from Secret app-credentials, which is created by
+          # hand in the cluster and never committed (docs/deploy.md). optional: the
+          # pod still starts before the Secret exists.
+          envFrom:
+            - secretRef:
+                name: app-credentials
+                optional: true
+          # Listed here so they win over the same names in the Secret.
+          env:
+            - name: PORT
+              value: "8080"
+            - name: TEAM_NAME
+              value: "pantheon"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop: ["ALL"]

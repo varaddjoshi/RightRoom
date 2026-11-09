@@ -22,6 +22,10 @@ npm start
 
 Fill in `.env` with your real Elasticsearch and Dash0 values. Never commit `.env`.
 
+## Deploy
+
+RightRoom runs on our hackathon cluster `pantheon` at https://pantheon.cnh.radarhq.io. Merging a PR to `main` builds the image and Argo CD deploys it. One-time steps, credentials and limits: [docs/deploy.md](docs/deploy.md).
+
 ## Notes
 
 - Scope for the hackathon demo: one event day, about 20 sessions, 6 rooms.
