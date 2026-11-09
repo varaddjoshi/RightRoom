@@ -35,6 +35,14 @@ jobs:
           find . -name '*.js' -not -path './node_modules/*' -not -path './.git/*' -print0 \
             | xargs -0 -r -n1 node --check
 
+      - name: Tests (npm test runs the unit tests and the 50-people-for-5-seats load test, all in memory)
+        env:
+          # The tests already delete ELASTICSEARCH_URL and CI holds no secrets. This is a second lock:
+          # if anyone ever points a test at Elasticsearch, it uses a throwaway index prefix, never the demo's.
+          # scripts/loadtest.js refuses a non-local URL without --live, and this step never passes it.
+          ES_INDEX_PREFIX: rr_test_
+        run: npm test
+
       - name: Smoke test (npm start boots and /health answers)
         env:
           PORT: "3999"
