@@ -59,23 +59,39 @@ test('the check-in QR key follows the REAL day, not the demo clock', () => {
 async function runLabel(fetchImpl) {
   const appended = [];
   const intervals = [];
+  const stored = {};
   const context = {
-    document: { createElement: () => ({ style: {}, setAttribute(k, v) { this[k] = v; } }), body: { appendChild: (el) => appended.push(el) } },
+    document: {
+      createElement: (tag) => ({ tag, style: {}, children: [], listeners: {}, setAttribute(k, v) { this[k] = v; }, getAttribute(k) { return this[k]; },
+        appendChild(c) { this.children.push(c); }, addEventListener(t, fn) { this.listeners[t] = fn; }, focus() {} }),
+      body: { appendChild: (el) => appended.push(el) },
+    },
+    localStorage: { getItem: () => null, setItem: (k, v) => { stored[k] = v; } },
     fetch: (...args) => fetchImpl(...args),
     Intl, Date, setInterval: (fn, ms) => { intervals.push(ms); return 1; },
   };
   vm.createContext(context);
   await vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'demo-clock.js'), 'utf8'), context);
-  return { appended, intervals };
+  return { appended, intervals, stored };
 }
 const json = (body, ok = true) => async () => ({ ok, json: async () => body });
 
-test('public/demo-clock.js shows a "Demo clock" badge, in MST, only when the server says demo', async () => {
-  const { appended, intervals } = await runLabel(json({ demo: true, now: '2026-11-10T18:45:00.000Z' }));
+test('public/demo-clock.js shows a collapsed "Demo" chip that opens to the stand-in time, in MST, only when the server says demo', async () => {
+  const { appended, intervals, stored } = await runLabel(json({ demo: true, now: '2026-11-10T18:45:00.000Z' }));
   assert.equal(appended.length, 1);
   assert.equal(appended[0].id, 'rr-demo-clock');
-  assert.equal(appended[0].role, 'status');
-  assert.match(appended[0].textContent, /^Demo clock · stand-in time Tue,? 11:4\d AM$/);
+  const btn = appended[0].children.find((c) => c.tag === 'button');
+  const more = appended[0].children.find((c) => c.tag === 'p');
+  assert.equal(btn.textContent, 'Demo');
+  assert.equal(btn['aria-expanded'], 'false', 'collapsed by default');
+  assert.equal(more.hidden, true);
+  assert.match(more.textContent, /^Stand-in time Tue,? 11:4\d AM\./);
+  btn.listeners.click();
+  assert.equal(btn['aria-expanded'], 'true');
+  assert.equal(more.hidden, false);
+  assert.equal(stored['rr-demo-clock-open'], '1', 'open state is remembered');
+  btn.listeners.click();
+  assert.equal(more.hidden, true);
   assert.deepEqual(intervals, [30_000], 'the stand-in time keeps ticking');
 });
 
