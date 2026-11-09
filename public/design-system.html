@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>RightRoom Wayfinding</title>
+  <link rel="stylesheet" href="rr.css">
+  <style>
+    .ds-grid { display: grid; gap: var(--rr-s6); max-width: 1040px; margin: 0 auto; padding-block: var(--rr-s6);
+      padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+    .ds-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--rr-s5); align-items: start; }
+    .ds-h { margin: 0; font: 700 var(--rr-t-lg)/1.2 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.08em; color: var(--rr-muted); border-bottom: 1px solid var(--rr-line); padding-bottom: var(--rr-s2); }
+    .ds-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--rr-s3); }
+    .ds-sw { border-radius: var(--rr-r1); overflow: hidden; background: var(--rr-panel); font-size: var(--rr-t-xs); }
+    .ds-sw div { height: 56px; }
+    .ds-sw p { margin: 0; padding: var(--rr-s2); font-family: var(--rr-font-code); color: var(--rr-muted); }
+    .ds-phone { border: 2px solid var(--rr-line); border-radius: 24px; overflow: hidden; }
+    .ds-phone .rr-screen { padding-block: var(--rr-s4); }
+  </style>
+</head>
+<body>
+<main class="ds-grid">
+  <header class="rr-sign">
+    <span class="rr-eyebrow">Design system · v1 · wayfinding signs</span>
+    <h1>RightRoom Wayfinding</h1>
+    <p style="margin:0;color:var(--rr-muted)">Dark sign panels, signal-yellow actions, and every status written in words with a shape. Built for phones at a door and the big screen across a room.</p>
+  </header>
+
+  <section class="rr-panel" aria-labelledby="h-color">
+    <h2 class="ds-h" id="h-color">Colour</h2>
+    <div class="ds-swatches">
+      <div class="ds-sw"><div style="background:var(--rr-bg);border-bottom:1px solid var(--rr-line)"></div><p>--rr-bg</p></div>
+      <div class="ds-sw"><div style="background:var(--rr-panel-2)"></div><p>--rr-panel-2</p></div>
+      <div class="ds-sw"><div style="background:var(--rr-ink)"></div><p>--rr-ink</p></div>
+      <div class="ds-sw"><div style="background:var(--rr-signal)"></div><p>--rr-signal</p></div>
+      <div class="ds-sw"><div style="background:var(--rr-free)"></div><p>--rr-free</p></div>
+      <div class="ds-sw"><div style="background:var(--rr-filling)"></div><p>--rr-filling</p></div>
+      <div class="ds-sw"><div style="background:var(--rr-full)"></div><p>--rr-full</p></div>
+      <div class="ds-sw"><div style="background:var(--rr-access)"></div><p>--rr-access</p></div>
+    </div>
+  </section>
+
+  <div class="ds-row">
+    <section class="rr-panel" aria-labelledby="h-btn">
+      <h2 class="ds-h" id="h-btn">Buttons</h2>
+      <div class="rr-btn-stack">
+        <button class="rr-btn" type="button">Join the queue</button>
+        <button class="rr-btn rr-btn--ghost" type="button">Show me other rooms</button>
+        <button class="rr-btn rr-btn--full rr-btn--plain" type="button">Confirm room is full</button>
+        <button class="rr-btn" type="button" disabled>Claimed</button>
+      </div>
+    </section>
+
+    <section class="rr-panel" aria-labelledby="h-status">
+      <h2 class="ds-h" id="h-status">Status and counts</h2>
+      <div style="display:flex;gap:var(--rr-s2);flex-wrap:wrap">
+        <span class="rr-status" data-status="free">Seats free</span>
+        <span class="rr-status" data-status="filling">Filling</span>
+        <span class="rr-status" data-status="full">Full</span>
+      </div>
+      <div class="rr-count" aria-label="47 of 50 seats taken">47<small>/ 50</small></div>
+      <div style="display:flex;gap:var(--rr-s2);flex-wrap:wrap">
+        <span class="rr-label" data-kind="live">LIVE</span>
+        <span class="rr-label">REAL</span>
+        <span class="rr-label">STAND-IN</span>
+      </div>
+      <div class="rr-position">
+        <span class="rr-eyebrow">Your place</span>
+        <strong>#12</strong>
+        <p>Admitted in order of arrival. 6 places are held for stated access needs.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="ds-row">
+    <section class="ds-phone" aria-labelledby="h-door">
+      <div class="rr-screen">
+        <div class="rr-sign">
+          <span class="rr-eyebrow">Room 204 · Floor 2</span>
+          <h1 id="h-door">eBPF deep dive</h1>
+          <div style="display:flex;align-items:center;gap:var(--rr-s3)">
+            <span class="rr-status" data-status="full">Full</span>
+            <span style="font-variant-numeric:tabular-nums">50 of 50 · <span class="rr-label" data-kind="live">LIVE</span></span>
+          </div>
+        </div>
+        <div class="rr-route">
+          <span class="rr-route__arrow" aria-hidden="true">&#9654;</span>
+          <div>
+            <div class="rr-route__to">Room 210</div>
+            <div class="rr-route__meta">Observability at scale · 9 seats free</div>
+            <span class="rr-access">&#9855; Step-free via east lift</span>
+          </div>
+          <div class="rr-route__time">2<small>MIN</small></div>
+        </div>
+        <details class="rr-why">
+          <summary>Why this?</summary>
+          <ul>
+            <li>Matches your interest: Observability.</li>
+            <li>Step-free route, as you asked.</li>
+            <li>9 seats free right now; 3 people are being sent there.</li>
+            <li class="rr-rejected">Room 305: stairs only.</li>
+            <li class="rr-rejected">Room 118: 6 minutes away, less similar topic.</li>
+          </ul>
+        </details>
+        <div class="rr-btn-stack">
+          <button class="rr-btn" type="button">Go to Room 210</button>
+          <button class="rr-btn rr-btn--ghost" type="button">Wait for Room 204 (#3)</button>
+          <button class="rr-btn rr-btn--ghost" type="button">Something different: Rust panel</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="ds-phone" aria-labelledby="h-offer">
+      <div class="rr-screen">
+        <div class="rr-offer">
+          <span class="rr-eyebrow" role="alert">Seat offer · Room 204</span>
+          <h2 class="rr-title" id="h-offer">Front, Left <span class="rr-access">&#9855; Accessible seat</span></h2>
+          <div class="rr-offer__timer" aria-hidden="true"><span id="bar"></span></div>
+          <p style="margin:0"><strong id="secs">60</strong> seconds to claim. If you don't, it goes to the next person.</p>
+          <p class="rr-sr" aria-live="polite" id="sr-time"></p>
+          <button class="rr-btn" type="button" id="claim">Claim my seat</button>
+        </div>
+        <div class="rr-panel" id="claimed" hidden>
+          <span class="rr-eyebrow">Show this at the door</span>
+          <div class="rr-code">KQ7M</div>
+          <p style="margin:0;color:var(--rr-muted)">blue-otter · Room 204 · Front, Left</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="ds-row">
+    <section class="rr-panel" aria-labelledby="h-zone">
+      <h2 class="ds-h" id="h-zone">Zone grid (check-in)</h2>
+      <div class="rr-zones" role="group" aria-label="Where are you sitting?">
+        <span class="rr-zones-front">STAGE</span>
+        <button type="button" aria-pressed="true" data-access>Front left</button>
+        <button type="button" aria-pressed="false">Front centre</button>
+        <button type="button" aria-pressed="false">Front right</button>
+        <button type="button" aria-pressed="false">Middle left</button>
+        <button type="button" aria-pressed="false">Middle centre</button>
+        <button type="button" aria-pressed="false">Middle right</button>
+        <button type="button" aria-pressed="false">Back left</button>
+        <button type="button" aria-pressed="false">Back centre</button>
+        <button type="button" aria-pressed="false">Back right</button>
+      </div>
+    </section>
+
+    <section class="rr-panel" aria-labelledby="h-staff">
+      <h2 class="ds-h" id="h-staff">Staff counter</h2>
+      <div class="rr-counter">
+        <button type="button" aria-label="One person left">&minus;</button>
+        <div class="rr-count" style="justify-content:center" aria-live="polite"><span id="n">46</span><small>/ 50</small></div>
+        <button type="button" aria-label="One person entered">+</button>
+      </div>
+      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button">Release seats</button>
+    </section>
+  </div>
+
+  <section class="rr-panel" aria-labelledby="h-ann">
+    <h2 class="ds-h" id="h-ann">Announcements</h2>
+    <div class="rr-announce" data-urgency="urgent">
+      <span class="rr-eyebrow">Urgent · Floor 2 · 9:12</span>
+      <span>West lift is out of service. Use the east lift for step-free access.</span>
+    </div>
+    <div class="rr-announce">
+      <span class="rr-eyebrow">Info · All floors · 9:00</span>
+      <span>Lunch is in the atrium from 12:00.</span>
+    </div>
+  </section>
+</main>
+
+<script>
+  // Preview only: wire the sample offer, zone grid and counter.
+  let left = 60;
+  const bar = document.getElementById('bar'), secs = document.getElementById('secs'), srTime = document.getElementById('sr-time');
+  const tick = setInterval(() => {
+    left = Math.max(0, left - 1);
+    secs.textContent = left;
+    bar.style.setProperty('--rr-left', (left / 60 * 100) + '%');
+    if ([30, 10].includes(left)) srTime.textContent = left + ' seconds left to claim your seat.';
+    if (!left) { srTime.textContent = 'Offer expired. It has gone to the next person.'; clearInterval(tick); }
+  }, 1000);
+  document.getElementById('claim').addEventListener('click', () => {
+    clearInterval(tick);
+    document.querySelector('.rr-offer').hidden = true;
+    document.getElementById('claimed').hidden = false;
+  });
+  document.querySelectorAll('.rr-zones button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.rr-zones button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  }));
+  const n = document.getElementById('n');
+  document.querySelectorAll('.rr-counter button').forEach((b, i) => b.addEventListener('click', () => {
+    n.textContent = Math.min(50, Math.max(0, +n.textContent + (i ? 1 : -1)));
+  }));
+</script>
+</body>
+</html>
