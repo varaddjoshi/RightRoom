@@ -73,7 +73,7 @@ const MAPPINGS = {
     staff_correction: int, // staff +/- for walk-ins who didn't scan (optional)
     access_seats: int, // seats only for people who stated the need
     access_taken: int,
-    status: keyword, // seats_free | filling | full
+    status: keyword, // free | filling | full (same names as the engine)
     status_source: keyword, // auto | staff (staff answered the Full prompt or overrode)
     staff_console_open_until: date, // a staff console for this room is open; Full waits up to 30s for them
     full_suggested_at: date, // at capacity with a staff console open: when the app asked staff to confirm
