@@ -131,10 +131,11 @@
     $('room').innerHTML = sessions.map((r) => `<option value="${RR.esc(r.id)}">${RR.esc(RR.roomName(r.id))} · ${RR.esc(r.title)}</option>`).join('');
     if (sel) $('room').value = sel;
     const v = ev.venue;
-    $('venue').innerHTML = `${RR.status(v.status)} <span>Venue ${v.taken} of ${v.capacity} in</span> ${RR.label('live')}`;
+    $('venue').innerHTML = `${RR.status(v.status)} <span>Venue: ${v.taken} admitted · ${Number(v.scannedIn)} scanned in of ${v.capacity}</span> ${RR.label('live')}`;
     const all = floors.flatMap((f) => f.rooms);
     const af = $('ann-floor'); if (af.options.length === 1) af.insertAdjacentHTML('beforeend', floors.map((f) => `<option value="${RR.esc(f.floor)}">Floor ${RR.esc(f.floor)}</option>`).join(''));
-    const needs = all.filter((r) => r.queue > 0 && !r.staffOn).length;
+    // A queue, or a room Full / filling up, with nobody on its door console.
+    const needs = all.filter((r) => !r.staffOn && (r.queue > 0 || r.status !== 'free')).length;
     $('sum').textContent = `${all.length} rooms · ${all.reduce((s, r) => s + r.free, 0)} seats free · ${all.filter((r) => r.staffOn).length} staffed · ${needs} need staff`;
     RR.floorBoard($('board'), floors, { role: 'organiser', mode, notices, onPick: pick });
   }

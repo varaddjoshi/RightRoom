@@ -37,7 +37,7 @@
   <a class="back rr-span" href="/sessions">&larr; Board</a>
   <header class="rr-sign rr-span"><span class="rr-eyebrow" id="eyebrow">Door</span><h1 id="title">Door console</h1></header>
 
-  <section class="rr-panel hero" id="hero" aria-label="Live count"><div class="line" id="st"></div><div id="count"></div></section>
+  <section class="rr-panel hero" id="hero" aria-label="Live count"><div class="line" id="st"></div><div id="count"></div><p class="m0 note" id="corr-note" hidden></p></section>
   <section class="rr-panel act" id="primary" aria-live="polite"></section>
 
   <section class="rr-panel" id="qsec" aria-labelledby="h-q">
@@ -78,6 +78,8 @@
   const err = $('err');
   const me = await RR.requireLogin('staff');
   RR.remember('rr-door', room);
+  // shortcut: 'checking' (at capacity, staff confirming) drawn as Full until RR.WORD/rr.css know it; drop once app.js has it.
+  const st = (s) => (s === 'checking' ? RR.status('full', 'Full · being checked') : RR.status(s));
   const ZONES = ['front-left', 'front-centre', 'front-right', 'middle-left', 'middle-centre', 'middle-right', 'back-left', 'back-centre', 'back-right'];
   let mode = 'map', v = null, ticker = null, notices = [], n = 1, zone = RR.recall(`rr-zone-${room}`), confirmUntil = 0;
 
@@ -136,9 +138,12 @@
       $('eyebrow').textContent = `Door · ${where}`;
       RR.here(where);
       $('title').textContent = s.title;
-      $('st').innerHTML = RR.status(s.status) + RR.label('live') + (s.standIn ? RR.label(`${Number(s.standIn)} stand-in`) : '');
+      $('st').innerHTML = st(s.status) + RR.label('live') + (s.standIn ? RR.label(`${Number(s.standIn)} stand-in`) : '');
       $('count').innerHTML = RR.count(s.taken, s.capacity);
       $('corr').textContent = (s.correction > 0 ? '+' : '') + s.correction;
+      // The map below counts scans only; say why it differs from the count.
+      $('corr-note').hidden = !s.correction;
+      $('corr-note').textContent = `Count includes ${s.correction > 0 ? '+' : '\u2212'}${Math.abs(s.correction)} staff correction, so it differs from the scans shown around the room.`;
       $('queue').innerHTML = s.queue.length
         ? s.queue.map((q, i) => `<div class="q"><span>#${i + 1} ${RR.esc(q.handle)}${q.needs?.length ? ` <span class="rr-access">&#9855; ${RR.esc(q.needs.join(', '))}</span>` : ''}</span><span>${q.code ? `<span class="rr-code sm">${RR.esc(q.code)}</span> ${RR.esc(RR.zoneName(q.zone))}` : `<span class="muted">${RR.esc(q.status)}</span>`}</span></div>`).join('')
         : '<p class="note">Nobody is waiting.</p>';

@@ -6,8 +6,9 @@
 // Hard rules (a room that fails one is listed in `rejected` with the reason, never suggested):
 //   - free seats (capacity - taken; open offers are already in taken) cover the whole group (rule 3)
 //   - not Full
-//   - step-free route and room when the person needs step_free; live captions when they need captions;
-//     a free accessibility seat when they need access_seat
+//   - step-free route and room when the person needs step-free or wheelchair (profile ids, auth.NEEDS);
+//     a free accessibility seat when they need wheelchair
+// Captions is a preference: captioned rooms rank first within the same topic band.
 //   - a session that is on now or starts within 20 minutes
 //   - organiser limits (src/policy.js, none by default): the person arrives before the door window closes
 //     (decision 32), and within the claim window when one is set (decision 31)
@@ -25,6 +26,12 @@ const OPENING_SOON_MIN = 20;
 
 function freeSeats(space) {
   return Math.max(0, (space.capacity || 0) - (space.taken || 0));
+}
+
+// Profile need ids (auth.NEEDS, hyphenated) to the rules the redirect applies.
+function needFlags(needs = []) {
+  const n = new Set(needs);
+  return { stepFree: n.has('step-free') || n.has('wheelchair'), accessSeat: n.has('wheelchair'), captions: n.has('captions') };
 }
 
 function walkTo(from, toId, to) {
@@ -104,7 +111,7 @@ function timeReason(session, now) {
 async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], now = clock.now() } = {}) {
   if (!spaceId) throw new Error('spaceId is required');
   groupSize = Math.max(1, Number(groupSize) || 1);
-  const needSet = new Set(needs);
+  const need = needFlags(needs);
   const interestSet = new Set(interests.map((s) => String(s).toLowerCase()));
 
   const fromDoc = await es().get({ index: INDEX.spaces, id: spaceId });
@@ -116,7 +123,7 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
     : [...interestSet].join(' ');
   const { method, hits } = await candidateSessions({ spaceId, now, queryText });
   const eventPolicy = await eventDefaults(from.event_id);
-  const accessNeed = needSet.size > 0;
+  const accessNeed = needs.length > 0;
 
   // One candidate per room: its best-scoring session.
   const byRoom = new Map();
@@ -151,9 +158,8 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
     let reason = null;
     if (space.status === 'full' || free === 0) reason = 'Full';
     else if (free < groupSize) reason = `Only ${free} seat${free === 1 ? '' : 's'} free, ${groupSize} needed`;
-    else if (needSet.has('step_free') && !walk.step_free) reason = 'No step-free route';
-    else if (needSet.has('captions') && !space.captions) reason = 'No live captions';
-    else if (needSet.has('access_seat') && accessFree < groupSize) reason = 'No accessibility seat free';
+    else if (need.stepFree && !walk.step_free) reason = 'No step-free route';
+    else if (need.accessSeat && accessFree < groupSize) reason = 'No accessibility seat free';
     else {
       const policy = effectivePolicy(eventPolicy, session.policy);
       const arrival = new Date(now.getTime() + walk.minutes * MIN);
@@ -200,14 +206,15 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
     if (matched.length) reasons.push(`Matches your interests: ${matched.join(', ')}`);
     reasons.push(`${walk.minutes} min walk${walk.step_free ? ', step-free' : ''}${walk.estimated ? ' (estimated)' : ''}`);
     reasons.push(`${free} seat${free === 1 ? '' : 's'} free`);
-    if (needSet.has('captions')) reasons.push('Live captions');
+    if (need.captions && space.captions) reasons.push('Live captions');
     reasons.push(timeReason(session, now));
 
-    eligible.push({ ...entry, topic_score: Number(rel.toFixed(3)), band, interest_matches: matched.length, reasons });
+    eligible.push({ ...entry, captions_match: need.captions && !!space.captions ? 1 : 0, topic_score: Number(rel.toFixed(3)), band, interest_matches: matched.length, reasons });
   }
 
   eligible.sort((a, b) =>
     b.band - a.band ||
+    b.captions_match - a.captions_match ||
     b.interest_matches - a.interest_matches ||
     a.walk_minutes - b.walk_minutes ||
     b.free - a.free ||
@@ -252,4 +259,4 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
   };
 }
 
-module.exports = { redirect, freeSeats, walkTo };
+module.exports = { redirect, freeSeats, walkTo, needFlags };
