@@ -67,6 +67,22 @@ body {
   gap: var(--rr-s5);
 }
 
+/* Laptop layouts (960px and up only, so phones keep the single column above).
+   --wide: two columns; sections and panels take one cell each, everything else spans the row.
+   --split: the .rr-aside (back link + sign) sits sticky on the left, the rest flows on the right. */
+@media (min-width: 960px) {
+  .rr-screen--wide, .rr-screen--split { max-width: 1100px; column-gap: var(--rr-s6); align-items: start; }
+  .rr-screen--wide { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rr-screen--wide > * { grid-column: 1 / -1; }
+  .rr-screen--wide > section:not(.rr-span), .rr-screen--wide > .rr-panel:not(.rr-span) { grid-column: auto; }
+  .rr-screen--wide > .rr-btn, .rr-screen--wide > .rr-btn-stack:not(.rr-span) { max-width: 420px; }
+  .rr-screen--wide > p { max-width: 75ch; }
+  .rr-screen--split { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+  .rr-screen--split > * { grid-column: 2; }
+  .rr-screen--split > .rr-aside { grid-column: 1; grid-row: 1 / span 9; position: sticky; top: var(--rr-s5); display: grid; gap: var(--rr-s4); align-self: start; }
+}
+.rr-aside { display: grid; gap: var(--rr-s5); }
+
 /* Eyebrow label: ROOM 204 · FLOOR 2 */
 .rr-eyebrow {
   font: 700 var(--rr-t-xs)/1.2 var(--rr-font-sign);
