@@ -8,11 +8,11 @@ let SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'
 function setSecret(secret) { if (!process.env.SESSION_SECRET && secret) SECRET = secret; }
 const DAY = 24 * 3600_000;
 const list = (v, d) => (v || d).split(',').map((s) => s.trim()).filter(Boolean);
-const ORGANISERS = list(process.env.ORGANISERS, 'dana');
+const ORGANISERS = list(process.env.ORGANISERS, 'dana,organiser');
 const STAFF = list(process.env.STAFF, 'leo');
 const HANDLE = /^[a-z0-9][a-z0-9-]{2,23}$/;
 const NEEDS = ['step-free', 'captions'];
-const DEMO = ['dana', 'leo', 'sam'];
+const DEMO = ['dana', 'leo', 'sam', 'organiser', 'host'];
 
 const roleFor = (h) => (ORGANISERS.includes(h) ? 'organiser' : STAFF.includes(h) ? 'staff' : 'attendee');
 
@@ -31,6 +31,10 @@ function ensureDemoUsers(db) {
   if (!db.users.has('dana')) addUser(db, 'dana', pw);
   if (!db.users.has('leo')) addUser(db, 'leo', pw);
   if (!db.users.has('sam')) addUser(db, 'sam', pw, { interests: ['kubernetes', 'observability', 'ebpf'], needs: ['step-free'] });
+  // Simple demo logins for the organiser view (/staff/venue) and the host view (/host). 'host' is an ordinary account;
+  // it hosts the talks of one demo room (src/catalog.js ensureDemoHost). Same DEMO_PASSWORD as the others.
+  if (!db.users.has('organiser')) addUser(db, 'organiser', pw);
+  if (!db.users.has('host')) addUser(db, 'host', pw);
 }
 
 function signup(db, handle, password) {
