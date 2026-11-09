@@ -45,6 +45,11 @@
     <div id="queue"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
   </section>
 
+  <section class="rr-panel" id="hsec" aria-labelledby="h-heat">
+    <h2 class="rr-eyebrow" id="h-heat">Around the room</h2>
+    <div id="heat" data-layer="crowd"><div class="rr-skel" aria-hidden="true"><i></i><i></i></div></div>
+  </section>
+
   <details class="rr-more rr-span" id="more">
     <summary><span>More options <span class="muted small">count, map, comments, leave</span></span></summary>
     <div>
@@ -140,6 +145,7 @@
       const cs = (s.comments || []).filter((c) => !c.hidden);
       $('comments').innerHTML = cs.length ? cs.map((c) => `<div class="cmt"><p>${RR.esc(c.text)}</p><button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" data-hide="${Number(c.id)}" aria-label="Hide this comment">Hide</button></div>`).join('') : '<p class="note">No comments yet.</p>';
       $('comments').querySelectorAll('[data-hide]').forEach((b) => b.addEventListener('click', () => act(`/staff/comments/${b.dataset.hide}/hide`)));
+      RR.heat($('heat'), room);
       if ($('more').open) RR.floorBoard($('board'), floors, { role: me.role, mode, notices, onPick: (id) => { if (id !== room) location.href = `/staff/room/${encodeURIComponent(id)}`; } });
       if (s.pendingConfirm != null) { if (!confirmUntil || confirmUntil < Date.now()) confirmUntil = Date.now() + s.pendingConfirm * 1000; startTicker(); } else { confirmUntil = 0; clearInterval(ticker); }
       // Don't redraw the action while someone is using its stepper or zone chips.

@@ -15,7 +15,7 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { status: res.status });
+    if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { status: res.status, data });
     return data;
   }
 
@@ -110,6 +110,8 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
     const list = opts.mode === 'list';
     const all = forFloor(opts.notices, null);
     const top = all.length ? (list ? `<div class="fl-all">${all.map(notice).join('')}</div>` : `<div class="fl-all">${badge(all, null, 'All floors')}</div>`) : '';
+    const everyRoom = floors.flatMap((f) => f.rooms.map((x) => ({ ...x, floor: x.floor ?? f.floor })));
+    const go = (r) => { const a = r.status === 'full' && nearbyFree(everyRoom, { ...r, floor: r.floor }); return a ? `<span class="tile-go">Full · seats free in ${esc(roomName(a))}</span>` : ''; };
     el.innerHTML = `<div class="fl-board">${top}${floors.map((f) => {
       const seats = f.rooms.reduce((s, r) => s + r.free, 0);
       const mine = forFloor(opts.notices, f.floor);
@@ -121,7 +123,7 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
             <span class="tile-top"><span class="tile-n">${esc(r.name || r.displayName || r.id)}</span>${status(r.status)}</span>
             <span class="tile-t">${esc(r.title)}</span>
             <span class="meter" aria-hidden="true"><i style="width:${Math.min(100, Math.round((r.taken / r.capacity) * 100))}%"></i></span>
-            <span class="tile-m">${r.taken} of ${r.capacity}</span><span class="tile-m">${access(r)}</span>${extra(r)}</button>`).join('')}</div>`;
+            <span class="tile-m">${r.taken} of ${r.capacity}</span><span class="tile-m">${access(r)}</span>${go({ ...r, floor: r.floor ?? f.floor })}${wifiChip(r.wifiStats)}${extra(r)}</button>`).join('')}</div>`;
       return `<div class="fl">${head}${body}</div>`;
     }).join('')}</div>`;
     motion(el, opts.mode || 'map');
@@ -131,6 +133,44 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
       showNotices(floor == null ? 'All floors' : `Floor ${floor} notices`, forFloor(opts.notices, floor), b);
     }));
   }
+
+  // Nearest room with free seats for a full one: same floor first, then the most free seats. Used where the
+  // server's redirect isn't fetched (tiles, Now); the room page itself shows the server's redirect with reasons.
+  const nearbyFree = (rooms, full) => rooms
+    .filter((x) => x.id !== full.id && x.free > 0)
+    .sort((a, b) => (a.floor !== full.floor) - (b.floor !== full.floor) || b.free - a.free)[0] || null;
+
+  // Crowd-sourced Wi-Fi on a tile: band word + speed + how many readings, labelled Live or Stand-in.
+  const BAND = { quiet: 'Quiet', busy: 'Busy', packed: 'Packed', good: 'Good', ok: 'OK', weak: 'Weak' };
+  const dataLabel = (l) => label(l === 'stand_in' ? 'stand-in' : l === 'mixed' ? 'live + stand-in' : 'live');
+  const wifiChip = (w) => (w && w.count ? `<span class="tile-m wifi" data-band="${esc(w.band)}">Wi-Fi ${esc(BAND[w.band] || w.band)} · ${Math.round(w.mbps)} Mbps · ${Number(w.count)} ${w.count === 1 ? 'reading' : 'readings'}${w.label === 'stand_in' ? ' (stand-in)' : w.label === 'mixed' ? ' (incl. stand-in)' : ''}</span>` : '');
+
+  // Zone heatmap from /api/heat: Crowd or Wi-Fi per zone, a word and a value in every cell, never colour alone.
+  // Zones nobody has measured say "No readings yet" instead of looking empty.
+  async function heat(el, room, opts = {}) {
+    const layer = el.dataset.layer || opts.layer || 'crowd';
+    let h;
+    try { h = await api(`/heat?room=${encodeURIComponent(room)}`); } catch { el.innerHTML = '<p class="note">The heatmap isn\'t available yet.</p>'; return null; }
+    const pick = (z) => (layer === 'crowd' ? z.crowd : z.wifi);
+    const labels = [...new Set(h.zones.map(pick).filter(Boolean).map((d) => d.label).filter(Boolean))];
+    const suggest = opts.suggest ? suggestZones(h) : [];
+    const cell = (z) => {
+      const d = pick(z);
+      if (!d) return `<div class="hz" data-band="none"><b>${esc(zoneName(z.zone))}</b><span>No readings yet</span></div>`;
+      const v = layer === 'crowd' ? `${Number(d.count)} here` : `${Math.round(d.mbps)} Mbps`;
+      return `<div class="hz" data-band="${esc(d.band)}"${suggest.includes(z.zone) ? ' data-suggest' : ''}><b>${esc(zoneName(z.zone))}</b><span>${esc(BAND[d.band] || d.band)} · ${esc(v)}</span>${suggest.includes(z.zone) ? '<em>Suggested</em>' : ''}</div>`;
+    };
+    el.innerHTML = `<div class="hm-head"><div class="seg" role="group" aria-label="Heatmap layer"><button type="button" data-layer="crowd" aria-pressed="${layer === 'crowd'}">Crowd</button><button type="button" data-layer="wifi" aria-pressed="${layer === 'wifi'}">Wi-Fi</button></div>
+      <span class="hm-meta">${labels.length ? dataLabel(labels.length > 1 ? 'mixed' : labels[0]) : ''}<span class="small muted">Updated ${clock(h.updatedAt)}</span></span></div>
+      <div class="hm" role="list" aria-label="${layer === 'crowd' ? 'How busy each part of the room is' : 'Wi-Fi in each part of the room'}"><span class="rr-zones-front" aria-hidden="true">Stage</span>${h.zones.map((z) => cell(z).replace('<div class="hz"', '<div role="listitem" class="hz"')).join('')}</div>`;
+    el.querySelectorAll('[data-layer]').forEach((b) => b.addEventListener('click', () => { el.dataset.layer = b.dataset.layer; heat(el, room, opts); }));
+    return h;
+  }
+  // Up to two zones that are quiet or busy (not packed) with good or ok Wi-Fi: a suggestion, never a seat rule.
+  const suggestZones = (h) => h.zones
+    .filter((z) => z.crowd?.band !== 'packed' && ['good', 'ok'].includes(z.wifi?.band))
+    .sort((a, b) => (a.crowd?.density ?? 0) - (b.crowd?.density ?? 0) || (b.wifi?.mbps ?? 0) - (a.wifi?.mbps ?? 0))
+    .slice(0, 2).map((z) => z.zone);
 
   // Motion: the first render staggers tiles in, switching Map/List cross-fades; live re-renders stay still.
   function motion(el, mode) {
@@ -215,7 +255,7 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
     if (!me) return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['me', 'Sign in', `/login?next=${encodeURIComponent(location.pathname)}`]];
     if (me.role === 'organiser') return [['board', 'Board', '/staff/setup'], ['door', 'Rooms', '/staff/setup#edit'], ['bell', 'Announce', '/staff/setup#ann'], ['qr', 'QR codes', '/staff/qr']];
     if (me.role === 'staff') return [['door', 'Door', door ? `/staff/room/${encodeURIComponent(door)}` : '/sessions?pick=door'], ['board', 'Board', '/sessions'], ['qr', 'QR codes', '/staff/qr'], ['sim', 'Simulator', '/sim']];
-    return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['seat', 'My seat', room ? `/r/${encodeURIComponent(room)}` : '/sessions'], ['me', 'Me', '/me']];
+    return [['now', 'Now', '/event'], ['map', 'Schedule', '/sessions'], ['seat', 'My seat', room ? `/r/${encodeURIComponent(room)}` : '/seat.html'], ['me', 'Me', '/me']];
   };
   const ROLE = { attendee: 'Attendee', guest: 'Guest', staff: 'Door staff', organiser: 'Organiser' };
   async function nav() {
@@ -233,7 +273,8 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
       : `<a class="rr-signin" href="/login?next=${encodeURIComponent(location.pathname)}">Sign in</a>`;
     const bar = document.createElement('header');
     bar.className = 'rr-bar';
-    bar.innerHTML = `<a class="rr-nav-brand" href="${esc(home)}"><i aria-hidden="true"></i>RightRoom</a><nav class="rr-nav rr-nav--top" aria-label="Main">${tabs.map(link).join('')}</nav><span class="rr-here" id="rr-here"></span>${user}`;
+    const scan = me && me.role !== 'organiser' && !path.startsWith('/scan') ? `<a class="rr-scanbtn" href="/scan">${svg('qr')}<span>Scan</span></a>` : '';
+    bar.innerHTML = `<a class="rr-nav-brand" href="${esc(home)}"><i aria-hidden="true"></i>RightRoom</a><nav class="rr-nav rr-nav--top" aria-label="Main">${tabs.map(link).join('')}</nav><span class="rr-here" id="rr-here"></span>${scan}${user}`;
     const tabbar = document.createElement('nav');
     tabbar.className = 'rr-nav rr-nav--tabs';
     tabbar.setAttribute('aria-label', 'Main');
@@ -264,5 +305,5 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', nav); else nav();
 
-  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, roomName, toast };
+  window.RR = { nearbyFree, heat, suggestZones, wifiChip, BAND, api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, roomName, toast };
 })();

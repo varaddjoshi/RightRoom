@@ -62,7 +62,7 @@
       // When full, point people at the nearest room with free seats (walking minutes from this room).
       const alt = floors.flatMap((f) => f.rooms).filter((r) => r.id !== v.id && r.free > 0).sort((a, b) => a.walk - b.walk || b.free - a.free)[0];
       $('next').innerHTML = v.status === 'full' && alt
-        ? `<div class="rr-route"><span class="rr-route__arrow" aria-hidden="true"></span><div><div class="rr-route__to">${RR.esc(RR.roomName(alt.id))} has seats</div><div class="rr-route__meta">${RR.esc(alt.title)} · ${alt.free} free</div><span class="rr-access">${alt.stepFree ? '&#9855; ' : ''}${RR.esc(alt.access)}</span></div><div class="rr-route__time">${Number(alt.walk)}<small>MIN</small></div></div>`
+        ? `<div class="rr-route"><span class="rr-route__arrow" aria-hidden="true"></span><div><div class="rr-route__to">Full. Go to ${RR.esc(RR.roomName(alt.id))}</div><div class="rr-route__meta">${RR.esc(alt.title)} · ${alt.free} free</div><span class="rr-access">${alt.stepFree ? '&#9855; ' : ''}${RR.esc(alt.access)}</span></div><div class="rr-route__time">${Number(alt.walk)}<small>MIN</small></div></div>`
         : v.status === 'full' ? '<p class="note">Every room is full right now. Join the queue at the door.</p>' : `<p class="rr-route__to">${v.free} seats free</p>`;
     } catch (e) { $('next').innerHTML = `<p class="note">${RR.esc(e.message)}</p>`; }
   }

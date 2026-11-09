@@ -443,3 +443,41 @@ a.talk:hover { border-color: var(--rr-line); }
 .star { color: var(--rr-accent-ink); font-weight: 700; }
 
 @media print { .rr-nav, .rr-bar, .rr-toast { display: none !important; } }
+
+/* ---- UI round 2 ------------------------------------------------------------------------------- */
+/* Scan action in the top bar */
+.rr-scanbtn { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 var(--rr-s3); border-radius: 999px; color: var(--rr-action); font-weight: 700; text-decoration: none; }
+.rr-scanbtn svg { width: 22px; height: 22px; }
+.rr-scanbtn:hover { background: var(--rr-panel-2); }
+.rr-scanbtn + .rr-user, .rr-scanbtn + .rr-signin { margin-left: var(--rr-s1); }
+@media (min-width: 960px) { .rr-here + .rr-scanbtn { margin-left: var(--rr-s3); } }
+
+/* Full room: the redirect is the hero card */
+.rr-redirect { display: grid; gap: var(--rr-s3); padding: var(--rr-s5) var(--rr-s4); background: var(--rr-panel); border: 1px solid var(--rr-free); border-radius: var(--rr-r2); box-shadow: var(--rr-shadow); }
+.rr-redirect__to { margin: 0; font: 800 var(--rr-t-xl)/1.15 var(--rr-font-sign); text-wrap: balance; }
+.rr-redirect__facts { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--rr-t-md); }
+.rr-redirect__facts b { color: var(--rr-free); }
+.tile-go, .go { color: var(--rr-free); font: 700 var(--rr-t-xs)/1.3 var(--rr-font-sign); }
+
+/* Wi-Fi: chip on tiles, band word, live gauge */
+.tile-m.wifi::before, .wifi-band::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 2px; background: var(--rr-free); vertical-align: 1px; }
+.tile-m.wifi[data-band="ok"]::before, .wifi-band[data-band="ok"]::before { background: var(--rr-filling); border-radius: 50%; }
+.tile-m.wifi[data-band="weak"]::before, .wifi-band[data-band="weak"]::before { background: var(--rr-full); clip-path: polygon(50% 0, 100% 100%, 0 100%); border-radius: 0; }
+.wifi-band { font-weight: 700; }
+.wg-bar { height: 8px; background: var(--rr-panel-2); border-radius: 999px; overflow: hidden; }
+.wg-bar i { display: block; height: 100%; background: var(--rr-action); transform-origin: left; transform: scaleX(var(--rr-scale, 0)); transition: transform 200ms linear; }
+
+/* Zone heatmap: every cell has a word and a value; colour only adds to them */
+.hm-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--rr-s2); margin-bottom: var(--rr-s3); }
+.hm-meta { display: inline-flex; align-items: center; gap: var(--rr-s2); }
+.hm { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--rr-s2); }
+.hz { display: grid; gap: 2px; min-height: 64px; padding: var(--rr-s2); border-radius: var(--rr-r1); border: 1px solid var(--rr-hair); background: var(--rr-panel); font-size: var(--rr-t-xs); overflow-wrap: anywhere; }
+.hz b { font: 700 var(--rr-t-xs)/1.2 var(--rr-font-sign); }
+.hz span { color: var(--rr-ink); }
+.hz em { font-style: normal; font-weight: 700; color: var(--rr-action); }
+.hz[data-band="quiet"], .hz[data-band="good"] { background: #e7effa; }
+.hz[data-band="busy"], .hz[data-band="ok"] { background: #fcefd2; }
+.hz[data-band="packed"], .hz[data-band="weak"] { background: #f9e0e4; }
+.hz[data-band="none"] { background: var(--rr-panel); border: 1px dashed var(--rr-line); color: var(--rr-muted); }
+.hz[data-suggest] { outline: 2px solid var(--rr-action); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .wg-bar i { transition: none; } }
