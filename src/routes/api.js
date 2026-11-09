@@ -67,7 +67,8 @@ function api({ store, engine }) {
   r.get('/spaces/:id', h((req) => engine.roomForUser(sid(req), req.user?.handle)));
   r.post('/spaces/:id/queue', h((req) => engine.joinQueue(sid(req), signedIn(req), req.device)));
   r.delete('/spaces/:id/queue', h((req) => engine.leaveQueue(sid(req), signedIn(req).handle)));
-  r.get('/spaces/:id/redirect', h((req) => engine.redirect(sid(req), signedIn(req))));
+  // Signed in: a suggestion plus that person's one hold. Signed out (D1 big screen): read-only, no hold (issue #23).
+  r.get('/spaces/:id/redirect', h((req) => engine.redirect(sid(req), req.user || null)));
   r.post('/offers/:id/claim', h((req) => engine.claim(req.params.id, signedIn(req).handle, req.body?.version)));
   r.post('/spaces/:id/checkin', h((req) => engine.checkin(sid(req), signedIn(req), zone(req.body?.zone))));
   r.post('/spaces/:id/leave', h((req) => engine.leave(sid(req), signedIn(req).handle)));

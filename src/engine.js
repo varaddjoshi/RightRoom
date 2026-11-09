@@ -4,12 +4,15 @@ const crypto = require('node:crypto');
 const { ZONES } = require('./mock/seed');
 
 const OFFER_MS = 60_000;          // seat offer hold
-const SCAN_MS = 5 * 60_000;       // claimed seat must be scanned in within this (journey-map decision 31)
-const SCAN_ACCESS_MS = 15 * 60_000; // longer for people with a stated access need
 const CONFIRM_MS = 30_000;        // staff answer window before Full goes out
 const ADMIT_MS = 30 * 60_000;     // venue admission expiry
 
-function createEngine({ store, redirect, publish = () => {}, now = Date.now }) {
+// Claim window (Varad's decision replacing 31-32): none unless an organiser sets one, so by default a claimed seat is
+// held until scan-in or the session ends. `policy.claimWindowMs(needs)` returns milliseconds or null; it is where
+// src/policy.js (P1, coming) plugs in, with its separate time for a stated access need and the walking-time add-on.
+const NO_POLICY = { claimWindowMs: () => null };
+
+function createEngine({ store, redirect, publish = () => {}, now = Date.now, policy = NO_POLICY }) {
   const db = () => store.db;
   const space = (id) => db().spaces.get(String(id));
   const inside = (sp) => db().checkins.get(sp.id) || new Map();
@@ -126,7 +129,8 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now }) {
     o.status = 'claimed';
     o.version++;
     o.code = code();
-    o.scanBy = now() + (o.needs.length ? SCAN_ACCESS_MS : SCAN_MS);
+    const window = policy.claimWindowMs?.(o.needs) ?? null;
+    o.scanBy = window ? now() + window : null;
     const q = db().queue.find((x) => x.offer === o.id);
     if (q) q.status = 'claimed';
     update(space(o.space));
@@ -199,9 +203,16 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now }) {
 
   function setConsole(spaceId, handle, action) {
     const sp = room(spaceId);
-    sp.staffOn = action === 'open' ? handle : null;
-    // With nobody on the door a pending Full goes out straight away (decision 15).
-    if (!sp.staffOn && sp.pending) { sp.pending = null; sp.confirmed = true; }
+    const offDoor = (r) => {
+      r.staffOn = null;
+      // With nobody on the door a pending Full goes out straight away (decision 15).
+      if (r.pending) { r.pending = null; r.confirmed = true; }
+    };
+    if (action === 'open') {
+      // One door per staff member (issue #23, bug 4): opening this console leaves any other door they were on.
+      for (const other of db().spaces.values()) if (other !== sp && other.staffOn === handle) { offDoor(other); update(other); }
+      sp.staffOn = handle;
+    } else offDoor(sp);
     return update(sp);
   }
 
@@ -254,7 +265,7 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now }) {
     const t = now();
     const touched = new Set();
     for (const o of db().offers.values()) {
-      const expired = (o.status === 'offered' && t > o.heldUntil) || (o.status === 'claimed' && t > o.scanBy);
+      const expired = (o.status === 'offered' && t > o.heldUntil) || (o.status === 'claimed' && o.scanBy != null && t > o.scanBy);
       if (!expired) continue;
       o.status = 'expired';
       const sp = space(o.space);

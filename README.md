@@ -77,7 +77,7 @@ The load test signs in as staff (`RR_USER`, default `dana`; `RR_PASSWORD`, defau
 - the room shows 5 of 5 taken;
 - a Full status reaches a live stream subscriber.
 
-With `--pass-on`, it also passes only if the unclaimed offer reaches the next person's stream after about 60 seconds. Exit code 0 means every check passed.
+With `--pass-on`, it also passes only if the unclaimed offer reaches the next person's stream after about 60 seconds, and that stream stays open the whole minute. It keeps at most 64 requests in flight (`--concurrency`), which stays under macOS's connection-queue limit. Exit code 0 means every check passed.
 
 ### Try the API by hand
 
