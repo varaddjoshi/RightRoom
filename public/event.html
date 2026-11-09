@@ -19,13 +19,14 @@
   .venue { display: flex; align-items: center; justify-content: space-between; gap: var(--rr-s3); }
   .risk { font-size: var(--rr-t-xs); font-weight: 700; color: var(--rr-full); }
   .go { font-size: var(--rr-t-sm); font-weight: 700; color: var(--rr-free); }
+  #details { justify-self: start; min-height: 44px; display: inline-flex; align-items: center; font-weight: 700; }
   @media (min-width: 960px) { #home { grid-column: 1; } #upcoming { grid-column: 2; grid-row: 2 / span 4; } }
 </style>
 </head>
 <body>
 <!-- "Now": the attendee home. It adapts to where you are in the day: register, your seat, then what's on now and next. -->
 <main class="rr-screen rr-screen--wide" id="main">
-  <div class="rr-sign rr-span"><span class="rr-eyebrow">Venue · Hall A</span><h1 id="title">KubeCon hack day</h1></div>
+  <div class="rr-sign rr-span"><span class="rr-eyebrow" id="where">Venue · Hall A</span><h1 id="title">Now</h1><a id="details" href="/events" class="note">Event details and full agenda</a></div>
   <section id="home" class="rr-btn-stack" aria-live="polite"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></section>
   <section id="upcoming" class="rr-btn-stack" aria-label="What's on"><div class="rr-skel" aria-hidden="true"><i></i><i></i><i></i></div></section>
   <p class="rr-panel rr-span m0" id="err" role="alert" hidden></p>
@@ -34,10 +35,12 @@
 <script>
   const $ = (id) => document.getElementById(id);
   const enc = encodeURIComponent;
-  const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  let me = null;
+  // Times are shown in the event's timezone and "now" is the server's (demo) clock, from GET /api/events/:slug.
+  let tz, nowMs = Date.now();
+  const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz });
+  let me = null, ev = null, overlapOk = false;
 
-  const slot = (mins) => { const d = new Date(); d.setMinutes(Math.floor(d.getMinutes() / 30) * 30 + mins, 0, 0); return d; };
+  const slot = (mins) => { const d = new Date(nowMs); d.setMinutes(Math.floor(d.getMinutes() / 30) * 30 + mins, 0, 0); return d; };
 
   function registration(entry, venue) {
     if (!me) return `<div class="rr-panel venue"><div><b>${venue.taken} of ${venue.capacity}</b> registered</div>${RR.status(venue.status)}</div><a class="rr-btn" href="/login?next=/event">Sign in to register</a>`;
@@ -75,8 +78,11 @@
         ${live && risk[r.id] === 'high' && r.status !== 'full' ? '<span class="risk">Likely to fill soon</span>' : ''}
         ${live && r.status === 'full' && RR.nearbyFree(rooms, r) ? `<span class="go">Full · go to ${name(RR.nearbyFree(rooms, r))}, ${Number(RR.nearbyFree(rooms, r).free)} seats free</span>` : ''}</div>${live ? RR.status(r.status) : ''}</a>`;
     const order = (list) => [...list].sort((a, b) => forYou(b) - forYou(a) || (b.free > 0) - (a.free > 0) || a.floor - b.floor);
-    const nexts = order(rooms).flatMap((r) => (r.next ? [[r, r.next]] : []));
-    const soon = nexts.filter(([, s]) => !s.startsAt || new Date(s.startsAt) <= slot(90));
+    // Up next comes from this event's agenda only: sessions starting later today, in rooms the live engine knows.
+    const day = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: tz });
+    const nexts = (ev?.sessions || []).filter((s) => Date.parse(s.start) > nowMs && day(s.start) === day(nowMs))
+      .flatMap((s) => { const r = rooms.find((x) => x.id === s.room); return r ? [[r, { title: s.title, startsAt: s.start }]] : []; });
+    const soon = nexts.filter(([, s]) => new Date(s.startsAt) <= slot(90));
     const later = nexts.filter((x) => !soon.includes(x));
     return `<div class="slot"><h2>Happening now <small>${time(slot(0))} ${RR.label('live')}</small></h2>${order(rooms).map((r) => row(r, r, true)).join('') || '<p class="note">Nothing is running right now.</p>'}</div>
       <div class="slot"><h2>Up next</h2>${soon.map(([r, s]) => row(r, s, false)).join('') || '<p class="note">The next sessions show here once the day\'s schedule is loaded.</p>'}</div>
@@ -85,9 +91,12 @@
 
   async function render() {
     try {
-      const [{ venue, me: entry }, rooms, fc, seat] = await Promise.all([RR.api('/event'), RR.api('/sessions'), RR.api('/forecast').catch(() => ({ sessions: [] })), mySeat()]);
+      const [{ venue, me: entry, slug, name }, rooms, fc, seat] = await Promise.all([RR.api('/event'), RR.api('/sessions'), RR.api('/forecast').catch(() => ({ sessions: [] })), mySeat()]);
+      if (slug && !ev) { ev = await RR.api(`/events/${enc(slug)}`).catch(() => null); tz = ev?.timezone; $('details').href = `/e/${enc(slug)}`; }
+      if (ev) nowMs = Date.parse(ev.now);
+      $('where').textContent = `${name || 'Venue'} · ${ev ? `${ev.city} · ` : ''}Hall A`;
       const risk = Object.fromEntries((fc.sessions || []).map((s) => [s.room, s.risk]));
-      $('title').textContent = entry?.status === 'admitted' ? "Here's what's on" : entry?.status === 'waiting' ? "You're on the waitlist" : 'KubeCon hack day';
+      $('title').textContent = entry?.status === 'admitted' ? "Here's what's on" : entry?.status === 'waiting' ? "You're on the waitlist" : (name || 'Now');
       $('home').innerHTML = seat + registration(entry, venue);
       $('upcoming').innerHTML = upcoming(rooms, risk);
       $('reg')?.addEventListener('click', register);
@@ -95,9 +104,18 @@
       return entry;
     } catch (x) { RR.showError($('err'), x); }
   }
+  // Registers through the event's RSVP endpoint, which warns when the dates overlap another event you joined.
   async function register() {
     $('err').hidden = true;
-    try { await RR.api('/event/register', { method: 'POST' }); RR.toast('Registered'); render(); } catch (x) { RR.showError($('err'), x); }
+    try {
+      await RR.api(ev ? `/events/${enc(ev.slug)}/rsvp` : '/event/register', { method: 'POST', body: { force: overlapOk } });
+      RR.toast('Registered'); render();
+    } catch (x) {
+      if (!x.data?.overlap) return RR.showError($('err'), x);
+      overlapOk = true;
+      $('err').textContent = `${x.message} Press Register again to join both.`;
+      $('err').hidden = false;
+    }
   }
 
   (async () => {
