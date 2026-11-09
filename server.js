@@ -21,12 +21,13 @@ app.get('/health', (req, res) => {
 });
 app.use('/api', api({ store, engine }));
 app.use('/api', require('./src/routes/insights').makeRouter({ requireRole: auth.requireRole, db: () => store.db }));
+app.use(require('./src/routes/qr').qrRouter({ store, requireRole: auth.requireRole }));
 
 // Screen URLs from docs/journey-map.md, each served by one page in public/.
 const PAGES = {
   '/login': 'login', '/me': 'me', '/event': 'event', '/sessions': 'sessions', '/news': 'news',
   '/r/:room': 'room', '/r/:room/in': 'in',
-  '/staff/room/:room': 'staff-room', '/staff/setup': 'staff-setup', '/screen/:room': 'screen', '/sim': 'sim',
+  '/staff/room/:room': 'staff-room', '/staff/setup': 'staff-setup', '/staff/qr': 'staff-qr', '/screen/:room': 'screen', '/sim': 'sim',
 };
 for (const [url, page] of Object.entries(PAGES)) {
   app.get(url, (req, res) => res.sendFile(path.join(__dirname, 'public', `${page}.html`), (e) => e && res.status(404).send('Page not built yet.')));
