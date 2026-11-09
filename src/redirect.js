@@ -8,7 +8,8 @@
 //   - not Full
 //   - step-free route and room when the person needs step_free; live captions when they need captions;
 //     a free accessibility seat when they need access_seat
-//   - a session that is running (and not ending within 10 minutes) or starts within 20 minutes
+//   - a session whose door window (decision 32) is open now or opens within 20 minutes, and stays open long
+//     enough to claim and scan in: 5 minutes, or 15 for anyone with a stated access need (decision 31)
 // Ranking among the rest: topic match to the full room's session, then walking minutes, then free seats.
 // Interests only break ties inside the same topic band; they never decide who gets a seat (rule 5).
 //
@@ -17,8 +18,9 @@
 const { es, INDEX, SEMANTIC } = require('./es');
 
 const MIN = 60 * 1000;
-const ENDING_SOON_MIN = 10;
-const STARTING_SOON_MIN = 20;
+const OPENING_SOON_MIN = 20;
+const SCAN_MIN = 5;
+const SCAN_MIN_ACCESS = 15;
 
 function freeSeats(space) {
   return Math.max(0, (space.capacity || 0) - (space.taken || 0));
@@ -48,10 +50,10 @@ async function currentSession(spaceId, now) {
 }
 
 // Sessions in other rooms that someone could walk into now, scored by topic similarity.
-async function candidateSessions({ spaceId, now, queryText }) {
+async function candidateSessions({ spaceId, now, queryText, scanMin }) {
   const filter = [
-    { range: { end: { gt: new Date(now.getTime() + ENDING_SOON_MIN * MIN).toISOString() } } },
-    { range: { start: { lte: new Date(now.getTime() + STARTING_SOON_MIN * MIN).toISOString() } } },
+    { range: { door_close_at: { gt: new Date(now.getTime() + scanMin * MIN).toISOString() } } },
+    { range: { door_open_at: { lte: new Date(now.getTime() + OPENING_SOON_MIN * MIN).toISOString() } } },
   ];
   const must_not = [{ term: { room_id: spaceId } }];
   const base = { index: INDEX.sessions, size: 50, _source: { excludes: ['topic'] } };
@@ -83,8 +85,9 @@ function minutesBetween(a, b) {
 
 function timeReason(session, now) {
   const startsIn = minutesBetween(now, session.start);
-  if (startsIn > 0) return `Starts in ${startsIn} min`;
-  return `On now, ends in ${minutesBetween(now, session.end)} min`;
+  const closesIn = session.door_close_at ? `, door closes in ${minutesBetween(now, session.door_close_at)} min` : '';
+  if (startsIn > 0) return `Starts in ${startsIn} min${closesIn}`;
+  return `On now${closesIn}`;
 }
 
 async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], now = new Date() } = {}) {
@@ -100,7 +103,8 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
   const queryText = current
     ? `${current.title}. ${current.abstract || ''} ${(current.tags || []).join(' ')}`
     : [...interestSet].join(' ');
-  const { method, hits } = await candidateSessions({ spaceId, now, queryText });
+  const scanMin = needSet.size ? SCAN_MIN_ACCESS : SCAN_MIN;
+  const { method, hits } = await candidateSessions({ spaceId, now, queryText, scanMin });
 
   // One candidate per room: its best-scoring session.
   const byRoom = new Map();

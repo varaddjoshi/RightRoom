@@ -1,5 +1,5 @@
 {
-  "_note": "Stand-in data for the demo. Session times are minutes relative to when the seed runs, so a session is always on. Every document is labelled stand_in.",
+  "_note": "Stand-in data for the demo. Session times are minutes relative to when the seed runs, so a session is always on and its door window (10 min before to 20 min after start) is still open. Rerun the seed shortly before a demo. Every document is labelled stand_in.",
   "event": { "id": "cnh-2026", "name": "Cloud Native Hackathon 2026" },
   "venue": {
     "id": "venue",
@@ -19,8 +19,8 @@
   ],
   "rule_room": "Seats go first come, first served at the door. Accessibility seats only go to people who stated that need.",
   "slots": [
-    { "id": "a", "start_min": -10, "duration_min": 45 },
-    { "id": "b", "start_min": 40, "duration_min": 45 }
+    { "id": "a", "start_min": -2, "duration_min": 45 },
+    { "id": "b", "start_min": 45, "duration_min": 45 }
   ],
   "sessions": [
     { "room": "r101", "slot": "a", "title": "Paved roads: platform engineering at scale", "track": "Platform", "level": "intro", "tags": ["platform-engineering", "developer-experience", "kubernetes"], "abstract": "How a platform team builds golden paths so hundreds of developers ship to Kubernetes without learning every knob, and how to measure whether the platform helps." },

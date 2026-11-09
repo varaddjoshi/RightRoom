@@ -15,6 +15,9 @@ const data = require('./seed-data.json');
 const EVENT = data.event.id;
 const LABEL = 'stand_in';
 const MIN = 60 * 1000;
+// Decision 32 defaults; the organiser or the room's staff can change them per session.
+const DOOR_OPENS_BEFORE_MIN = 10;
+const DOOR_CLOSES_AFTER_MIN = 20;
 
 function statusFor(taken, capacity) {
   if (taken >= capacity) return 'full';
@@ -74,6 +77,8 @@ function buildDocs(now) {
     docs.push([INDEX.sessions, `s-${s.room}-${s.slot}`, {
       ...stamp, title: s.title, abstract: s.abstract, speakers: [], tags: s.tags, track: s.track,
       level: s.level, room_id: s.room, start: start.toISOString(), end: end.toISOString(),
+      door_open_at: new Date(start.getTime() - DOOR_OPENS_BEFORE_MIN * MIN).toISOString(),
+      door_close_at: new Date(start.getTime() + DOOR_CLOSES_AFTER_MIN * MIN).toISOString(),
       topic: `${s.title}. ${s.abstract} Tags: ${s.tags.join(', ')}.`,
     }]);
   }

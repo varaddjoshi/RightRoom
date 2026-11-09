@@ -129,6 +129,10 @@ const MAPPINGS = {
     room_id: keyword,
     start: date,
     end: date,
+    // Door window (decision 32): check-ins, offers and claims only happen between these two times.
+    // Default 10 min before start to 20 min after; the organiser or the room's staff can move either.
+    door_open_at: date,
+    door_close_at: date,
     // Title + abstract + tags, embedded by Elasticsearch, used by the redirect query.
     topic: semanticField,
   },
