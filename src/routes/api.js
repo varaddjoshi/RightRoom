@@ -60,7 +60,7 @@ function api({ store, engine }) {
   }));
 
   // Schedule and floors (A4, S1, S2, D1)
-  r.get('/sessions', h(() => [...db().spaces.values()].filter((s) => s.type === 'room').map((s) => ({ ...engine.view(s), wifi: engine.wifiMedian(s.id) }))));
+  r.get('/sessions', h(() => [...db().spaces.values()].filter((s) => s.type === 'room' && !s.test).map((s) => ({ ...engine.view(s), wifi: engine.wifiMedian(s.id) }))));
   r.get('/floors', h((req) => engine.floors(req.user?.role, db().spaces.has(String(req.query.from)) ? String(req.query.from) : null)));
 
   // Room door and inside (A5, A6)
@@ -164,6 +164,16 @@ function api({ store, engine }) {
     return engine.staffView(id);
   }));
   r.post('/sim/rush', requireRole('staff'), h(() => rush(engine, db())));
+  // Room for scripts/loadtest.js over real HTTP: separate from the real rooms and left out of /sessions, /floors and
+  // redirects. POST recreates it empty with `seats` seats; DELETE removes it with its queue, offers and the guest
+  // accounts that only queued for it.
+  r.post('/sim/loadtest-room', requireRole('staff'), h((req) => {
+    const seats = int(req.body?.seats ?? 5, 1, 50, 'seats');
+    removeTestRoom(db(), LOADTEST_ROOM, { guests: true });
+    addTestRoom(db(), LOADTEST_ROOM, seats);
+    return engine.view(engine.space(LOADTEST_ROOM));
+  }));
+  r.delete('/sim/loadtest-room', requireRole('staff'), h(() => removeTestRoom(db(), LOADTEST_ROOM, { guests: true })));
   r.post('/sim/end-session', requireRole('staff'), h((req) => engine.endSession(bodySpace(req))));
   r.post('/sim/reset', requireRole('organiser'), h(() => { store.reset(); auth.ensureDemoUsers(store.db); return { reset: true }; }));
 
@@ -173,18 +183,36 @@ function api({ store, engine }) {
 // Load test in-process: 50 stand-ins queue for a 5-seat room, every one tries to claim every offer; exactly 5 must win.
 function rush(engine, db) {
   const id = 'rush';
-  db.spaces.set(id, { id, type: 'room', floor: 0, pos: 0, title: 'Load test room', capacity: 5, tags: [], stepFree: true, access: 'Test', rule: 'First come', accessZones: [], correction: 0, freeZones: [], override: null, confirmed: false, pending: null, staffOn: null, redirectHolds: [] });
-  db.checkins.set(id, new Map());
+  addTestRoom(db, id, 5);
   const people = Array.from({ length: 50 }, (_, i) => `stand-in-rush-${i}`);
   for (const p of people) engine.joinQueue(id, { handle: p, needs: [] }, null);
   const offers = [...db.offers.values()].filter((o) => o.space === id);
   let winners = 0;
   for (const p of people) for (const o of offers) { try { engine.claim(o.id, p); winners++; } catch { /* lost the race, as expected */ } }
+  removeTestRoom(db, id);
+  return { people: people.length, seats: 5, winners };
+}
+
+const LOADTEST_ROOM = 'loadtest';
+
+// A test room is a normal room flagged `test`, so the screens' room lists and redirects skip it.
+function addTestRoom(db, id, seats) {
+  db.spaces.set(id, { id, type: 'room', test: true, floor: 0, pos: 0, title: 'Load test room', capacity: seats, tags: [], stepFree: true, access: 'Test', rule: 'First come', accessZones: [], correction: 0, freeZones: [], override: null, confirmed: false, pending: null, staffOn: null, redirectHolds: [] });
+  db.checkins.set(id, new Map());
+}
+
+// Removes a test room with everything in it. With `guests`, also the guest accounts whose only queue entries were here.
+function removeTestRoom(db, id, { guests = false } = {}) {
+  if (!db.spaces.get(id)?.test) return { removed: false };
+  const here = new Set(db.queue.filter((q) => q.space === id).map((q) => q.handle));
+  const elsewhere = new Set(db.queue.filter((q) => q.space !== id).map((q) => q.handle));
   db.spaces.delete(id);
   db.checkins.delete(id);
-  for (const o of offers) db.offers.delete(o.id);
+  for (const [oid, o] of db.offers) if (o.space === id) db.offers.delete(oid);
   db.queue = db.queue.filter((q) => q.space !== id);
-  return { people: people.length, seats: 5, winners };
+  let removedGuests = 0;
+  if (guests) for (const h of here) if (h.startsWith('guest-') && !elsewhere.has(h) && db.users.delete(h)) removedGuests++;
+  return { removed: true, guests: removedGuests };
 }
 
 const STOP = new Set(['this', 'that', 'with', 'from', 'have', 'were', 'there', 'their', 'about', 'would', 'could', 'should', 'very', 'really', 'just', 'too', 'the']);

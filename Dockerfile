@@ -6,7 +6,8 @@ RUN npm ci --omit=dev --no-audit --no-fund
 # The app lives at the repo root; .dockerignore keeps docs, deploy files and secrets out.
 COPY . .
 ARG APP_VERSION=dev
-ENV PORT=8080 APP_VERSION=$APP_VERSION NODE_ENV=production
+# No npm update check at each start: it's a network call and log noise in the pod.
+ENV PORT=8080 APP_VERSION=$APP_VERSION NODE_ENV=production NPM_CONFIG_UPDATE_NOTIFIER=false
 # The node image's "node" user, by number so runAsNonRoot can check it.
 USER 1000
 EXPOSE 8080
