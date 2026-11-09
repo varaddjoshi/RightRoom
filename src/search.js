@@ -29,22 +29,24 @@ function memorySearch(rooms, q) {
   return out;
 }
 
-// P1 owns the index and mappings; this only reads it. Sessions carry room_id like "r204"; the engine's id is "204".
+// P1 owns the index and mappings; this only reads it. Sessions carry the real KubeCon room ids (r-2-255-bc), the
+// same ids the engine uses once it loads rooms from rr_spaces. Only sessions that haven't ended (demo clock) count.
 async function esSearch(q, size = 50) {
   const { es, INDEX, SEMANTIC } = require('./es');
   const should = [{ multi_match: { query: q, fields: ['title^3', 'tags^2', 'abstract'], fuzziness: 'AUTO' } }];
   if (SEMANTIC) should.push({ semantic: { field: 'topic', query: q } });
+  const filter = [{ range: { end: { gt: require('./clock').now().toISOString() } } }];
   const res = await es().search({
     index: INDEX.sessions,
     size,
-    query: { bool: { should, minimum_should_match: 1 } },
+    query: { bool: { should, filter, minimum_should_match: 1 } },
     highlight: { fields: { title: {}, abstract: {}, tags: {} } },
     _source: ['room_id', 'title', 'start', 'end', 'tags'],
   });
   return res.hits.hits.map((h) => {
     const fields = Object.keys(h.highlight || {});
     return {
-      room: String(h._source.room_id || '').replace(/^r/, ''),
+      room: String(h._source.room_id || ''),
       title: h._source.title,
       start: h._source.start,
       end: h._source.end,
@@ -54,11 +56,29 @@ async function esSearch(q, size = 50) {
   });
 }
 
+// Room rows for ids the engine doesn't know, from P1's spaces index. live: false marks them as having no live
+// queue or staff state in this process.
+async function spacesFromES(ids) {
+  const unique = [...new Set(ids)].filter(Boolean);
+  if (!unique.length) return [];
+  const { es, INDEX } = require('./es');
+  const { docs } = await es().mget({ index: INDEX.spaces, ids: unique });
+  return docs.filter((d) => d.found).map((d) => {
+    const s = d._source;
+    const free = Math.max(0, (s.capacity || 0) - (s.taken || 0));
+    return {
+      id: d._id, title: s.name, floor: s.floor, status: s.status || 'free', taken: s.taken || 0, capacity: s.capacity || 0, free,
+      stepFree: !!s.step_free, access: s.step_free ? 'Step-free' : 'Stairs only', tags: [], live: false,
+    };
+  });
+}
+
 let warned = false;
 
 async function search(engine, user, p) {
   const t0 = Date.now();
   const rooms = engine.floors(user?.role).flatMap((f) => f.rooms.map((r) => ({ ...r, floor: f.floor, tags: engine.space(r.id)?.tags || [] })));
+  const staffView = rooms.some((r) => 'staffOn' in r);
   let source = 'memory';
   let list = null;
 
@@ -66,6 +86,8 @@ async function search(engine, user, p) {
     try {
       const hits = await esSearch(p.q);
       const byId = new Map(rooms.map((r) => [r.id, r]));
+      // Rooms the engine doesn't hold (yet): fill them from rr_spaces, without live queue/staff state.
+      for (const r of await spacesFromES(hits.map((h) => h.room).filter((id) => !byId.has(id)))) byId.set(r.id, r);
       const seen = new Set();
       list = [];
       // Several sessions can share a room; keep its best hit.
@@ -76,6 +98,7 @@ async function search(engine, user, p) {
         list.push({ r, score: h.score, why: h.why, startsAt: h.start, endsAt: h.end, sessionTitle: h.title });
       }
       source = 'elasticsearch';
+      if (!list.length) { list = null; source = 'memory'; } // nothing joinable (e.g. a room-number query): try memory
     } catch (e) {
       if (!warned) { warned = true; console.warn('[search] Elasticsearch unavailable, using the in-memory search:', e.message); }
       list = null;
@@ -113,6 +136,8 @@ async function search(engine, user, p) {
       stepFree: r.stepFree, access: r.access, startsAt: x.startsAt || null, risk: RISK[r.id] || null, why, score: x.score,
     };
     if ('staffOn' in r) Object.assign(out, { staffOn: r.staffOn, queue: r.queue });
+    else if (staffView) Object.assign(out, { staffOn: null, queue: null }); // staff, but no live state for this room
+    if (r.live === false) { out.live = false; out.why.push('no live seat state in this demo yet'); }
     return out;
   });
   return { source, query: p, results, took: Date.now() - t0 };
