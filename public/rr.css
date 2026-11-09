@@ -481,3 +481,22 @@ a.talk:hover { border-color: var(--rr-line); }
 .hz[data-band="none"] { background: var(--rr-panel); border: 1px dashed var(--rr-line); color: var(--rr-muted); }
 .hz[data-suggest] { outline: 2px solid var(--rr-action); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .wg-bar i { transition: none; } }
+
+/* Crowd-sourced insights (RR.insights): a tinted, dashed-edge block so what people measured never reads as official data. */
+.rr-insights { display: grid; gap: var(--rr-s2); padding: var(--rr-s3); background: color-mix(in srgb, var(--rr-access) 6%, var(--rr-panel)); border: 1px dashed var(--rr-access); border-radius: var(--rr-r1); }
+.rr-insights-h { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rr-s2); }
+.rr-insights-h .rr-eyebrow { color: var(--rr-access); }
+.rr-insights dl { margin: 0; display: grid; gap: var(--rr-s1); }
+.rr-insights dl > div { display: grid; grid-template-columns: 4.5em 1fr; gap: var(--rr-s2); font-size: var(--rr-t-sm); }
+.rr-insights dt { font-weight: 700; color: var(--rr-ink); }
+.rr-insights dd { margin: 0; color: var(--rr-muted); min-width: 0; overflow-wrap: anywhere; }
+.rr-insights--compact { padding: var(--rr-s2) var(--rr-s3); gap: var(--rr-s1); }
+.rr-insights--compact dl > div { font-size: var(--rr-t-xs); }
+.rr-fit summary small { font-weight: 500; color: var(--rr-muted); }
+
+/* Star a talk (decision 7): a toggle button, the word changes with the state. */
+.rr-star { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 44px; padding: 0 var(--rr-s3); border: 1px solid var(--rr-line); border-radius: 999px; background: var(--rr-panel); color: var(--rr-ink); font: 700 var(--rr-t-sm)/1 var(--rr-font-sign); cursor: pointer; }
+.rr-star::before { content: "\2606"; font-size: 1.1em; }
+.rr-star[aria-pressed="true"] { background: var(--rr-signal); color: var(--rr-on-signal); border-color: var(--rr-signal-edge); }
+.rr-star[aria-pressed="true"]::before { content: "\2605"; }
+.rr-star:focus-visible { outline: 3px solid var(--rr-focus); outline-offset: 2px; }

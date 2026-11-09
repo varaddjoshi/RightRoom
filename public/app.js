@@ -145,6 +145,51 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
   const dataLabel = (l) => label(l === 'stand_in' ? 'stand-in' : l === 'mixed' ? 'live + stand-in' : 'live');
   const wifiChip = (w) => (w && w.count ? `<span class="tile-m wifi" data-band="${esc(w.band)}">Wi-Fi ${esc(BAND[w.band] || w.band)} · ${Math.round(w.mbps)} Mbps · ${Number(w.count)} ${w.count === 1 ? 'reading' : 'readings'}${w.label === 'stand_in' ? ' (stand-in)' : w.label === 'mixed' ? ' (incl. stand-in)' : ''}</span>` : '');
 
+  // Crowd-sourced insights (A4, A5): Wi-Fi median, top comment topics and crowd heat in one visually distinct block,
+  // labelled Live or Stand-in. Missing data says "No readings yet", never a made-up number.
+  // wifi: a wifiStats object ({mbps, count, band, label}; GET /api/floors) or falls back to room.wifiStats.
+  // topics: string[] (GET /api/spaces/:id/comments). heat: GET /api/heat?room= ({zones}) or the floors summary ({busiest}).
+  // compact: one line per item for list cards.
+  function insights(room, { wifi, topics, heat, compact } = {}) {
+    const w = wifi || room?.wifiStats;
+    const zones = heat?.zones || [];
+    const busiest = heat?.busiest || zones.filter((z) => z.crowd).sort((a, b) => b.crowd.density - a.crowd.density).map((z) => ({ zone: z.zone, band: z.crowd.band }))[0];
+    const weakest = heat?.weakestWifi || zones.filter((z) => z.wifi).sort((a, b) => a.wifi.mbps - b.wifi.mbps).map((z) => ({ zone: z.zone, band: z.wifi.band, mbps: z.wifi.mbps }))[0];
+    const kinds = [w?.count ? w.label : null, heat?.label || zones.find((z) => z.crowd)?.crowd.label].filter(Boolean);
+    const tag = kinds.length ? dataLabel(new Set(kinds).size > 1 ? 'mixed' : kinds[0]) : '';
+    const wifiTxt = w?.count
+      ? `<span class="wifi-band" data-band="${esc(w.band)}">${esc(BAND[w.band] || w.band)}</span> · ${Math.round(w.mbps)} Mbps median · ${Number(w.count)} ${w.count === 1 ? 'reading' : 'readings'}${weakest && weakest.band === 'weak' ? ` · weak at ${esc(zoneName(weakest.zone).toLowerCase())}` : ''}`
+      : 'No readings yet';
+    const topicTxt = topics?.length ? topics.slice(0, 3).map(esc).join(', ') : 'No comments yet';
+    const heatTxt = busiest ? `${esc(BAND[busiest.band] || busiest.band)} at ${esc(zoneName(busiest.zone).toLowerCase())}` : 'No readings yet';
+    const row = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+    return `<section class="rr-insights${compact ? ' rr-insights--compact' : ''}" aria-label="Crowd-sourced insights for ${esc(roomName(room))}">
+      <div class="rr-insights-h"><span class="rr-eyebrow">Crowd-sourced</span>${tag}</div>
+      <dl>${row('Wi-Fi', wifiTxt)}${row('Topics', topicTxt)}${row('Crowd', heatTxt)}</dl></section>`;
+  }
+
+  // "Why this for you" (A4, A5): plain-language reasons from interests, access needs, seats, Wi-Fi and walk.
+  // Each reason starts with a word that says good or not ("Matches", "Not step-free"), never colour alone.
+  // me: GET /api/me (or null). minutes: walk time (defaults to room.walk). open: start expanded.
+  function whyForYou(room, me, { minutes = room?.walk, open } = {}) {
+    const reasons = [];
+    const mine = (room?.tags || []).filter((t) => (me?.interests || []).includes(t));
+    if (mine.length) reasons.push(`Matches your interests: ${mine.join(', ')}`);
+    const needs = me?.needs || [];
+    if (needs.includes('step-free')) reasons.push(room.stepFree ? 'Step-free, as you asked' : 'Not step-free: stairs only');
+    if (needs.includes('captions')) reasons.push(/caption/i.test(room.access || '') ? 'Has captions, as you asked' : 'No captions listed');
+    if (room?.free != null) reasons.push(room.free > 0 ? `${Number(room.free)} ${room.free === 1 ? 'seat' : 'seats'} free now` : 'Full right now: join the queue or pick another room');
+    const w = room?.wifiStats;
+    if (w?.count) reasons.push(`Wi-Fi ${String(BAND[w.band] || w.band).toLowerCase()} (${Math.round(w.mbps)} Mbps, crowd-sourced)`);
+    else if (room?.wifi != null) reasons.push(`Wi-Fi about ${Math.round(room.wifi)} Mbps (crowd-sourced)`);
+    if (minutes === 0) reasons.push("You're already here");
+    else if (minutes != null) reasons.push(`${Number(minutes)} min walk`);
+    const html = reasons.length
+      ? `<details class="rr-why rr-fit"${open ? ' open' : ''}><summary><span>Why this for you<small> · ${esc(reasons[0])}</small></span></summary><ul>${reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul></details>`
+      : '';
+    return { reasons, html };
+  }
+
   // Zone heatmap from /api/heat: Crowd or Wi-Fi per zone, a word and a value in every cell, never colour alone.
   // Zones nobody has measured say "No readings yet" instead of looking empty.
   async function heat(el, room, opts = {}) {
@@ -321,5 +366,5 @@ if (typeof document !== 'undefined') document.head.appendChild(Object.assign(doc
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', nav); else nav();
 
-  window.RR = { nearbyFree, heat, suggestZones, wifiChip, BAND, api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, liveEvent, eventWhen, evTime, evDay, roomName, toast };
+  window.RR = { insights, whyForYou, nearbyFree, heat, suggestZones, wifiChip, BAND, api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion, nav, here, undo, remember, recall, svg, whoami, liveEvent, eventWhen, evTime, evDay, roomName, toast };
 })();
