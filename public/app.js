@@ -113,13 +113,14 @@
       const head = `<div class="fl-h"><b>FLOOR ${Number(f.floor)}</b>${here}${list ? '' : badge(mine, f.floor, `Floor ${Number(f.floor)}`)}<span>${f.rooms.length} rooms · ${seats} seats free</span></div>${list ? mine.map(notice).join('') : ''}`;
       const body = list
         ? f.rooms.map((r) => `<div class="talk${needs(r) ? ' alert' : ''}"><div><b>Room ${esc(r.id)} · ${esc(r.title)}</b><span>${r.taken} of ${r.capacity} · ${access(r)}</span>${extra(r).replace(/tile-m|tile-x/g, '')}</div>${status(r.status)}</div>`).join('')
-        : `<div class="fl-rooms">${f.rooms.map((r) => `<button type="button" class="tile${needs(r) ? ' needs' : ''}" data-room="${esc(r.id)}" data-status="${esc(r.status)}" style="--cap:${Number(r.capacity)}">
+        : `<div class="fl-rooms">${f.rooms.map((r, i) => `<button type="button" class="tile${needs(r) ? ' needs' : ''}" data-room="${esc(r.id)}" data-status="${esc(r.status)}" style="--cap:${Number(r.capacity)};--i:${Math.min(i, 4)}">
             <span class="tile-top"><span class="tile-n">${esc(r.id)}</span>${status(r.status)}</span>
             <span class="tile-t">${esc(r.title)}</span>
             <span class="meter" aria-hidden="true"><i style="width:${Math.min(100, Math.round((r.taken / r.capacity) * 100))}%"></i></span>
             <span class="tile-m">${r.taken} of ${r.capacity}</span><span class="tile-m">${access(r)}</span>${extra(r)}</button>`).join('')}</div>`;
       return `<div class="fl">${head}${body}</div>`;
     }).join('')}</div>`;
+    motion(el, opts.mode || 'map');
     if (opts.onPick) el.querySelectorAll('[data-room]').forEach((b) => b.addEventListener('click', () => opts.onPick(b.dataset.room)));
     el.querySelectorAll('.notice-badge').forEach((b) => b.addEventListener('click', () => {
       const floor = b.dataset.floor === 'all' ? null : Number(b.dataset.floor);
@@ -127,11 +128,43 @@
     }));
   }
 
+  // Motion: the first render staggers tiles in, switching Map/List cross-fades; live re-renders stay still.
+  function motion(el, mode) {
+    const first = !el.dataset.rrMode, swapped = !first && el.dataset.rrMode !== mode;
+    el.dataset.rrMode = mode;
+    if (!first && !swapped) return;
+    el.classList.remove('rr-enter', 'rr-swap');
+    void el.offsetWidth; // restart the animation
+    el.classList.add(first ? 'rr-enter' : 'rr-swap');
+    setTimeout(() => el.classList.remove('rr-enter', 'rr-swap'), 400);
+  }
+
+  // Motion: pages redraw with innerHTML, so a value is tracked by a stable key (nearest room or id + position),
+  // not by node. A changed count or status gets a short tick; a claim code or offer animates when it first appears.
+  const WATCH = [['.rr-count', 'rr-tick', 'change'], ['.rr-position strong', 'rr-tick', 'change'], ['.rr-status', 'rr-pulse', 'change'], ['.rr-code', 'rr-reveal', 'appear'], ['.rr-offer', 'rr-arrive', 'appear']];
+  const last = new Map();
+  function noticeChanges() {
+    for (const [sel, cls, when] of WATCH) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (when === 'appear' && !el.getClientRects().length) continue; // hidden: animate when it is actually shown
+        const host = el.closest('[data-room],[id]');
+        const key = `${sel}|${host ? host.dataset.room || host.id : ''}|${host ? [...host.querySelectorAll(sel)].indexOf(el) : 0}`;
+        const val = sel === '.rr-status' ? el.dataset.status : el.textContent;
+        const was = last.get(key);
+        last.set(key, val);
+        if (when === 'change' ? was !== undefined && was !== val : was !== val) el.classList.add(cls);
+      }
+    }
+  }
+  let queued = false;
+  new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; noticeChanges(); }); } })
+    .observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['data-status', 'hidden'] });
+
   // Shows an error next to a form instead of failing silently.
   function showError(el, e) {
     el.textContent = e.message || String(e);
     el.hidden = false;
   }
 
-  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices };
+  window.RR = { api, requireLogin, live, status, count, label, zoneName, floorBoard, showError, esc, WORD, notice, forFloor, showNotices, watchNotices, motion };
 })();

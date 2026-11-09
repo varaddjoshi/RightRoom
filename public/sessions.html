@@ -66,6 +66,7 @@
             <span>${Number(r.taken)} of ${Number(r.capacity)} in${r.wifi != null ? ` · Wi-Fi ${Number(r.wifi)} Mbps` : ''}${topics[r.id]?.length ? ` · topics: ${topics[r.id].map(RR.esc).join(', ')}` : ''}</span>
             ${fcLine(r.id)}
           </div>${RR.status(r.status)}</a>`).join('')}</div></section>`).join('')}</div>`;
+      RR.motion($('view'), 'list');
     } catch (x) { RR.showError($('err'), x); }
   }
 
