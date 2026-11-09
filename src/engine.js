@@ -49,6 +49,7 @@ function createEngine({ store, redirect, publish = () => {}, now = require('./cl
 
   // Called after every change: offers free seats to the queue first (decision 17), then works out Full (decisions 14-15).
   function update(sp) {
+    if (sp.type === 'venue') admitVenue(); // a freed place (e.g. a deleted account) goes to the waitlist straight away
     if (sp.type === 'room') {
       fill(sp);
       const atCap = taken(sp) >= sp.capacity;

@@ -64,7 +64,7 @@
     const count = `<p class="m0"><b>${Number(ev.going)} of ${Number(ev.capacity)}</b> ${word}${ev.waitlist ? ` · ${Number(ev.waitlist)} on the waitlist` : ''} ${RR.label(ev.register ? 'live' : 'stand-in')}</p><p class="m0 muted">${esc(ev.rule)}</p>`;
     const verb = ev.register ? 'Register' : 'RSVP';
     if (ev.status === 'past') return `${count}<p class="m0">This event has ended.</p>`;
-    if (!me) return `${count}<a class="rr-btn" href="/login?next=${enc(location.pathname)}">Sign in to ${verb.toLowerCase()}</a>`;
+    if (!me) return `${count}<a class="rr-btn" href="/login?mode=login&next=${enc(location.pathname)}">Sign in to ${verb.toLowerCase()}</a>`;
     if (me.role === 'guest') return `${count}<a class="rr-btn rr-btn--ghost" href="/login?next=${enc(location.pathname)}">Create an account to ${verb.toLowerCase()}</a>`;
     const m = ev.me;
     if (!m || m.status === 'expired') return `${count}<button class="rr-btn" type="button" id="go">${force ? `${verb} anyway` : `${verb} for this event`}</button>`;

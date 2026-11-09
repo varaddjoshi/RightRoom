@@ -275,7 +275,7 @@
         body.innerHTML = (s ? `<section class="rr-redirect" aria-labelledby="h-go">
             <span class="rr-eyebrow">This room is full</span>
             <h2 class="rr-redirect__to" id="h-go">Go to ${RR.esc(RR.roomName(s.room))}</h2>
-            <p class="rr-redirect__facts"><b>${Number(s.free)} seats free</b><span>${Number(s.minutes)} min walk</span><span${s.stepFree ? ' class="rr-access"' : ''}>${s.stepFree ? '&#9855; ' : ''}${RR.esc(s.access)}</span></p>
+            <p class="rr-redirect__facts"><b>${Number(s.free)} seats free</b>${s.heldForRedirects ? `<span>${Number(s.heldForRedirects)} already on their way</span>` : ''}<span>${Number(s.minutes)} min walk</span><span${s.stepFree ? ' class="rr-access"' : ''}>${s.stepFree ? '&#9855; ' : ''}${RR.esc(s.access)}</span></p>
             <p class="m0 muted">${RR.esc(s.title)}</p>
             <a class="rr-btn" href="/r/${enc(s.room)}">Go to ${RR.esc(RR.roomName(s.room))}</a>
             <details class="rr-why"><summary>Why this room?</summary><ul>

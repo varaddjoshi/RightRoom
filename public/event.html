@@ -62,7 +62,7 @@
   const slot = (mins) => { const d = new Date(nowMs); d.setMinutes(Math.floor(d.getMinutes() / 30) * 30 + mins, 0, 0); return d; };
 
   function registration(entry, venue) {
-    if (!me) return `<div class="rr-panel venue"><div><b>${venue.taken} of ${venue.capacity}</b> registered</div>${RR.status(venue.status)}</div><a class="rr-btn" href="/login?next=/event">Sign in to register</a>`;
+    if (!me) return `<div class="rr-panel venue"><div><b>${venue.taken} of ${venue.capacity}</b> registered</div>${RR.status(venue.status)}</div><a class="rr-btn" href="/login?mode=login&next=/event">Sign in to register</a>`;
     if (me.role === 'guest') return `<div class="rr-panel"><p class="m0">You're browsing as a guest. Room doors work; registering for the venue needs an account.</p></div><a class="rr-btn rr-btn--ghost" href="/login?next=/event">Create an account</a>`;
     if (!entry) return `<div class="rr-panel venue"><div><b>${venue.taken} of ${venue.capacity}</b> registered · ${RR.esc(venue.rule)}</div>${RR.status(venue.status)}</div><button class="rr-btn" type="button" id="reg">Register for the day</button>`;
     if (entry.status === 'waiting') return `<div class="rr-panel rr-position"><span class="rr-eyebrow">Your place on the waitlist</span><strong>#${Number(entry.position)}</strong><p>${RR.esc(entry.reason)} This page updates when you're admitted.</p></div>${notifyBtn()}`;
@@ -139,7 +139,7 @@
     const name = (r) => RR.esc(RR.roomName(r));
     const row = (r, s, live) => `<a class="talk" href="/r/${enc(r.id)}"><div><b>${RR.esc(s.title)}</b>
         <span>${name(r)} · Floor ${RR.esc(r.floor)}${s.startsAt ? ` · ${time(s.startsAt)}` : ''}${live ? ` · ${Number(r.free)} seats free` : ''}${forYou(r) ? ' · <span class="star">For you</span>' : ''}</span>
-        ${live && risk[r.id] === 'high' && r.status !== 'full' ? '<span class="risk">Likely to fill soon</span>' : ''}
+        ${live && risk[r.id] === 'high' && r.free > 0 && !['full', 'checking'].includes(r.status) ? '<span class="risk">Likely to fill soon</span>' : ''}
         ${live && r.status === 'full' && RR.nearbyFree(rooms, r) ? `<span class="go">Full · go to ${name(RR.nearbyFree(rooms, r))}, ${Number(RR.nearbyFree(rooms, r).free)} seats free</span>` : ''}</div>${live ? RR.status(r.status) : ''}</a>`;
     const order = (list) => [...list].sort((a, b) => forYou(b) - forYou(a) || (b.free > 0) - (a.free > 0) || a.floor - b.floor);
     // Up next comes from this event's agenda only: sessions starting later today, in rooms the live engine knows.

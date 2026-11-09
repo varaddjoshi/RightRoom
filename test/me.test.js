@@ -70,3 +70,16 @@ test('deleting my account frees my places and signs me out', async () => {
   assert.equal((await call('riya', 'POST', '/api/login', { handle: 'riya-me', password: 'long-enough-pw' })).status, 401);
   assert.equal((await call('dana', 'DELETE', '/api/me')).status, 409, 'shared demo accounts stay');
 });
+
+test('a deleted admitted account lets the next person on the waitlist in', async () => {
+  const { venue } = await ok('dana', 'GET', '/api/event');
+  const fill = venue.capacity - venue.taken; // admitted places left
+  for (let i = 0; i <= fill; i++) {
+    await ok(`f${i}`, 'POST', '/api/signup', { handle: `fill-${i}`, password: 'long-enough-pw' });
+    await ok(`f${i}`, 'POST', '/api/event/register');
+  }
+  const last = `f${fill}`;
+  assert.equal((await ok(last, 'GET', '/api/event')).me.status, 'waiting');
+  await ok('f0', 'DELETE', '/api/me');
+  assert.equal((await ok(last, 'GET', '/api/event')).me.status, 'admitted');
+});
