@@ -40,7 +40,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # GHCR sometimes refuses a push with "denied: permission_denied: write_package" although the token is fine: 4 of
+      # 14 runs on Nov 9 (different people merging), each after the layers were already uploaded. A missing permission
+      # would fail every run, so this looks like a registry flake. Try the push once more before failing the run.
       - uses: docker/build-push-action@v6
+        id: push1
+        continue-on-error: true
+        with:
+          context: .
+          push: true
+          build-args: APP_VERSION=${{ steps.meta.outputs.tag }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Retry the image push once (only if the first attempt failed)
+        if: steps.push1.outcome == 'failure'
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
