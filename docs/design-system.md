@@ -67,3 +67,23 @@ One theme only, by choice: dark signage reads well on phones at a door and on th
 | `.rr-counter` | S2 count correction for walk-ins who didn't scan |
 | `.rr-announce` | A7, S1 |
 | `.rr-sr` | Screen-reader-only text anywhere |
+
+## Mobile check
+
+`scripts/mobile-check.sh` renders pages in headless Chrome and fails on anything a phone user would hit: the page scrolling sideways, elements off the edge of the screen, tap targets smaller than 44 × 44px, text under 12px, images or inputs wider than their box, and text covered by a button it doesn't belong to. Content inside a sideways-scrolling row (`overflow-x: auto`) is allowed past the edge. Full-height screenshots go to `.mobile-shots/` (not committed).
+
+```sh
+scripts/mobile-check.sh public/login.html http://localhost:3000/r/204      # phones: 320, 360, 390, 414
+scripts/mobile-check.sh --widths 768,1280,1440 http://localhost:3000/staff/setup
+scripts/mobile-check.sh --widths 1920x1080 http://localhost:3000/screen/204
+```
+
+Which widths each screen must pass:
+
+| Screens | Widths |
+|---|---|
+| A1 to A7, S2 (attendees and door staff, on phones) | 320, 360, 390, 414 |
+| S1 (organisers, on laptops) | 1280 and 1440, plus 768 as a sanity pass |
+| D1 (big screen) | 1920x1080 |
+
+Every screen PR runs it at those widths and pastes the pass table into the PR description. It needs Chrome or Playwright's headless shell (`npx playwright install chromium-headless-shell`); set `CHROME=/path/to/chrome` to pick one. Pages behind a login show their signed-out state, so check signed-in screens by hand until the end-to-end tests add a login step.
