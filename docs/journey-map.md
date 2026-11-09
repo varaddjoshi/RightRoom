@@ -25,15 +25,18 @@ Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, regi
 19. If an offer expires and the queue is empty, the seat returns to "Seats free" for walk-ups.
 20. Any staff member opens a room's console by scanning the staff QR at that door. Staff are optional: they run the queue, check claim codes and correct the count, but the count works without them. A Full stays Full until the session ends or a seat is freed by "I'm leaving" or a release. (Q29, revised: automatic count)
 21. Attendees get an "I'm leaving" button on A6. It checks them out (the count drops by one) and sends their seat to the queue as an offer straight away, so the seat is never counted twice. (Q32, draft)
-22. The +/− counter is an optional correction, not the count: + for people who walked in without scanning, − for people who left without tapping "I'm leaving". Signs at every door say "Scan to count yourself in", and a claimed seat needs the scan within 10 minutes, so most people scan. (Q33, revised: automatic count)
+22. The +/− counter is an optional correction, not the count: + for people who walked in without scanning, − for people who left without tapping "I'm leaving". Signs at every door say "Scan to count yourself in", and a claimed seat needs the scan within 5 minutes (15 with a stated access need, decision 31), so most people scan. (Q33, revised: automatic count)
 23. Updates reach phones through the open page (live updates over server-sent events) plus a browser notification where the person allows it. No SMS, since we store no phone number or email. iPhones only show web notifications from an app added to the home screen, so the open page is the main path. (G1, draft)
 24. A venue admission expires 30 minutes after doors open, or 30 minutes after the person is admitted if that is later, unless they scan "I'm at the door" at the venue entrance. The place then goes to the next person on the waitlist, who gets their own 30 minutes. Each `queue` entry stores its own expiry. (G2, draft)
-25. Organisers import the schedule on S1 as a CSV or JSON file; session embeddings are built on import. (G3, draft)
+25. Sessions are loaded by a seed script (`scripts/seed.js`) from a JSON file; Elasticsearch builds the session embeddings on load. An S1 schedule import is an Extra that reuses the same loader. (G3, Varad)
 26. RightRoom runs one event for the hackathon. Every index carries an `event_id` field so interests can carry over to the next event, but there is no event picker. (G4, draft)
 27. A claimed seat shows the handle, zone and a 4-letter code on A5. Door staff see the same code on S2. (G5, draft)
 28. Each signed-in user, or each device for guests, holds at most one place per queue. Guest queue joins are rate-limited. (G6, draft)
 29. Staff pick a zone when releasing seats. "I'm leaving" uses the zone from that person's check-in. (G7, draft)
 30. The venue is a space like any room: its entrance has its own "I'm at the door" QR, staff QR and S2 console. (G8, draft)
+31. Claiming a seat is not attending. A claim holds the seat; attendance is the "I'm in the room" scan. After claiming, a person has 5 minutes to scan in, or 15 minutes if they stated an access need; otherwise the seat passes to the next person in the queue. (Varad)
+32. Check-in is open from the session's start time until 20 minutes after it. (Varad)
+33. Lateness is not recorded: a check-in stores that it happened, not how late it was. (Varad)
 
 ## Personas
 
@@ -205,7 +208,7 @@ project.md is out of date with these decisions. Update it to match:
 | Data model | Add `users`, `comments` and `wifi_readings`; add zones and the open staff console to `spaces`, a zone to `checkins`, zone and claim code to `offers`, and `event_id` everywhere | Data section above, 26 |
 | "Get a text-first update when admitted" | Updates on the open page plus a browser notification where allowed; no SMS | 23 |
 | Venue admission has no end | Admission expires 30 minutes after doors open unless the person scans in at the venue door | 24, 30 |
-| Sessions data owned by P1 with no import path | Organisers import the schedule on S1 | 25 |
+| Sessions data owned by P1 with no import path | A seed script loads sessions from JSON; S1 import is an Extra | 25 |
 | "Never double-booked" | Also: one queue place per user or device, and a claim code shown at the door | 27, 28 |
 
 Q29 to Q33 and G1 to G8 are drafts. If Hitesh changes an answer, update decisions 11, 14, 15 and 20 to 30 and the rows that cite them.
