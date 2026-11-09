@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Room door · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<style>
+  .back { min-height: 44px; display: inline-flex; align-items: center; color: var(--rr-muted); }
+  .rr-route { color: inherit; text-decoration: none; }
+  .rr-panel > .rr-status { justify-self: start; }
+</style>
+</head>
+<body>
+<main class="rr-screen" id="main">
+  <a class="back" href="/sessions">&larr; Schedule</a>
+  <div class="rr-sign"><span class="rr-eyebrow" id="eyebrow">Room</span><h1 id="title">Loading</h1><div class="line" id="state"></div></div>
+  <section id="body" class="rr-btn-stack"></section>
+  <p class="rr-sr" aria-live="polite" id="sr"></p>
+  <p class="rr-panel m0" id="err" role="alert" hidden></p>
+</main>
+<script src="/app.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const id = decodeURIComponent(location.pathname.split('/')[2] || '');
+  const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const enc = encodeURIComponent;
+  let redirect = null, timer = null, passed = false;
+
+  function offerView(o) {
+    return `<div class="rr-offer"><span class="rr-eyebrow" role="alert">Seat offer · Room ${RR.esc(id)}</span>
+      <h2 class="rr-title m0">${RR.esc(RR.zoneName(o.zone))}${o.accessible ? ' <span class="rr-access">&#9855; Accessible seat</span>' : ''}</h2>
+      <div class="rr-offer__timer" aria-hidden="true"><span id="bar"></span></div>
+      <p class="m0"><strong id="secs">${Number(o.secondsLeft)}</strong> seconds to claim. If you don't, it goes to the next person.</p>
+      <button class="rr-btn" type="button" id="claim" data-offer="${RR.esc(o.id)}">Claim my seat</button></div>
+      ${o.accessible ? '<p class="note">Offered to you first because it is an accessible seat and you asked for that.</p>' : ''}`;
+  }
+  function startCountdown(o) {
+    clearInterval(timer);
+    const end = Date.now() + o.secondsLeft * 1000;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      if (!$('secs')) return clearInterval(timer);
+      $('secs').textContent = left;
+      $('bar').style.setProperty('--rr-left', `${(left / 60) * 100}%`);
+      // Only a few announcements, so a screen reader user can still hear the Claim button.
+      if (left === 30 || left === 10) $('sr').textContent = `${left} seconds left to claim your seat.`;
+      if (!left) { $('sr').textContent = 'Offer expired. It has gone to the next person.'; clearInterval(timer); }
+    };
+    tick();
+    timer = setInterval(tick, 1000);
+  }
+
+  function redirectView(r) {
+    if (!r?.suggestion) return '<div class="rr-panel"><p class="m0">No other room has free seats right now. You can wait for this one.</p></div>';
+    const s = r.suggestion;
+    return `<a class="rr-route" href="/r/${enc(s.room)}"><span class="rr-route__arrow" aria-hidden="true">&#9654;</span>
+        <div><div class="rr-route__to">Room ${RR.esc(s.room)}</div><div class="rr-route__meta">${RR.esc(s.title)} · ${Number(s.free)} seats free</div>${s.stepFree ? `<span class="rr-access">&#9855; ${RR.esc(s.access)}</span>` : `<span class="rr-route__meta">${RR.esc(s.access)}</span>`}</div>
+        <div class="rr-route__time">${Number(s.minutes)}<small>MIN</small></div></a>
+      <details class="rr-why"><summary>Why this?</summary><ul>
+        ${r.reasons.map((x) => `<li>${RR.esc(x)}</li>`).join('')}
+        ${r.rejected.map((x) => `<li class="rr-rejected">Room ${RR.esc(x.room)}: ${RR.esc(x.reason)}.</li>`).join('')}
+      </ul></details>`;
+  }
+
+  async function render() {
+    try {
+      const r = await RR.api(`/spaces/${enc(id)}`);
+      $('eyebrow').textContent = id === 'venue' ? 'Venue entrance' : `Room ${r.id} · Floor ${r.floor}`;
+      $('title').textContent = r.title;
+      document.title = `${r.title} · RightRoom`;
+      $('state').innerHTML = `${RR.status(r.status)}<span>${Number(r.taken)} of ${Number(r.capacity)}</span>${RR.label('live')}`;
+      const me = r.me || {};
+      const body = $('body');
+      // Keep an offer that's already on screen, so its alert isn't announced again and the countdown keeps going.
+      if (me.queue?.status === 'offered' && $('claim')?.dataset.offer === me.queue.offer?.id) return;
+      clearInterval(timer);
+
+      if (id === 'venue') {
+        const v = me.venue;
+        body.innerHTML = v?.status === 'admitted'
+          ? (v.scannedIn ? `<div class="rr-panel">${RR.status('free', 'Place kept')}<p class="m0">You're scanned in. Your place is confirmed for the day.</p></div><a class="rr-btn" href="/sessions">See the schedule</a>`
+            : `<div class="rr-panel"><p class="m0">Scan in to keep your place. It's held until <b>${time(v.expiresAt)}</b>.</p></div><button class="rr-btn" type="button" id="scan">I'm at the venue door</button>`)
+          : `<div class="rr-panel"><p class="m0">${v ? `Your registration is ${RR.esc(v.status)}${v.position ? `, #${Number(v.position)} on the waitlist` : ''}.` : "You haven't registered yet."}</p></div><a class="rr-btn" href="/event">Go to registration</a>`;
+        $('scan')?.addEventListener('click', () => act(() => RR.api('/spaces/venue/checkin', { method: 'POST', body: {} })));
+        return;
+      }
+
+      if (me.checkedIn) {
+        body.innerHTML = `<div class="rr-panel">${RR.status('free', 'Checked in')}<p class="m0">You're in, at ${RR.esc(RR.zoneName(me.checkedIn.zone))}.</p></div><a class="rr-btn" href="/r/${enc(id)}/in">Open the room page</a>`;
+      } else if (me.claimed) {
+        body.innerHTML = `<div class="rr-panel"><span class="rr-eyebrow">Show this at the door</span><div class="rr-code">${RR.esc(me.claimed.code)}</div><p class="m0 muted">Room ${RR.esc(id)} · ${RR.esc(RR.zoneName(me.claimed.zone))}</p></div>
+          <p class="note">Scan "I'm in the room" by ${time(me.claimed.scanBy)} or the seat goes to the next person.</p>
+          <a class="rr-btn" href="/r/${enc(id)}/in">I'm in the room</a>`;
+      } else if (me.queue?.status === 'offered' && me.queue.offer) {
+        body.innerHTML = offerView(me.queue.offer);
+        startCountdown(me.queue.offer);
+        $('claim').addEventListener('click', (e) => act(() => RR.api(`/offers/${enc(e.target.dataset.offer)}/claim`, { method: 'POST', body: {} })));
+      } else if (me.queue?.status === 'waiting') {
+        body.innerHTML = `${passed ? '<p class="rr-panel m0">You missed the last offer, so it went to the next person. You are back in the queue.</p>' : ''}
+          <div class="rr-position"><span class="rr-eyebrow">Your place for the next seat</span><strong>#${Number(me.queue.position)}</strong><p>${RR.esc(me.queue.reason)} Keep this page open; it updates when a seat is yours.</p></div>
+          <button class="rr-btn rr-btn--ghost" type="button" id="leaveq">Leave the queue</button>`;
+        $('leaveq').addEventListener('click', () => act(() => RR.api(`/spaces/${enc(id)}/queue`, { method: 'DELETE' })));
+      } else if (r.status === 'full') {
+        redirect ??= await RR.api(`/spaces/${enc(id)}/redirect`).catch(() => null);
+        const s = redirect?.suggestion, d = redirect?.somethingDifferent;
+        body.innerHTML = `${redirectView(redirect)}
+          ${s ? `<a class="rr-btn" href="/r/${enc(s.room)}">Go to Room ${RR.esc(s.room)}</a>` : ''}
+          <button class="rr-btn ${s ? 'rr-btn--ghost' : ''}" type="button" id="joinq">Wait for this room</button>
+          ${d ? `<a class="rr-btn rr-btn--ghost" href="/r/${enc(d.room)}">Something different: ${RR.esc(d.title)}</a>` : ''}
+          ${redirect?.overflow ? `<p class="note">Overflow: ${RR.esc(redirect.overflow.title)} for anyone who can't get a seat.</p>` : ''}`;
+        $('joinq').addEventListener('click', () => act(() => RR.api(`/spaces/${enc(id)}/queue`, { method: 'POST', body: {} })));
+      } else {
+        body.innerHTML = `<div class="rr-panel"><span class="rr-eyebrow">The rule</span><p class="m0">${RR.esc(r.rule)}</p></div>
+          <p class="note">${Number(r.free)} seats free. Walk in and scan "I'm in the room" so the count stays right for everyone outside.</p>
+          <a class="rr-btn" href="/r/${enc(id)}/in">I'm in the room</a>`;
+      }
+    } catch (x) { RR.showError($('err'), x); }
+  }
+  async function act(fn) {
+    $('err').hidden = true;
+    try { await fn(); passed = false; await render(); } catch (x) { RR.showError($('err'), x); render(); }
+  }
+
+  (async () => {
+    // Arriving from a door QR: offer guest access instead of a full sign-in.
+    const me = await RR.api('/me').catch(() => null);
+    if (!me) { location.href = `/login?from=qr&next=${enc(location.pathname)}`; return; }
+    await render();
+    let t;
+    const soon = () => { clearTimeout(t); t = setTimeout(render, 200); };
+    RR.live(id, { status: soon, position: soon, offer: () => { $('sr').textContent = 'A seat is yours to claim for 60 seconds.'; render(); }, offer_passed: () => { passed = true; render(); } });
+  })();
+</script>
+</body>
+</html>

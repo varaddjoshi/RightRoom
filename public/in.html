@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>In the room · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<style>
+  .back { min-height: 44px; display: inline-flex; align-items: center; color: var(--rr-muted); }
+  .rr-panel > .rr-status { justify-self: start; }
+</style>
+</head>
+<body>
+<main class="rr-screen" id="main">
+  <a class="back" id="back" href="/sessions">&larr; Room door</a>
+  <div class="rr-sign"><span class="rr-eyebrow" id="eyebrow">I'm in the room</span><h1 id="title">Loading</h1><div class="line" id="state"></div></div>
+  <section id="body" class="rr-btn-stack" aria-live="polite"></section>
+  <p class="rr-panel m0" id="err" role="alert" hidden></p>
+</main>
+<script src="/app.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const id = decodeURIComponent(location.pathname.split('/')[2] || '');
+  const enc = encodeURIComponent;
+  const ZONES = ['front-left', 'front-centre', 'front-right', 'middle-left', 'middle-centre', 'middle-right', 'back-left', 'back-centre', 'back-right'];
+  let wasIn = false, left = false, wifi = null, picked = null;
+  $('back').href = `/r/${enc(id)}`;
+
+  // A rough 1-second speed test against this server: how many bytes of a static file arrive in about a second.
+  // shortcut: measures phone to app server, not the room's access point alone; good enough for comparing zones.
+  async function speedTest() {
+    const t0 = performance.now();
+    await fetch(`/health?t=${Date.now()}`, { cache: 'no-store' });
+    const ms = Math.round(performance.now() - t0);
+    let bytes = 0;
+    const start = performance.now();
+    while (performance.now() - start < 1000) bytes += (await (await fetch(`/rr.css?t=${Math.random()}`, { cache: 'no-store' })).arrayBuffer()).byteLength;
+    const mbps = (bytes * 8) / 1e6 / ((performance.now() - start) / 1000);
+    return { ms, mbps: Math.max(0, Math.round(mbps)) };
+  }
+
+  function zoneGrid(r) {
+    return `<div class="rr-zones" role="group" aria-label="Where are you sitting?"><span class="rr-zones-front">STAGE</span>
+      ${ZONES.map((z) => `<button type="button" data-zone="${z}" aria-pressed="${z === picked}"${r.accessZones?.includes(z) ? ' data-access' : ''}>${RR.esc(RR.zoneName(z))}</button>`).join('')}</div>`;
+  }
+
+  async function topicsHtml() {
+    const t = await RR.api(`/spaces/${enc(id)}/comments`).catch(() => ({ topics: [] }));
+    return t.topics.length ? `<div class="chips static">${t.topics.map((x) => `<span>${RR.esc(x)}</span>`).join('')}</div>` : '<p class="note">No comments yet.</p>';
+  }
+  const commentBox = `<div class="fld"><label for="c1">Comment on this session</label><textarea id="c1" rows="2" maxlength="280"></textarea></div>
+    <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="post">Post comment</button>`;
+
+  async function render() {
+    try {
+      const r = await RR.api(`/spaces/${enc(id)}`);
+      $('eyebrow').textContent = `Room ${r.id} · I'm in the room`;
+      $('title').textContent = r.title;
+      $('state').innerHTML = `${RR.status(r.status)}<span>${Number(r.taken)} of ${Number(r.capacity)}</span>${RR.label('live')}`;
+      const me = r.me || {};
+      picked ??= me.claimed?.zone || null;
+      const body = $('body');
+
+      if (me.checkedIn) {
+        wasIn = true;
+        body.innerHTML = `<div class="rr-panel">${RR.status('free', 'Checked in')}<p class="m0">You're counted in at ${RR.esc(RR.zoneName(me.checkedIn.zone))}.</p></div>
+          ${wifi ? `<div class="rr-panel"><span class="rr-eyebrow">Your Wi-Fi reading ${RR.label('live')}</span><p class="m0"><b class="big">${Number(wifi.mbps)}</b> Mbps · ${Number(wifi.ms)} ms</p>${wifi.median != null ? `<p class="m0 muted">Room median ${Number(wifi.median)} Mbps ${RR.label('crowd-sourced')}</p>` : ''}</div>` : ''}
+          <section class="rr-panel"><span class="rr-eyebrow">What people are saying</span>${await topicsHtml()}</section>
+          ${commentBox}
+          <button class="rr-btn rr-btn--ghost" type="button" id="leave">I'm leaving</button>
+          <p class="note">Leaving passes your seat to the next person in the queue straight away.</p>`;
+        $('leave').addEventListener('click', () => act(async () => { await RR.api(`/spaces/${enc(id)}/leave`, { method: 'POST', body: {} }); left = true; }));
+      } else if (wasIn || left) {
+        // Checked out: by "I'm leaving", by checking in somewhere else, or because the session ended.
+        body.innerHTML = `<div class="rr-panel"><p class="m0">${left ? 'Thanks. Your seat has gone to the next person.' : "You've been checked out. Your check-in has been deleted."}</p></div>
+          <section class="rr-panel"><span class="rr-eyebrow">What people said</span>${await topicsHtml()}</section>
+          ${commentBox}<p class="note">You can still comment for 24 hours.</p>
+          <a class="rr-btn" href="/sessions">What's next for me</a>`;
+      } else {
+        body.innerHTML = `<span class="rr-eyebrow">Where are you sitting?</span>${zoneGrid(r)}
+          <label class="tog"><input type="checkbox" id="wifi"> Share a 1-second Wi-Fi test for this zone</label>
+          <button class="rr-btn" type="button" id="in">Check in</button>
+          <p class="note">Your scan is what counts you in, so the room's status stays right for everyone outside.</p>`;
+        body.querySelectorAll('[data-zone]').forEach((b) => b.addEventListener('click', () => {
+          picked = b.dataset.zone;
+          body.querySelectorAll('[data-zone]').forEach((x) => x.setAttribute('aria-pressed', x === b));
+        }));
+        $('in').addEventListener('click', () => act(async () => {
+          const res = await RR.api(`/spaces/${enc(id)}/checkin`, { method: 'POST', body: { zone: picked } });
+          if ($('wifi').checked) {
+            const m = await speedTest();
+            wifi = await RR.api(`/spaces/${enc(id)}/wifi`, { method: 'POST', body: { zone: res.zone, ...m } });
+          }
+        }));
+      }
+      $('post')?.addEventListener('click', () => act(async () => {
+        await RR.api(`/spaces/${enc(id)}/comments`, { method: 'POST', body: { text: $('c1').value } });
+      }));
+    } catch (x) { RR.showError($('err'), x); }
+  }
+  async function act(fn) {
+    $('err').hidden = true;
+    try { await fn(); await render(); } catch (x) { RR.showError($('err'), x); }
+  }
+
+  (async () => {
+    const me = await RR.api('/me').catch(() => null);
+    if (!me) { location.href = `/login?from=qr&next=${enc(location.pathname)}`; return; }
+    await render();
+    let t;
+    RR.live(id, { status: () => { if (document.activeElement?.id === 'c1') return; clearTimeout(t); t = setTimeout(render, 300); } });
+  })();
+</script>
+</body>
+</html>

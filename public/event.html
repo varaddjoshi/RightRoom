@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Event · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<style>
+  .nav { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
+  .nav a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--rr-s3); color: var(--rr-ink); text-decoration: none; border: 2px solid var(--rr-line); border-radius: var(--rr-r1); font: 700 var(--rr-t-sm)/1 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.06em; }
+  .nav a[aria-current] { border-color: var(--rr-signal); color: var(--rr-signal); }
+  .rr-panel > .rr-status { justify-self: start; }
+</style>
+</head>
+<body>
+<main class="rr-screen" id="main">
+  <nav class="nav" aria-label="Pages"><a href="/event" aria-current="page">Event</a><a href="/sessions">Schedule</a><a href="/news">News</a><a href="/me">Me</a></nav>
+  <div class="rr-sign"><span class="rr-eyebrow">Venue · Hall A</span><h1 id="title">Event</h1><div class="line" id="state"></div></div>
+  <div class="line" id="count"></div>
+  <section class="rr-panel" aria-labelledby="h-rule"><h2 class="rr-eyebrow m0" id="h-rule">The rule</h2><p class="m0" id="rule"></p></section>
+  <section id="mine" aria-live="polite"></section>
+  <p class="rr-panel m0" id="err" role="alert" hidden></p>
+</main>
+<script src="/app.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  let me = null;
+
+  function mine(entry) {
+    if (!me) return `<a class="rr-btn" href="/login?next=/event">Sign in to register</a>`;
+    if (me.role === 'guest') return `<div class="rr-panel"><p class="m0">Guests can use room doors, but registering for the venue needs an account.</p></div><a class="rr-btn" href="/login?next=/event">Create an account</a>`;
+    if (!entry) return `<button class="rr-btn" type="button" id="reg">Register</button>`;
+    if (entry.status === 'waiting') return `<div class="rr-position"><span class="rr-eyebrow">Your place on the waitlist</span><strong>#${Number(entry.position)}</strong><p>${RR.esc(entry.reason)} This page updates when you're admitted.</p></div>
+      ${notifyBtn()}<p class="note">If no place frees up, you can still follow the talks remotely.</p>`;
+    if (entry.status === 'admitted' && entry.scannedIn) return `<div class="rr-panel">${RR.status('free', 'Place kept')}<p class="m0">You scanned in at the venue door. Your place is confirmed for the day.</p></div><a class="rr-btn" href="/sessions">See the schedule</a>`;
+    if (entry.status === 'admitted') return `<div class="rr-panel">${RR.status('free', 'Admitted')}<p class="m0">Scan in at the venue door by <b>${time(entry.expiresAt)}</b> to keep your place. After that it goes to the next person on the waitlist.</p></div>
+      <a class="rr-btn" href="/r/venue">I'm at the venue door</a>`;
+    if (entry.status === 'expired') return `<div class="rr-panel">${RR.status('full', 'Admission expired')}<p class="m0">Nobody scanned in for this place in time, so it went to the waitlist. You can join the waitlist again.</p></div><button class="rr-btn" type="button" id="reg">Join the waitlist again</button>`;
+    return `<div class="rr-panel"><p class="m0">Registration status: ${RR.esc(entry.status)}.</p></div>`;
+  }
+  const notifyBtn = () => ('Notification' in window && Notification.permission === 'default') ? `<button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="notify">Allow notifications</button>` : '';
+
+  async function render() {
+    try {
+      const { venue, me: entry } = await RR.api('/event');
+      $('title').textContent = entry?.status === 'admitted' ? "You're in" : entry?.status === 'waiting' ? "You're on the waitlist" : 'KubeCon hack day';
+      $('state').innerHTML = `${RR.status(venue.status)} ${RR.label('live')}`;
+      $('count').innerHTML = `${RR.count(venue.taken, venue.capacity)}<span class="muted">registered</span>`;
+      $('rule').textContent = venue.rule;
+      $('mine').innerHTML = mine(entry);
+      $('reg')?.addEventListener('click', register);
+      $('notify')?.addEventListener('click', async () => { await Notification.requestPermission(); render(); });
+      return entry;
+    } catch (x) { RR.showError($('err'), x); }
+  }
+  async function register() {
+    $('err').hidden = true;
+    try { await RR.api('/event/register', { method: 'POST' }); render(); } catch (x) { RR.showError($('err'), x); }
+  }
+
+  (async () => {
+    me = await RR.api('/me').catch(() => null);
+    let last = (await render())?.status;
+    RR.live('venue', {
+      status: render,
+      position: async () => {
+        const entry = await render();
+        if (last === 'waiting' && entry?.status === 'admitted' && 'Notification' in window && Notification.permission === 'granted') new Notification("You're in at RightRoom", { body: `Scan in at the venue door by ${time(entry.expiresAt)}.` });
+        last = entry?.status;
+      },
+    });
+  })();
+</script>
+</body>
+</html>
