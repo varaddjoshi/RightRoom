@@ -9,3 +9,4 @@ node_modules
 *.key
 npm-debug.log*
 .DS_Store
+.mobile-shots/

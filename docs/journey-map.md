@@ -37,6 +37,7 @@ Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, regi
 31. Claiming a seat is not attending. A claim holds the seat; attendance is the "I'm in the room" scan. After claiming, a person has 5 minutes to scan in, or 15 minutes if they stated an access need; otherwise the seat passes to the next person in the queue. (Varad)
 32. Check-in is open from the session's start time until 20 minutes after it. (Varad)
 33. Lateness is not recorded: a check-in stores that it happened, not how late it was. (Varad)
+34. While checked in to one session you can keep waiting in another room's queue (Sam sits in Room 210 and waits for Room 204). Checking in cancels any seat offers or claims you hold elsewhere, but not your queue places. If a seat offer arrives while you're seated, claiming it and scanning in moves you: you're checked out of the first room and that seat goes to its queue as an offer. You still hold at most one place per queue. (Hitesh)
 
 ## Personas
 

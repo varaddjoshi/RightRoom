@@ -67,3 +67,33 @@ One theme only, by choice: dark signage reads well on phones at a door and on th
 | `.rr-counter` | S2 count correction for walk-ins who didn't scan |
 | `.rr-announce` | A7, S1 |
 | `.rr-sr` | Screen-reader-only text anywhere |
+
+## Mobile check
+
+`scripts/mobile-check.sh` loads each page in headless Chrome (driven over the DevTools protocol by `scripts/mobile-run.js`, with phone emulation below 1000px) and fails on anything a phone user would hit: the page scrolling sideways, elements off the edge of the screen, tap targets smaller than 44 × 44px, text under 12px, images or inputs wider than their box, and text that a button is painted over. Content inside a sideways-scrolling row (`overflow-x: auto`) may sit past the edge, and links inside a sentence are exempt from the tap-size rule. Full-height screenshots and `details.log` go to `.mobile-shots/` (not committed). Every page and size gets a row; a page that fails to load is a FAIL row, not a crash, and the run ends with "N of M passed".
+
+```sh
+scripts/mobile-check.sh public/design-system.html http://localhost:3000/r/204          # phones: 320, 360, 390, 414
+scripts/mobile-check.sh --widths 768,1280,1440 http://localhost:3000/staff/setup
+scripts/mobile-check.sh --widths 1920x1080 http://localhost:3000/screen/204
+```
+
+Screens behind a login: sign in with curl, then pass the session cookie (`rr`) with `--cookie` (or `COOKIE=`):
+
+```sh
+curl -s -c /tmp/rr.jar -H 'content-type: application/json' \
+  -d '{"handle":"sam","password":"rightroom-demo"}' http://localhost:3000/api/login
+scripts/mobile-check.sh --cookie "$(awk '$6=="rr"{print $6"="$7}' /tmp/rr.jar)" http://localhost:3000/r/204/in
+```
+
+Sign in as `leo` for S2 and `dana` for S1 the same way.
+
+Which widths each screen must pass:
+
+| Screens | Widths |
+|---|---|
+| A1 to A7, S2 (attendees and door staff, on phones) | 320, 360, 390, 414 |
+| S1 (organisers, on laptops) | 1280 and 1440, plus 768 as a sanity pass |
+| D1 (big screen) | 1920x1080 |
+
+Every screen PR runs it at those widths and pastes the pass table into the PR description. It needs Chrome, Chromium or Playwright's headless shell; if none is found it stops and says how to install one (`npx playwright install chromium-headless-shell` is the smallest). Set `CHROME=/path/to/chrome` to pick a specific browser.
