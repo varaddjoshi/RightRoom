@@ -1,6 +1,6 @@
 # RightRoom user journey map
 
-Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, registration, interests, crowd-sourced Wi-Fi, comment topics, automatic room count from check-ins, zone map, door staff instead of room hosts). Decisions Q1 to Q28 were agreed in SwarmChat #general. Q29 to Q33 (door staff) and gaps G1 to G8 are drafts with the recommended answers, awaiting Hitesh.
+Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, registration, interests, crowd-sourced Wi-Fi, comment topics, automatic room count from check-ins, zone map, door staff instead of room hosts). Decisions Q1 to Q28 were agreed in SwarmChat #general. Q29 to Q33 (door staff) and gaps G1 to G8 are drafts with the recommended answers, awaiting Hitesh, except G3 (decision 25), which Varad decided. Decisions 31 to 33 are Varad's.
 
 ## Decisions this map rests on
 
@@ -35,8 +35,9 @@ Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, regi
 29. Staff pick a zone when releasing seats. "I'm leaving" uses the zone from that person's check-in. (G7, draft)
 30. The venue is a space like any room: its entrance has its own "I'm at the door" QR, staff QR and S2 console. (G8, draft)
 31. Claiming a seat is not attending. A claim holds the seat; attendance is the "I'm in the room" scan. After claiming, a person has 5 minutes to scan in, or 15 minutes if they stated an access need; otherwise the seat passes to the next person in the queue. (Varad)
-32. Check-in is open from the session's start time until 20 minutes after it. (Varad)
+32. Each session has a door window: by default it opens 10 minutes before the start and closes 20 minutes after it. Inside the window people can check in, and seats are offered and claimed. After it closes nothing more happens for that session: no check-ins, no offers, no claims, and a seat freed later is not offered. The organiser or the staff on that room can change both times for a session. The scan deadline after a claim (decision 31) is the earlier of claim time plus 5 or 15 minutes and the window close. (Varad)
 33. Lateness is not recorded: a check-in stores that it happened, not how late it was. (Varad)
+34. While checked in to one session you can keep waiting in another room's queue (Sam sits in Room 210 and waits for Room 204). Checking in cancels any seat offers or claims you hold elsewhere, but not your queue places. If a seat offer arrives while you're seated, claiming it and scanning in moves you: you're checked out of the first room and that seat goes to its queue as an offer. You still hold at most one place per queue. (Hitesh)
 
 ## Personas
 
@@ -75,8 +76,8 @@ Eleven screens. One screen is one URL; the states listed are what the screen sho
 | A5 | Room door | `/r/:room` (QR "I'm at the door"; `/r/venue` at the entrance) | Attendee | At the venue: scan in to keep the admission. Seats free: join queue, position. Full: redirect with walking time, step-free route, "Why this?", rejected options and why, one "something different", overflow room or stream. Seat offer: zone ("Back, Left") and 60-second claim. Claimed: handle, zone and a 4-letter code to show at the door. Offer missed: passed on, back in queue |
 | A6 | In the room | `/r/:room/in` (QR "I'm in the room") | Attendee | Pick zone on a 3×3 grid; checked in anonymously; Wi-Fi test consent and result for the zone; comment box; session topics; "I'm leaving" button; after the session: "comment within 24h" |
 | A7 | Announcements | `/news` | Attendee | Filtered by floor and urgency, text first, newest on top |
-| S1 | Organiser setup | `/staff/setup` | Organiser | Import schedule (CSV or JSON); spaces with capacity, rule and public priorities; zones and accessibility seats per room; which rooms have staff at the door right now; post announcement; interest counts and topics for the next event |
-| S2 | Door console | `/staff/room/:room` (staff QR at each door) | Door staff, organiser | Live count from check-ins; +/− correction for walk-ins who didn't scan; "Room looks full, confirm?" prompt with 30-second countdown; Confirm / "Not yet, N free"; manual Full override; release N seats in a chosen zone; queue with claim codes; 3×3 zone fill; accessibility seat status; hide a comment; "Leave this door" |
+| S1 | Organiser setup | `/staff/setup` | Organiser | Sessions come from the seed script (S1 import is an Extra, decision 25); door window per session (decision 32); spaces with capacity, rule and public priorities; zones and accessibility seats per room; which rooms have staff at the door right now; post announcement; interest counts and topics for the next event |
+| S2 | Door console | `/staff/room/:room` (staff QR at each door) | Door staff, organiser | Live count from check-ins; +/− correction for walk-ins who didn't scan; "Room looks full, confirm?" prompt with 30-second countdown; Confirm / "Not yet, N free"; manual Full override; release N seats in a chosen zone; queue with claim codes; 3×3 zone fill; accessibility seat status; hide a comment; "Leave this door"; change this session's door window (decision 32) |
 | D1 | Big-screen room status | `/screen/:room` | Shared | Live count, status in words and zone fill, updates as people check in |
 | D2 | Check-in simulator | `/sim` | Demo | Button that adds stand-in check-ins and waitlist entries, labelled Stand-in |
 
@@ -124,7 +125,7 @@ Critical moments:
 
 | Stage | Screen | What they do | What they're thinking | Feeling | Pain today | What RightRoom does |
 |---|---|---|---|---|---|---|
-| Before the event | A1, S1 | Sign in via allowlist; import the schedule; set capacity, rule and public priorities for the venue and each room; mark zones and accessibility seats; print the staff QR for each door, including the venue entrance | "Is the rule clear enough to publish?" | Busy | Rules live in people's heads | The rule is set once and shown to every attendee on A3 and A5 |
+| Before the event | A1, S1 | Sign in via allowlist; check the seeded schedule (S1 import is an Extra); set capacity, rule and public priorities for the venue and each room; mark zones and accessibility seats; print the staff QR for each door, including the venue entrance | "Is the rule clear enough to publish?" | Busy | Rules live in people's heads | The rule is set once and shown to every attendee on A3 and A5 |
 | Doors open | S1, A3 | Watch venue registrations and the waitlist; post announcements | "Are people being turned away, and do they know why?" | Watchful | Waitlisting with no reason given | Every waitlisted person sees a position and reason |
 | During sessions | S1, S2 | See which filling rooms have no staff at the door and send someone; raise capacity if a bigger room opens | "Which door needs a person?" | Under pressure | No view across rooms | S1 shows rooms that are filling with no console open |
 | After the event | S1 | Read interest counts and room and session topics | "What should the next event cover, and in which rooms?" | Thoughtful | No data on what people wanted | Interest counts (groups of 5 or more), topics, Wi-Fi by zone for venue choice |
@@ -150,17 +151,17 @@ The night before, at 8:10 pm, Sam opens the event link and signs in with GitHub 
 
 At 9:20 Sam scans the QR at the venue entrance, which keeps their admission. An urgent Floor 2 announcement on A7 says the west lift is out of service, so they use the east lift.
 
-At 10:55 the schedule (A4) shows "eBPF deep dive · Room 204 · Filling (96%) · Wi-Fi weak at back left · topics: verifier, tracing".
+At 10:55 the schedule (A4) shows "eBPF deep dive (11:00 to 11:45; door open 10:50 to 11:20) · Room 204 · Filling (96%) · Wi-Fi weak at back left · topics: verifier, tracing".
 
 At 11:05 Sam scans "I'm at the door" at Room 204 (A5). Staff have confirmed the room is Full, so Sam gets a suggestion: "Observability at scale, Room 210, 2 minutes, step-free via the east lift, 9 seats free". "Why this?" says it matches Observability, the route is step-free and seats are free. Room 305 was rejected because it is stairs only, and Room 118 because it is 6 minutes away with a less similar topic. The page also offers a Rust panel as something different, and a stream of Room 204. Sam stays in the 204 queue at #3.
 
-At 11:12 someone at the front taps "I'm leaving". Their seat is an accessible one at Front Left, and Sam stated a step-free need, so the offer goes to Sam ahead of #1 and #2. Sam's phone buzzes: "Seat in Room 204, Front Left (accessible). Claim in 60 seconds." They claim it and get the code `KQ7M`, which the door staff see too.
+At 11:12 someone at the front taps "I'm leaving". Their seat is an accessible one at Front Left, and Sam stated a step-free need, so the offer goes to Sam ahead of #1 and #2. Sam's phone buzzes: "Seat in Room 204, Front Left (accessible). Claim in 60 seconds." With a stated need Sam would get 15 minutes to scan in, but the door closes at 11:20, so the deadline is 11:20. They claim it and get the code `KQ7M`, which the door staff see too.
 
 Inside, Sam scans "I'm in the room" (A6), taps Front Left on the zone grid and allows the Wi-Fi test: 38 Mbps down, 40 ms latency. They comment "Slides too small to read from the back rows." At 11:45 the session ends and Sam is checked out automatically. The check-in is deleted; the comment stays without the handle.
 
 ### Door staff: Leo, a volunteer on Floor 2
 
-At 10:50 Leo, already signed in and on the staff allowlist, gets a message from Dana that Room 204 has a queue building and nobody at the door. At 10:52 they scan the staff QR there (S2). The count is already on screen: 46, from check-ins. Two people walk in without scanning, so Leo taps + twice.
+At 11:00 Leo, already signed in and on the staff allowlist, gets a message from Dana that Room 204 has a queue building and nobody at the door. At 11:02 they scan the staff QR there (S2). The count is already on screen: 46, from check-ins. Two people walk in without scanning, so Leo taps + twice.
 
 At 11:03 the console asks "Room looks full: 50 of 50. Confirm?" Leo can see two empty seats at the back right (two people left without tapping "I'm leaving"), so they tap "Not yet, 2 free", which corrects the count to 48, and pick Back Right. Both seats go to the queue as offers instead of being shown as free to everyone. At 11:04 the prompt returns and Leo confirms. Redirects start for people at the door, and the confirm is traced to Dash0.
 
@@ -168,9 +169,9 @@ At 11:12 the zone grid shows Front Left freed and offered to Sam. Leo doesn't ne
 
 ### Organiser: Dana
 
-The day before, Dana imports the schedule file on S1. They set the venue to 180 places with the rule "order of registration" and 6 places for stated access needs, shown publicly. Room 204 gets 50 seats, 3×3 zones and 4 accessible seats at Front Left. Dana prints a staff QR for every door, including the venue entrance.
+The day before, the schedule is loaded with the seed script and Dana checks it on S1. They set the venue to 180 places with the rule "order of registration" and 6 places for stated access needs, shown publicly. Room 204 gets 50 seats, 3×3 zones and 4 accessible seats at Front Left. Dana prints a staff QR for every door, including the venue entrance.
 
-On the day, Dana watches registrations and the waitlist from 9:00. Admissions nobody has scanned in for start expiring at 9:30 and go to the waitlist; anyone admitted from the waitlist gets their own 30 minutes. Dana posts the urgent lift announcement for Floor 2. At 10:50 S1 shows "Room 204, Filling 46/50, queue of 6, no staff at the door", so Dana sends Leo to run the queue. They consider raising Room 204's capacity but leave it, because 50 is the fire limit.
+On the day, Dana watches registrations and the waitlist from 9:00. Admissions nobody has scanned in for start expiring at 9:30 and go to the waitlist; anyone admitted from the waitlist gets their own 30 minutes. Dana posts the urgent lift announcement for Floor 2. At 11:00 S1 shows "Room 204, Filling 46/50, queue of 6, no staff at the door", so Dana sends Leo to run the queue. They consider raising Room 204's capacity but leave it, because 50 is the fire limit.
 
 After the event, S1 shows interest counts (Observability 52, eBPF 37, "platform eng" 9; anything under 5 is hidden), Room 204's topics ("slides too small", "verifier") and a Wi-Fi median of 4 Mbps at the back left. For the next event Dana plans a bigger room for eBPF, larger screens and another access point at the back. Dash0 shows staff overrode the app's Full suggestion once in 14 prompts.
 
@@ -188,7 +189,7 @@ Existing indexes gain a few fields: `spaces` gets zones, a status-confirmation s
 
 ## Extras, in cut order
 
-Cut from the top when behind: team finder, forecast, saved-need alerts, tables, comments and topics, zone map with Wi-Fi readings. The zone map and Wi-Fi are built together and cut last.
+Cut from the top when behind: S1 schedule import, team finder, forecast, saved-need alerts, tables, comments and topics, zone map with Wi-Fi readings. The zone map and Wi-Fi are built together and cut last.
 
 ## Open items
 
@@ -211,4 +212,4 @@ project.md is out of date with these decisions. Update it to match:
 | Sessions data owned by P1 with no import path | A seed script loads sessions from JSON; S1 import is an Extra | 25 |
 | "Never double-booked" | Also: one queue place per user or device, and a claim code shown at the door | 27, 28 |
 
-Q29 to Q33 and G1 to G8 are drafts. If Hitesh changes an answer, update decisions 11, 14, 15 and 20 to 30 and the rows that cite them.
+Q29 to Q33 and G1 to G8 (except G3) are drafts. If Hitesh changes an answer, update decisions 11, 14, 15, 20 to 24 and 26 to 30 and the rows that cite them. Decisions 25 and 31 to 33 are Varad's: change them only with Varad, and keep decision 22's scan time in line with decision 31.

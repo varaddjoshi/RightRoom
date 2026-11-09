@@ -132,6 +132,7 @@ body {
 /* Status chip: shape + word + colour, never colour alone */
 .rr-status {
   display: inline-flex;
+  justify-self: start;
   align-items: center;
   gap: var(--rr-s2);
   padding: var(--rr-s1) var(--rr-s3);
@@ -275,7 +276,8 @@ body {
 /* Staff counter: huge +/- around the true total */
 .rr-counter {
   display: grid;
-  grid-template-columns: minmax(64px, var(--rr-tap-xl)) minmax(0, 1fr) minmax(64px, var(--rr-tap-xl));
+  grid-template-columns: minmax(64px, var(--rr-tap-xl)) auto minmax(64px, var(--rr-tap-xl));
+  justify-content: space-between;
   align-items: center;
   gap: var(--rr-s3);
   text-align: center;
@@ -289,7 +291,8 @@ body {
   background: var(--rr-panel-2);
   color: var(--rr-ink);
 }
-.rr-counter .rr-count { font-size: var(--rr-t-2xl); } /* 44px fits between the buttons from 300px up */
+.rr-counter .rr-count { font-size: var(--rr-t-2xl); white-space: nowrap; justify-content: center; }
+.rr-counter .rr-count small { font-size: var(--rr-t-sm); }
 .rr-counter button:last-child { background: var(--rr-signal); color: var(--rr-on-signal); }
 
 /* Announcement strip */
@@ -412,6 +415,20 @@ body { padding-block: 32px 48px; padding-left: max(16px, env(safe-area-inset-lef
 .meter i { display: block; height: 100%; background: var(--rr-free); }
 .tile[data-status="filling"] .meter i { background: var(--rr-filling); }
 .tile[data-status="full"] .meter i { background: var(--rr-full); }
+
+/* Organiser (S1) screens are laptop-first: full row width, content in columns. Phones and staff stay phone-sized. */
+.pg-row.wrap { flex-wrap: wrap; }
+.ph.laptop { flex: 1 1 100%; }
+.ph.laptop .ph-s { min-height: 0; border-radius: var(--rr-r2); padding: var(--rr-s5); grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); column-gap: var(--rr-s5); align-items: start; }
+.ph.laptop .ph-s > .rr-sign, .ph.laptop .ph-s > .board, .ph.laptop .ph-s > .board-sum, .ph.laptop .ph-s > .note { grid-column: 1 / -1; }
+.ph.laptop .ph-s > .fld:has(textarea) { grid-column: span 2; }
+.ph.laptop .ph-s > .rr-btn { justify-self: start; width: auto; min-width: 280px; }
+@media (max-width: 720px) {
+  .ph.laptop { flex: 0 0 280px; }
+  .ph.laptop .ph-s { grid-template-columns: 1fr; padding: var(--rr-s4) 14px var(--rr-s5); }
+  .ph.laptop .ph-s > .fld:has(textarea) { grid-column: auto; }
+  .ph.laptop .ph-s > .rr-btn { justify-self: stretch; min-width: 0; }
+}
 </style>
 </head>
 <body>
@@ -428,7 +445,7 @@ body { padding-block: 32px 48px; padding-left: max(16px, env(safe-area-inset-lef
 <section class="pg-person" id="floors" aria-labelledby="h-fl">
   <div class="pg-person-head"><span class="rr-eyebrow">Everyone</span><h2 id="h-fl">Floor view</h2><p>Every room on every floor at a glance, stacked like the building. Tile width follows capacity. Attendees see walking time; staff and organisers also see who is on each door and the queue.</p></div>
   <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>Where is there space?</h3><p>Same board, three levels of detail.</p></div>
-   <div class="pg-row">
+   <div class="pg-row wrap">
     <figure class="ph" data-board="attendee"><figcaption><b>A4</b> Map view</figcaption><div class="ph-s">
       <div class="rr-sign"><span class="rr-eyebrow">Now · 11:05</span><h1>Rooms by floor</h1></div>
       <div class="seg" role="group" aria-label="View"><button type="button" data-mode="list" aria-pressed="false">List</button><button type="button" data-mode="map" aria-pressed="true">Map</button></div>
@@ -439,7 +456,7 @@ body { padding-block: 32px 48px; padding-left: max(16px, env(safe-area-inset-lef
       <div class="seg" role="group" aria-label="View"><button type="button" data-mode="list" aria-pressed="false">List</button><button type="button" data-mode="map" aria-pressed="true">Map</button></div>
       <div class="board"></div>
     </div></figure>
-    <figure class="ph wide" data-board="organiser"><figcaption><b>S1</b> Venue board</figcaption><div class="ph-s">
+    <figure class="ph laptop" data-board="organiser"><figcaption><b>S1</b> Venue board</figcaption><div class="ph-s">
       <div class="rr-sign"><span class="rr-eyebrow">Organiser · Live · 11:05</span><h1>Venue board</h1></div>
       <p class="m0 board-sum"></p>
       <div class="seg" role="group" aria-label="View"><button type="button" data-mode="list" aria-pressed="false">List</button><button type="button" data-mode="map" aria-pressed="true">Map</button></div>
@@ -618,7 +635,8 @@ body { padding-block: 32px 48px; padding-left: max(16px, env(safe-area-inset-lef
    <div class="pg-row">
     <figure class="ph"><figcaption><b>S2</b> Confirm Full?</figcaption><div class="ph-s">
       <div class="rr-offer"><span class="rr-eyebrow" role="alert">Room 204 looks full</span>
-        <div class="rr-count">50<small>/ 50 checked in</small></div>
+        <div class="rr-count">50<small>/ 50</small></div>
+        <p class="m0 muted">checked in</p>
         <p class="m0">You're on this door, so you get a say. Confirm to show Full and start sending people to other rooms. No answer in <b>30</b> seconds confirms it. With nobody on the door it goes out straight away.</p>
         <button class="rr-btn rr-btn--full rr-btn--plain" type="button">Confirm room is full</button>
         <button class="rr-btn rr-btn--ghost" type="button">Not yet, 2 free</button></div>
@@ -668,8 +686,8 @@ body { padding-block: 32px 48px; padding-left: max(16px, env(safe-area-inset-lef
   <div class="pg-person-head"><span class="rr-eyebrow">Persona 3</span><h2 id="h-org">Organiser · Dana</h2><p>"Set fair rules once, before doors open, and learn what to run next time."</p></div>
 
   <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">Before</span><h3>Before the event</h3><p>The day before.</p></div>
-   <div class="pg-row">
-    <figure class="ph"><figcaption><b>S1</b> Space setup</figcaption><div class="ph-s">
+   <div class="pg-row wrap">
+    <figure class="ph laptop"><figcaption><b>S1</b> Space setup</figcaption><div class="ph-s">
       <div class="rr-sign"><span class="rr-eyebrow">Organiser · Setup</span><h1>Room 204</h1></div>
       <div class="fld"><label for="cap">Capacity (fire limit)</label><input id="cap" value="50"></div>
       <div class="fld"><label for="rule">Published rule</label><textarea id="rule" rows="2">First come, within accessibility fit.</textarea></div>
@@ -680,15 +698,15 @@ body { padding-block: 32px 48px; padding-left: max(16px, env(safe-area-inset-lef
    </div></div>
 
   <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>Doors open and sessions</h3><p>9:00 to the end of the day.</p></div>
-   <div class="pg-row">
-    <figure class="ph"><figcaption><b>S1</b> Overview · rooms</figcaption><div class="ph-s">
+   <div class="pg-row wrap">
+    <figure class="ph laptop"><figcaption><b>S1</b> Overview · rooms</figcaption><div class="ph-s">
       <div class="rr-sign"><span class="rr-eyebrow">Organiser · Live</span><h1>All rooms</h1></div>
       <div class="talk"><div><b>Venue</b><span>176 of 180 in · 4 waitlisted</span></div><span class="rr-status" data-status="filling">Filling</span></div>
       <div class="talk"><div><b>Room 204</b><span>Leo on the door</span></div><span class="rr-status" data-status="full">Full</span></div>
       <div class="talk alert"><div><b>Room 118</b><span>Queue of 6 · no staff at the door</span></div><span class="rr-status" data-status="filling">Filling</span></div>
       <div class="talk"><div><b>Room 210</b><span>No staff needed</span></div><span class="rr-status" data-status="free">Seats free</span></div>
     </div></figure>
-    <figure class="ph"><figcaption><b>S1</b> Post an announcement</figcaption><div class="ph-s">
+    <figure class="ph laptop"><figcaption><b>S1</b> Post an announcement</figcaption><div class="ph-s">
       <div class="rr-sign"><span class="rr-eyebrow">Organiser</span><h1>New announcement</h1></div>
       <div class="fld"><label for="ann">Message</label><textarea id="ann" rows="3">West lift is out of service. Use the east lift for step-free access.</textarea></div>
       <div class="chips" role="group" aria-label="Floor"><button type="button" aria-pressed="false">All floors</button><button type="button" aria-pressed="true">Floor 2</button></div>
@@ -698,8 +716,8 @@ body { padding-block: 32px 48px; padding-left: max(16px, env(safe-area-inset-lef
    </div></div>
 
   <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">After</span><h3>After the event</h3><p>Planning the next one.</p></div>
-   <div class="pg-row">
-    <figure class="ph"><figcaption><b>S1</b> Interests and topics</figcaption><div class="ph-s">
+   <div class="pg-row wrap">
+    <figure class="ph laptop"><figcaption><b>S1</b> Interests and topics</figcaption><div class="ph-s">
       <div class="rr-sign"><span class="rr-eyebrow">Organiser · After</span><h1>What people wanted</h1></div>
       <div class="rr-panel"><span class="rr-eyebrow">Interest counts</span>
         <div class="bar"><span>Observability</span><i style="--w:100%"></i><b>52</b></div>
