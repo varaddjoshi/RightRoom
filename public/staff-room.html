@@ -18,10 +18,11 @@
   .cmt { display: flex; justify-content: space-between; align-items: center; gap: var(--rr-s2); border-top: 1px solid var(--rr-line); padding-top: var(--rr-s2); }
   .cmt p { margin: 0; min-width: 0; overflow-wrap: anywhere; }
   .cmt button { min-height: 44px; min-width: 64px; }
+  @media (min-width: 960px) { .cmt button { width: auto; flex: none; } }
 </style>
 </head>
 <body>
-<main class="rr-screen" aria-busy="true">
+<main class="rr-screen rr-screen--wide" aria-busy="true">
   <header class="rr-sign">
     <span class="rr-eyebrow" id="eyebrow">Staff · Room</span>
     <h1 id="title">Door console</h1>
