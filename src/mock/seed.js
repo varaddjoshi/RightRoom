@@ -2,13 +2,13 @@
 const ZONES = ['front-left', 'front-centre', 'front-right', 'middle-left', 'middle-centre', 'middle-right', 'back-left', 'back-centre', 'back-right'];
 
 const ROOMS = [
-  { id: '305', floor: 3, pos: 1, capacity: 60, title: 'Supply chain security', tags: ['security', 'supply-chain'], stepFree: false, access: 'Stairs only · captions', captions: true, inside: 60 },
-  { id: '310', floor: 3, pos: 2, capacity: 40, title: 'Helm workshop', tags: ['kubernetes', 'helm'], stepFree: true, access: 'Step-free', inside: 12 },
-  { id: '204', floor: 2, pos: 1, capacity: 50, title: 'eBPF deep dive', tags: ['ebpf', 'kernel', 'observability'], stepFree: true, access: 'Step-free via east lift', inside: 50 },
+  { id: '305', floor: 3, pos: 1, capacity: 60, title: 'Supply chain security', tags: ['security', 'kubernetes'], stepFree: false, access: 'Stairs only · captions', captions: true, inside: 60 },
+  { id: '310', floor: 3, pos: 2, capacity: 40, title: 'Helm workshop', tags: ['helm', 'kubernetes'], stepFree: true, access: 'Step-free', inside: 12 },
+  { id: '204', floor: 2, pos: 1, capacity: 50, title: 'eBPF deep dive', tags: ['ebpf', 'observability'], stepFree: true, access: 'Step-free via east lift', inside: 50 },
   { id: '210', floor: 2, pos: 2, capacity: 40, title: 'Observability at scale', tags: ['observability', 'kubernetes'], stepFree: true, access: 'Step-free', inside: 31 },
-  { id: '220', floor: 2, pos: 3, capacity: 40, title: 'Lightning talks', tags: ['kubernetes', 'platform-eng'], stepFree: true, access: 'Step-free', inside: 34 },
-  { id: '118', floor: 1, pos: 1, capacity: 50, title: 'Rust in the kernel', tags: ['rust', 'kernel'], stepFree: true, access: 'Step-free', inside: 41 },
-  { id: '101', floor: 1, pos: 2, capacity: 300, title: 'Keynote hall', tags: ['kubernetes', 'keynote'], stepFree: true, access: 'Step-free', inside: 120 },
+  { id: '220', floor: 2, pos: 3, capacity: 40, title: 'Lightning talks', tags: ['kubernetes', 'observability', 'platform'], stepFree: true, access: 'Step-free', inside: 34 },
+  { id: '118', floor: 1, pos: 1, capacity: 50, title: 'Rust in the kernel', tags: ['rust', 'ebpf'], stepFree: true, access: 'Step-free', inside: 41 },
+  { id: '101', floor: 1, pos: 2, capacity: 300, title: 'Keynote hall', tags: ['kubernetes', 'platform'], stepFree: true, access: 'Step-free', inside: 120 },
 ];
 
 function seed(now = Date.now()) {
