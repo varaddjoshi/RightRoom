@@ -38,7 +38,7 @@
     if (forecast === false) return '<span>Forecast: not available yet</span>';
     const f = forecast?.find((x) => x.room === id);
     if (!f) return '';
-    const by = f.likelyFullMinute != null && f.risk !== 'low' ? `, around ${Number(f.likelyFullMinute)} min in` : '';
+    const by = f.likelyFullMinute != null && f.risk !== 'low' ? `, around ${Math.round(f.likelyFullMinute)} min in` : '';
     return `<span class="fc">${riskWord[f.risk] || f.risk}${by} · ${Math.round(f.expectedFill * 100)}% expected</span>`;
   }
 
