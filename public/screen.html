@@ -50,6 +50,8 @@
 (async () => {
   const room = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop());
   const $ = (id) => document.getElementById(id);
+  // shortcut: 'checking' (at capacity, staff confirming) drawn as Full until RR.WORD/rr.css know it; drop once app.js has it.
+  const st = (s) => (s === 'checking' ? RR.status('full', 'Full · being checked') : RR.status(s));
   async function refresh() {
     try {
       const [v, floors] = await Promise.all([RR.api(`/spaces/${encodeURIComponent(room)}`), RR.api(`/floors?from=${encodeURIComponent(room)}`)]);
@@ -58,12 +60,13 @@
       $('title').textContent = v.title;
       $('count').innerHTML = `${v.taken}<small>/ ${v.capacity}</small>`;
       $('count').setAttribute('aria-label', `${v.taken} of ${v.capacity} seats taken`);
-      $('st').innerHTML = RR.status(v.status) + ' ' + RR.label('live') + (v.standIn ? ` <span class="rr-label">includes ${Number(v.standIn)} stand-in</span>` : '');
+      $('st').innerHTML = st(v.status) + ' ' + RR.label('live') + (v.standIn ? ` <span class="rr-label">includes ${Number(v.standIn)} stand-in</span>` : '');
       // When full, point people at the nearest room with free seats (walking minutes from this room).
       const alt = floors.flatMap((f) => f.rooms).filter((r) => r.id !== v.id && r.free > 0).sort((a, b) => a.walk - b.walk || b.free - a.free)[0];
       $('next').innerHTML = v.status === 'full' && alt
         ? `<div class="rr-route"><span class="rr-route__arrow" aria-hidden="true"></span><div><div class="rr-route__to">Full. Go to ${RR.esc(RR.roomName(alt.id))}</div><div class="rr-route__meta">${RR.esc(alt.title)} · ${alt.free} free</div><span class="rr-access">${alt.stepFree ? '&#9855; ' : ''}${RR.esc(alt.access)}</span></div><div class="rr-route__time">${Number(alt.walk)}<small>MIN</small></div></div>`
-        : v.status === 'full' ? '<p class="note">Every room is full right now. Join the queue at the door.</p>' : `<p class="rr-route__to">${v.free} seats free</p>`;
+        : v.status === 'full' ? '<p class="note">Every room is full right now. Join the queue at the door.</p>'
+        : v.status === 'checking' ? '<p class="rr-route__to">0 seats free · staff are checking</p><p class="note">Join the queue at the door: any seat that frees up goes to the queue first.</p>' : `<p class="rr-route__to">${v.free} seats free</p>`;
     } catch (e) { $('next').innerHTML = `<p class="note">${RR.esc(e.message)}</p>`; }
   }
   await refresh();

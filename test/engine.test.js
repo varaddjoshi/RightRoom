@@ -95,7 +95,7 @@ test('with a staff console open, Full waits for confirm or 30 seconds', () => {
   const sp = engine.space('220');
   engine.setConsole('220', 'leo', 'open');
   for (let i = 0; i < 6; i++) engine.checkin('220', { handle: `p${i}` }, 'back-left');
-  assert.equal(engine.view(sp).status, 'filling');
+  assert.equal(engine.view(sp).status, 'checking');
   assert.ok(events.some((e) => e.type === 'confirm' && e.space === '220'));
   tick(CONFIRM_MS + 1);
   engine.sweep();

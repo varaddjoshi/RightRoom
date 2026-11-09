@@ -28,13 +28,15 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now, pol
     if (sp.type === 'venue') return taken(sp) >= sp.capacity ? 'full' : taken(sp) >= 0.8 * sp.capacity ? 'filling' : 'free';
     if (sp.override === 'full') return 'full';
     const t = taken(sp);
-    if (t >= sp.capacity && sp.confirmed && sp.override !== 'not_full') return 'full';
+    if (t >= sp.capacity && sp.override !== 'not_full') return sp.confirmed ? 'full' : 'checking'; // at capacity, staff confirming: "Full · being checked", never "Filling" at 0 free
     return t >= 0.8 * sp.capacity ? 'filling' : 'free';
   }
   function view(sp) {
     const t = taken(sp);
     const base = { id: sp.id, type: sp.type, floor: sp.floor, title: sp.title, capacity: sp.capacity, taken: t, free: Math.max(0, sp.capacity - t), status: status(sp), rule: sp.rule };
-    if (sp.type === 'venue') return base;
+    if (sp.type === 'venue') return { ...base, scannedIn: admitted().filter((q) => q.scannedIn).length };
+    // Seats held for people already sent here by a redirect (SLO 2); `free` stays the one number everyone shows.
+    base.heldForRedirects = (sp.redirectHolds || []).filter((h) => h.until > now()).length;
     const zoneFill = Object.fromEntries(ZONES.map((z) => [z, 0]));
     let standIn = 0;
     for (const c of inside(sp).values()) { zoneFill[c.zone] = (zoneFill[c.zone] || 0) + 1; if (c.standIn) standIn++; }
