@@ -31,6 +31,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'rightroom', version: process.env.APP_VERSION || 'dev', store: store.mode });
 });
 app.use(require('./src/rum').router()); // browser monitoring settings and SDK file; off without DASH0_BROWSER_TOKEN
+app.use(require('./src/clockinfo').router()); // GET /api/clock: lets screens label a demo clock (public/demo-clock.js)
 app.use('/api', api({ store, engine }));
 app.use('/api', require('./src/routes/insights').makeRouter({ requireRole: auth.requireRole, db: () => store.db }));
 app.use('/api', require('./src/routes/search').searchRouter({ engine }));
