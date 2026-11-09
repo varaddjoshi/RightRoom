@@ -162,6 +162,18 @@ Every other commit, including the first one with product content (12:04 MST), co
 
 RightRoom runs on our hackathon cluster `pantheon` at https://pantheon.cnh.radarhq.io. Merging a PR to `main` builds the image and Argo CD deploys it. One-time steps, credentials and limits: [docs/deploy.md](docs/deploy.md).
 
+## Wi-Fi data and zone heatmaps
+
+Readings people share from the in-room page are kept in memory and, when `ELASTICSEARCH_URL` is set, indexed into the `wifi_readings` index; check-ins are mirrored there anonymously for the crowd heatmap. To give every room a believable heatmap (fronts fuller than backs, weak Wi-Fi at the back of the busiest rooms):
+
+```
+node scripts/stage-heat.js http://localhost:3000            # locally, through the API
+node scripts/stage-heat.js https://pantheon.cnh.radarhq.io --live  # on the cluster, on purpose (DEMO_PASSWORD for dana)
+node scripts/stage-heat.js https://pantheon.cnh.radarhq.io --live --es --reset   # Wi-Fi straight into Elasticsearch, replacing earlier stand-ins
+```
+
+Rooms come from `/api/floors`, so the same command works for the demo rooms locally and the real KubeCon rooms on the cluster. Any URL other than localhost needs `--live`, because it adds stand-in data to a shared server. The staged zone check-ins only colour the heatmap: they are kept apart from real check-ins and never take seats, so free seats, status and queues are unchanged. Everything staged is labelled `stand_in`, and `/api/heat`, `/api/wifi` and `wifiStats` on `/api/floors` carry a `label` (`live`, `stand_in` or `mixed`) next to `source` (the backend), so screens can mark the numbers Live or Stand-in. See `GET /api/heat?room=<id>`.
+
 ## Demo data
 
 `scripts/demo.sh [BASE_URL]` stages the demo story from `docs/journey-map.md` ("Example scenarios") on any running RightRoom server (default `http://localhost:3000`; password from `DEMO_PASSWORD`, default `rightroom-demo`). It **resets the server's state first** (as dana, through `/api/sim/reset`), then:

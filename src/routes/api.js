@@ -62,7 +62,7 @@ function api({ store, engine }) {
 
   // Schedule and floors (A4, S1, S2, D1)
   r.get('/sessions', h(() => [...db().spaces.values()].filter((s) => s.type === 'room' && !s.test).map((s) => ({ ...engine.view(s), wifi: engine.wifiMedian(s.id) }))));
-  r.get('/floors', h((req) => engine.floors(req.user?.role, db().spaces.has(String(req.query.from)) ? String(req.query.from) : null)));
+  r.get('/floors', h((req) => require('../heat').withHeat(db(), engine, engine.floors(req.user?.role, db().spaces.has(String(req.query.from)) ? String(req.query.from) : null))));
 
   // Room door and inside (A5, A6)
   r.get('/spaces/:id', h((req) => engine.roomForUser(sid(req), req.user?.handle)));
@@ -78,7 +78,7 @@ function api({ store, engine }) {
   r.post('/spaces/:id/wifi', h((req) => {
     signedIn(req);
     const reading = { space: sid(req), zone: zone(req.body?.zone), mbps: int(Math.round(req.body?.mbps), 0, 10_000, 'mbps'), ms: int(Math.round(req.body?.ms), 0, 60_000, 'ms'), at: Date.now() };
-    db().wifi.push(reading);
+    require('../wifi').record(db(), { ...reading, floor: engine.space(reading.space).floor }); // also indexed into Elasticsearch when configured
     return { ...reading, median: engine.wifiMedian(reading.space) };
   }));
   r.get('/spaces/:id/comments', h((req) => {
