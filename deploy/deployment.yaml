@@ -52,6 +52,10 @@ spec:
             # The demo's saved state (src/store.js). Only the cluster uses this index; laptops get their own.
             - name: STATE_INDEX
               value: "rr_engine_state"
+            # Address inside printed QR codes (src/routes/qr.js). TLS ends at the gateway, so without this the pod
+            # sees http:// and the in-app scanner rejects the codes as another site.
+            - name: PUBLIC_URL
+              value: "https://pantheon.cnh.radarhq.io"
             # Demo clock (src/clock.js): the app's "now" starts at Tuesday 11:45 at KubeCon (when most real talks run)
             # and ticks forward from there. It restarts at 11:45 on every restart or deploy. Not a secret. Screens show
             # a "Demo clock" badge while it is set. Check-in QR codes (src/presence.js) use the REAL day, so printed
