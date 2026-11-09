@@ -141,8 +141,13 @@
     if (staff()) $('legend').innerHTML = `${RR.label('live')} room status · ${RR.label('crowd-sourced')} Wi-Fi`;
     const rooms = await RR.api('/sessions').catch(() => []);
     // Where the person is checked in, for "you are here" and walking times. Only the room last used is checked.
-    const last = RR.recall('rr-room');
-    if (me && last && rooms.some((r) => r.id === last)) { const s = await RR.api(`/spaces/${enc(last)}`).catch(() => null); if (s?.me?.checkedIn) here = last; }
+    // Rechecked on every live update, so leaving (or checking in) in another tab updates "You're here" and walk times.
+    const findHere = async () => {
+      const last = RR.recall('rr-room');
+      const s = me && last ? await RR.api(`/spaces/${enc(last)}`).catch(() => null) : null;
+      here = s?.me?.checkedIn ? last : null;
+    };
+    await findHere();
     if (!staff()) {
       await Promise.all(rooms.map(async (r) => {
         topics[r.id] = ((await RR.api(`/spaces/${enc(r.id)}/comments`).catch(() => ({ topics: [] }))).topics || []).slice(0, 3);
@@ -153,7 +158,7 @@
     notices = await RR.api('/announcements').catch(() => []);
     await render();
     let t;
-    RR.live('*', { status: () => { clearTimeout(t); t = setTimeout(render, 300); } });
+    RR.live('*', { status: () => { clearTimeout(t); t = setTimeout(async () => { await findHere(); render(); }, 300); } });
     const myFloor = rooms.find((r) => r.id === here)?.floor ?? null;
     RR.watchNotices({ floor: myFloor, onChange: (a) => { notices = [a, ...notices]; render(); } });
     // Demo and screenshot aid: ?notices=open opens the first floor's notices (staff map).
