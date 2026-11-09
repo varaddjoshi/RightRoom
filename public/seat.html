@@ -27,9 +27,10 @@
 <script src="/app.js"></script>
 <script>
   // If you've since joined a room, go straight to it.
-  const room = RR.recall('rr-room');
-  if (room) location.replace('/r/' + encodeURIComponent(room));
-  else RR.liveEvent().then((e) => { if (e.name) document.getElementById('ev').textContent = `${e.name} · My seat`; });
+  RR.myRoom().then((room) => {
+    if (room) location.replace('/r/' + encodeURIComponent(room));
+    else RR.liveEvent().then((e) => { if (e.name) document.getElementById('ev').textContent = `${e.name} · My seat`; });
+  });
 </script>
 </body>
 </html>
