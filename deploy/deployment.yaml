@@ -30,7 +30,7 @@ spec:
             - name: http
               containerPort: 8080
           # Keys (ELASTICSEARCH_URL, ELASTICSEARCH_API_KEY, DASH0_OTLP_ENDPOINT,
-          # DASH0_TOKEN, ...) come from Secret app-credentials, which is created by
+          # DASH0_TOKEN, optional ES_INDEX_PREFIX) come from Secret app-credentials, which is created by
           # hand in the cluster and never committed (docs/deploy.md). optional: the
           # pod still starts before the Secret exists.
           envFrom:
