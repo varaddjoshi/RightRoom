@@ -39,7 +39,8 @@ const textKw = { type: 'text', fields: { raw: { type: 'keyword', ignore_above: 2
 const notIndexed = { type: 'keyword', index: false, doc_values: false };
 
 // Fields every document carries.
-const base = { event_id: keyword, created_at: date, updated_at: date };
+// label: live | real | stand_in. Every number on screen says which one it is.
+const base = { event_id: keyword, label: keyword, created_at: date, updated_at: date };
 
 // Access needs are preferences, never a diagnosis: "step_free", "captions", "front_row", "access_seat".
 const needs = keyword;
@@ -56,12 +57,14 @@ const MAPPINGS = {
     name: textKw,
     floor: int,
     capacity: int,
-    taken: int, // check-ins + held seats (open offers); the engine changes it with scripted updates only
+    taken: int, // check-ins + staff_correction + held seats (open offers); changed with scripted updates only
+    staff_correction: int, // staff +/- for walk-ins who didn't scan (optional)
     access_seats: int, // seats only for people who stated the need
     access_taken: int,
     status: keyword, // seats_free | filling | full
-    status_source: keyword, // checkins | staff | override
-    full_suggested_at: date, // when the app suggested Full and is waiting for staff to confirm
+    status_source: keyword, // auto | staff (staff answered the Full prompt or overrode)
+    staff_console_open_until: date, // a staff console for this room is open; Full waits up to 30s for them
+    full_suggested_at: date, // at capacity with a staff console open: when the app asked staff to confirm
     rule: text, // the published admission rule, shown word for word
     priorities: keyword, // publicly listed priorities, e.g. "access_needs"
     step_free: bool,
