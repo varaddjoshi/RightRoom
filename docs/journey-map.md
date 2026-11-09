@@ -34,6 +34,7 @@ Nov 9, 2026. Built from `docs/project.md` plus Hitesh's additions (sign-in, regi
 28. Each signed-in user, or each device for guests, holds at most one place per queue. Guest queue joins are rate-limited. (G6, draft)
 29. Staff pick a zone when releasing seats. "I'm leaving" uses the zone from that person's check-in. (G7, draft)
 30. The venue is a space like any room: its entrance has its own "I'm at the door" QR, staff QR and S2 console. (G8, draft)
+31. While checked in to one session you can keep waiting in another room's queue (Sam sits in Room 210 and waits for Room 204). Checking in cancels any seat offers or claims you hold elsewhere, but not your queue places. If a seat offer arrives while you're seated, claiming it and scanning in moves you: you're checked out of the first room and that seat goes to its queue as an offer. You still hold at most one place per queue. (Hitesh)
 
 ## Personas
 
