@@ -91,6 +91,7 @@ These are where the hackathon is won or lost. P2 owns them and the load test pro
 3. Redirects never send more people than there are free seats. Open offers are already counted in `taken` (rule 1), so free seats are `capacity - taken`. The redirect query only returns rooms where that covers everyone being redirected there at that moment, and the engine reserves those places as offers.
 4. Room status follows the rule in `docs/journey-map.md`. The count is automatic: check-ins plus any staff correction plus held offers. Seats free under 80 percent, Filling from 80 percent, Full at capacity, all pushed straight away. Only when a staff console is open for that room does Full wait for the staff member's answer, up to 30 seconds. Redirects start once Full is pushed.
 5. Interests never decide who gets a seat. They only rank redirect suggestions.
+6. Checking in settles seats, not queues. It cancels the person's offers and claims in other rooms and checks them out of any other room (whose seat then goes to that room's queue), but leaves their place in other queues so they can wait for a better session while seated (journey-map decision 34).
 
 ## API contract
 

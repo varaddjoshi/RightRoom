@@ -26,13 +26,85 @@ Fill in `.env` with your real Elasticsearch and Dash0 values. Never commit `.env
 `OTEL_EXPORTER_OTLP_*` variables the OpenTelemetry auto-instrumentation reads. Without them, traces are switched off
 instead of failing. Real environment variables (for example on the host) override `.env`.
 
-### Running with the mock API
+## Run the backend
 
-The app currently runs on an in-memory mock of the API in `docs/architecture.md`, so every screen works without Elasticsearch. State resets on restart.
+One Node process serves the pages, the JSON API (`docs/architecture.md`), the live stream (`/api/stream`) and the sweeper that passes on expired offers every 2 seconds. The seat rules run on state in memory (exactly one replica, so two requests never race for a seat). With Elasticsearch configured, that state is saved within about a second of every change and loaded back on start, so a restart or deploy keeps queues, offers, check-ins, accounts and sign-ins.
 
-- Demo users: `dana` (organiser), `leo` (staff), `sam` (attendee, step-free). Password `rightroom-demo`, or whatever `DEMO_PASSWORD` is set to.
-- Optional `.env` values: `DEMO_PASSWORD`, `ORGANISERS` and `STAFF` (comma-separated usernames; defaults `dana` and `leo`), `SESSION_SECRET` (keeps people signed in across restarts).
-- `npm test` runs the seat rules, including the 50-people-for-5-seats load test.
+Needs Node 22.
+
+### Quick start, in memory (no keys)
+
+```bash
+npm ci
+npm start                       # http://localhost:3000, state resets on restart
+```
+
+- Demo users: `dana` (organiser), `leo` (staff), `sam` (attendee, step-free). Password `rightroom-demo`, or `DEMO_PASSWORD`.
+- `curl localhost:3000/health` shows `"store":"memory"`.
+
+### With Elasticsearch (state survives restarts)
+
+```bash
+cp .env.example .env            # fill in ELASTICSEARCH_URL and ELASTICSEARCH_API_KEY (DASH0_* for traces)
+npm start
+curl localhost:3000/health      # "store":"elasticsearch"
+```
+
+- The state is one document, id `EVENT_ID` (default `cnh-2026`), in index `<ES_INDEX_PREFIX>engine_state` (default `rr_engine_state`). It's saved after changes and once more at shutdown.
+- **Try it without touching the demo's state:** `ES_INDEX_PREFIX=rr_test_ npm start`.
+- **Start over from the seed:** `RESET_STATE=1 npm start`, or the organiser's reset (`POST /api/sim/reset`).
+- If Elasticsearch can't be reached at start, the app runs in memory and saves nothing (`/health` says `"memory (elasticsearch unreachable)"`), so a bad connection never overwrites good saved state.
+- This doesn't write the per-entity indexes from `src/es.js` (P1) yet.
+
+### In Docker (the image the cluster runs)
+
+```bash
+docker build -t rightroom .
+docker run --rm -p 8080:8080 --env-file .env -e PORT=8080 rightroom    # http://localhost:8080
+```
+
+### Tests and the load test
+
+```bash
+npm test                                                        # seat rules, plus the HTTP load test in-process
+node scripts/loadtest.js --url http://localhost:3000            # 50 people try for 5 seats
+node scripts/loadtest.js --url http://localhost:3000 --pass-on  # also: an offer passes on after 60s (about a minute)
+node scripts/loadtest.js --url https://pantheon.cnh.radarhq.io  # against the cluster
+```
+
+The load test signs in as staff (`RR_USER`, default `dana`; `RR_PASSWORD`, default `DEMO_PASSWORD` or `rightroom-demo`). It uses its own test room, never a real one, and removes it afterwards. It passes only if:
+- exactly 5 of the 250 claims win, and no offer or person wins twice;
+- the room shows 5 of 5 taken;
+- a Full status reaches a live stream subscriber.
+
+With `--pass-on`, it also passes only if the unclaimed offer reaches the next person's stream after about 60 seconds. Exit code 0 means every check passed.
+
+### Try the API by hand
+
+```bash
+curl -c jar -H 'content-type: application/json' -d '{"handle":"sam","password":"rightroom-demo"}' localhost:3000/api/login
+curl -b jar localhost:3000/api/floors                           # rooms by floor, with status
+curl -b jar -X POST localhost:3000/api/spaces/310/queue         # queue at a room's door; a free seat is offered at once
+curl -b jar localhost:3000/api/spaces/310                       # your offer: id, zone, seconds left
+curl -b jar -X POST localhost:3000/api/offers/<offer id>/claim  # claim it within 60 seconds
+curl -N -b jar 'localhost:3000/api/stream?space=310'            # live events: status, position, offer, offer_passed
+```
+
+### Settings
+
+| Variable | Default | What it does |
+|---|---|---|
+| `PORT` | `3000` (`8080` in the image) | HTTP port |
+| `ELASTICSEARCH_URL`, `ELASTICSEARCH_API_KEY` | unset: in memory | Where the state is saved |
+| `ES_INDEX_PREFIX` | `rr_` | Index prefix; use `rr_test_` for experiments |
+| `EVENT_ID` | `cnh-2026` | Which saved state to use |
+| `RESET_STATE` | unset | `1` starts from the seed and replaces the saved state |
+| `DEMO_PASSWORD` | `rightroom-demo` | Password of the demo users. **Set it on the cluster**: the default is public in this repo |
+| `SESSION_SECRET` | generated and saved with the state | Signs the login cookie |
+| `ORGANISERS`, `STAFF` | `dana`, `leo` | Comma-separated usernames with those roles |
+| `DASH0_OTLP_ENDPOINT`, `DASH0_TOKEN` | unset: traces off | Traces to Dash0 (`src/telemetry-env.js`) |
+
+`npm start` loads `.env`, and real environment variables override it.
 
 ## Notes
 

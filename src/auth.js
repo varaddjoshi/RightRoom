@@ -2,8 +2,10 @@
 // No email, name or phone is stored; the username is the public handle.
 const crypto = require('node:crypto');
 
-// shortcut: a random secret per boot logs everyone out on restart; set SESSION_SECRET in .env for a stable one.
-const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+// SESSION_SECRET keeps people signed in across restarts. Without it the store (src/store.js) keeps a generated one
+// with the saved state when Elasticsearch is on; in memory only, a random secret per boot logs everyone out.
+let SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+function setSecret(secret) { if (!process.env.SESSION_SECRET && secret) SECRET = secret; }
 const DAY = 24 * 3600_000;
 const list = (v, d) => (v || d).split(',').map((s) => s.trim()).filter(Boolean);
 const ORGANISERS = list(process.env.ORGANISERS, 'dana');
@@ -102,4 +104,4 @@ function publicUser(u) { return u && { handle: u.handle, role: u.role, interests
 
 function bad(message, status = 400) { return Object.assign(new Error(message), { status }); }
 
-module.exports = { signup, login, guest, setSession, clearSession, middleware, requireRole, publicUser, ensureDemoUsers, NEEDS, verify, sign };
+module.exports = { signup, login, guest, setSession, clearSession, middleware, requireRole, publicUser, ensureDemoUsers, NEEDS, verify, sign, setSecret };

@@ -308,7 +308,7 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now }) {
   function floors(role, fromId) {
     const from = fromId ? space(fromId) : null;
     const staff = role === 'staff' || role === 'organiser';
-    const rooms = [...db().spaces.values()].filter((s) => s.type === 'room');
+    const rooms = [...db().spaces.values()].filter((s) => s.type === 'room' && !s.test);
     const byFloor = [...new Set(rooms.map((r) => r.floor))].sort((a, b) => b - a);
     return byFloor.map((f) => ({
       floor: f,
