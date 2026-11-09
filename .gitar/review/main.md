@@ -2,7 +2,8 @@
 
 RightRoom decides, in public and in real time, who gets a seat at a live event. The team ships many small PRs under a
 hard deadline, so review for what would hurt on stage or in a public repo. **Skip style, naming and formatting nits.**
-Report a problem only if it falls under one of the sections below, and say which section. Keep findings short.
+Always report a clear bug, crash, data loss or security problem, even if it is not listed below. For anything else,
+report only what falls under one of the sections below, and say which section. Keep findings short.
 
 ## 1. Secrets and personal data (the repo is public)
 
