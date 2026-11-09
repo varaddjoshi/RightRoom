@@ -210,4 +210,4 @@ if (require.main === module) {
   run(opts).then((r) => process.exit(r.ok ? 0 : 1), (e) => { console.error(`Load test could not run: ${e.message}`); process.exit(1); });
 }
 
-module.exports = { run };
+module.exports = { run, listen };
