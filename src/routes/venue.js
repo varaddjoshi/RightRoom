@@ -47,6 +47,12 @@ function venueRouter({ store, engine }) {
   }));
   r.put('/host/sessions/:id', a((req) => catalog.updateTalk(db(), req.params.id, req.body || {}, signedIn(req))));
 
+  // Anyone signed in: change your own password, giving the current one. {current, password}
+  r.put('/me/password', a((req) => {
+    auth.changePassword(db(), signedIn(req).handle, req.body?.current, req.body?.password);
+    return { changed: true };
+  }));
+
   // Anyone: one talk's public details. Who hosts it stays private.
   r.get('/talks/:id', a((req) => {
     const { hosts, ...talk } = catalog.talkView(catalog.getTalk(db(), req.params.id));
