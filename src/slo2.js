@@ -54,6 +54,12 @@ const ctx = { store: null, clock: Date.now };
 const waiting = new Map(); // "handle|space" -> { t0, timer }: turned away, no answer yet
 const pendingRedirects = new Map(); // handle -> { room, timer }: redirected, not yet settled
 const lastStatus = new Map(); // space -> last status seen, to count transitions to Full
+// Count at most one SLO 2 outcome per person per room, and one settled redirect per person per room, so a loop of
+// join / redirect / leave (or redirect / check in) cannot inflate the numbers. /api is open to anyone and guests are
+// free to create, so this is about one person repeating; it does not stop someone making many guests.
+const settled = new Set(); // "handle|space" already given an SLO 2 outcome
+const settledRedirects = new Set(); // "handle|room" already given a settled redirect
+const remember = (set, k) => { if (set.size >= 20_000) set.clear(); set.add(k); };
 
 const key = (handle, space) => `${handle}|${space}`;
 const isTestSpace = (space) => !!ctx.store?.db?.spaces?.get?.(space)?.test;
@@ -69,10 +75,10 @@ function record(outcome, ms) {
 }
 
 function turnedAway(handle, space) {
-  if (!counts(handle, space) || waiting.has(key(handle, space))) return;
   const k = key(handle, space);
+  if (!counts(handle, space) || waiting.has(k) || settled.has(k)) return;
   const timer = unref(setTimeout(() => {
-    if (waiting.delete(k)) record('none', SLO2_MS);
+    if (waiting.delete(k)) { record('none', SLO2_MS); remember(settled, k); }
   }, SLO2_MS));
   waiting.set(k, { t0: ctx.clock(), timer });
 }
@@ -83,6 +89,7 @@ function respond(handle, space, outcome) {
   clearTimeout(w.timer);
   waiting.delete(key(handle, space));
   record(outcome, ctx.clock() - w.t0);
+  remember(settled, key(handle, space));
 }
 
 // Not a miss: the person left the queue, or checked in somewhere, before the 30 s were up.
@@ -97,12 +104,14 @@ function redirectShown(user, fromSpace, result) {
   const room = result?.suggestion?.room;
   if (!user?.handle || !room || !counts(user.handle, fromSpace)) return;
   respond(user.handle, fromSpace, 'redirect');
+  if (settledRedirects.has(key(user.handle, room))) return; // this person already had a redirect to this room settled
   const existing = pendingRedirects.get(user.handle);
   if (existing && existing.room === room) return; // the screen refreshed; same redirect
   if (existing) clearTimeout(existing.timer); // a newer suggestion replaces the old one
   const timer = unref(setTimeout(() => {
     if (pendingRedirects.get(user.handle)?.room === room) {
       pendingRedirects.delete(user.handle);
+      remember(settledRedirects, key(user.handle, room));
       redirectsCounter.add(1, { 'redirect.followed': false });
     }
   }, REDIRECT_WINDOW_MS));
@@ -115,6 +124,7 @@ function checkedIn(handle, space) {
   if (p && p.room === space) {
     clearTimeout(p.timer);
     pendingRedirects.delete(handle);
+    remember(settledRedirects, key(handle, space));
     redirectsCounter.add(1, { 'redirect.followed': true });
   }
 }
@@ -148,11 +158,14 @@ function instrument({ engine, store, clock = Date.now }) {
   ctx.store = store;
   ctx.clock = clock;
   const queued = (spaceId, handle) => !!store?.db?.queue?.some?.((q) => q.space === spaceId && q.handle === handle && ['waiting', 'offered'].includes(q.status));
+  const waitingNow = (spaceId, handle) => !!store?.db?.queue?.some?.((q) => q.space === spaceId && q.handle === handle && q.status === 'waiting');
 
   wrap(engine, 'joinQueue', (orig) => (spaceId, user, ...rest) => {
     const had = safe(queued)(spaceId, user?.handle);
     const res = orig(spaceId, user, ...rest);
-    if (!had && res && res.status === 'waiting') safe(turnedAway)(user.handle, String(spaceId));
+    // The engine returns an existing entry when the same DEVICE joins again under a different guest handle. That
+    // person has no entry of their own, so only start a clock if THIS handle is now waiting in the queue.
+    if (!had && res && res.status === 'waiting' && safe(waitingNow)(spaceId, user?.handle)) safe(turnedAway)(user.handle, String(spaceId));
     return res;
   });
   wrap(engine, 'leaveQueue', (orig) => (spaceId, handle, ...rest) => {
@@ -172,7 +185,7 @@ function instrument({ engine, store, clock = Date.now }) {
   });
   wrap(engine, 'override', (orig) => (spaceId, mode, ...rest) => {
     const res = orig(spaceId, mode, ...rest);
-    safe(() => overridesCounter.add(1, { 'override.mode': ['full', 'not_full', 'clear'].includes(mode) ? mode : 'other' }))();
+    safe(() => { if (!isTestSpace(String(spaceId))) overridesCounter.add(1, { 'override.mode': ['full', 'not_full', 'clear'].includes(mode) ? mode : 'other' }); })();
     return res;
   });
   Object.defineProperty(engine, '__slo2', { value: true });
@@ -183,7 +196,7 @@ function instrument({ engine, store, clock = Date.now }) {
 function reset() {
   for (const w of waiting.values()) clearTimeout(w.timer);
   for (const p of pendingRedirects.values()) clearTimeout(p.timer);
-  waiting.clear(); pendingRedirects.clear(); lastStatus.clear();
+  waiting.clear(); pendingRedirects.clear(); lastStatus.clear(); settled.clear(); settledRedirects.clear();
 }
 
 module.exports = { instrument, observe, reset, SLO2_MS, REDIRECT_WINDOW_MS };

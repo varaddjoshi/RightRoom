@@ -118,6 +118,55 @@ test('redirect success: followed when they check in at the suggested room, not f
   assert.equal(by('rightroom.redirects').length, 2, 'checking in after the window is settled adds nothing');
 });
 
+test('one person looping join / redirect / leave adds ONE SLO 2 outcome, not one per round (Gitar finding 1)', () => {
+  const { engine } = setup();
+  for (let i = 0; i < 5; i++) {
+    engine.joinQueue('204', ann);
+    engine.redirect('204', ann);
+    engine.leaveQueue('204', 'ann');
+  }
+  assert.equal(by('rightroom.slo2.responses').length, 1);
+  assert.equal(by('rightroom.slo2.time_to_response').length, 1);
+});
+
+test('looping redirect / check in adds ONE settled redirect, not one per round', () => {
+  const { engine } = setup();
+  for (let i = 0; i < 4; i++) {
+    const r = engine.redirect('204', ann);
+    engine.checkin(r.suggestion.room, ann);
+  }
+  assert.equal(by('rightroom.redirects').length, 1);
+});
+
+test('a miss is counted once per person per room, even if they are turned away again', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { engine } = setup();
+  engine.joinQueue('204', ann);
+  t.mock.timers.tick(30_000);
+  engine.leaveQueue('204', 'ann');
+  engine.joinQueue('204', ann);
+  t.mock.timers.tick(30_000);
+  assert.equal(by('rightroom.slo2.responses').length, 1);
+});
+
+test('a guest re-joining from the same device under another handle gets no clock of their own (Gitar finding 2)', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { engine } = setup();
+  const first = engine.joinQueue('204', { handle: 'guest-1', needs: [] }, 'device-A');
+  const second = engine.joinQueue('204', { handle: 'guest-2', needs: [] }, 'device-A');
+  assert.equal(first.status, 'waiting');
+  assert.equal(second.status, 'waiting', 'the engine hands back the existing entry');
+  t.mock.timers.tick(30_000);
+  assert.deepEqual(attrsOf('rightroom.slo2.responses'), [{ 'slo2.outcome': 'none', 'slo2.within_30s': false }], 'one miss, for guest-1 only');
+});
+
+test('staff overrides on the load-test room are not counted (Gitar finding 3)', () => {
+  const { engine, db } = setup();
+  db.spaces.get('204').test = true;
+  engine.override('204', 'full');
+  assert.equal(by('rightroom.staff.overrides').length, 0);
+});
+
 test('staff overrides are counted by mode', () => {
   const { engine } = setup();
   engine.override('204', 'not_full');
