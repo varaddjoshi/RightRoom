@@ -64,8 +64,11 @@ async function runLabel(fetchImpl) {
     document: {
       createElement: (tag) => ({ tag, style: {}, children: [], listeners: {}, setAttribute(k, v) { this[k] = v; }, getAttribute(k) { return this[k]; },
         appendChild(c) { this.children.push(c); }, addEventListener(t, fn) { this.listeners[t] = fn; }, focus() {} }),
-      body: { appendChild: (el) => appended.push(el) },
+      body: { appendChild: (el) => { el.parentNode = 'body'; appended.push(el); } },
+      querySelector: () => null,
+      addEventListener() {},
     },
+    MutationObserver: class { observe() {} },
     localStorage: { getItem: () => null, setItem: (k, v) => { stored[k] = v; } },
     fetch: (...args) => fetchImpl(...args),
     Intl, Date, setInterval: (fn, ms) => { intervals.push(ms); return 1; },
