@@ -106,6 +106,12 @@ curl -N -b jar 'localhost:3000/api/stream?space=310'            # live events: s
 
 `npm start` loads `.env`, and real environment variables override it.
 
+## QR codes
+
+Attendees scan printed codes with their phone camera; there is no in-app scanner. Sign in as staff or an organiser and open `/staff/qr` for a printable sheet: one card per space with "I'm at the door" (`/r/:room`), "I'm in the room" (`/r/:room/in`) and "Staff only" (`/staff/room/:room`), plus the venue entrance and the two demo-slide codes for Room 204. Print it from the browser; each space gets its own page.
+
+Each code is also an image at `/qr/:room.svg?kind=door|in|staff` (staff codes need a staff login). Set `PUBLIC_URL` so the codes point at the deployed site, for example `https://pantheon.cnh.radarhq.io`; locally, set it to your LAN address (`http://<your IP>:3000`) so phones on the same Wi-Fi can open them.
+
 ## Notes
 
 - Scope for the hackathon demo: one event day, about 20 sessions, 6 rooms.
