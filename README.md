@@ -125,6 +125,11 @@ With Elasticsearch on, the venue and its talks are the real KubeCon ones from P1
 
 A room's title on every screen is the talk on now, using the app's clock (`DEMO_CLOCK`, `src/clock.js`).
 
+Views and demo logins:
+- **Organiser view:** `/staff/venue`. Sign in as `organiser` (or `dana`).
+- **Host view:** `/host`. Sign in as `host`, which hosts the talks of one demo room: 255 BC on the real venue, 310 in memory; set `DEMO_HOST_ROOM` to change it.
+- **Password:** `DEMO_PASSWORD`, the same as `dana`/`leo`/`sam`. Locally it's `rightroom-demo`. On the live site it comes from Raj, never from chat.
+
 ### Settings
 
 | Variable | Default | What it does |

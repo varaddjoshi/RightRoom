@@ -21,9 +21,9 @@
   .grid2 { display: grid; gap: var(--rr-s3); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
   .chk { display: flex; gap: var(--rr-s2); align-items: center; min-height: 44px; font-weight: 600; }
   .chk input { width: 22px; height: 22px; accent-color: var(--rr-signal); }
-  .talk { display: grid; gap: var(--rr-s2); padding: var(--rr-s3) 0; border-top: 1px solid var(--rr-hair); }
-  .talk:first-child { border-top: 0; }
-  .talk .when { color: var(--rr-muted); font-size: var(--rr-t-sm); }
+  .v-talk { display: grid; gap: var(--rr-s2); padding: var(--rr-s3) 0; border-top: 1px solid var(--rr-hair); }
+  .v-talk:first-child { border-top: 0; }
+  .v-talk .when { color: var(--rr-muted); font-size: var(--rr-t-sm); }
   .row { display: flex; gap: var(--rr-s2); flex-wrap: wrap; align-items: end; }
   .row .fld { flex: 1 1 200px; }
   .row .rr-btn { width: auto; }
@@ -132,13 +132,13 @@
   async function loadTalks() {
     const { talks } = await RR.api(`/staff/sessions?room=${encodeURIComponent(current)}`);
     $('talks').innerHTML = talks.length ? talks.map((t) => `
-      <div class="talk" data-id="${RR.esc(t.id)}">
+      <div class="v-talk" data-id="${RR.esc(t.id)}">
         <div><b>${RR.esc(t.title)}</b><div class="when">${when(t)}${t.speakers.length ? ` · ${RR.esc(t.speakers.join(', '))}` : ''}</div></div>
         <div class="row"><div class="fld"><label for="h-${RR.esc(t.id)}">Hosts</label><input id="h-${RR.esc(t.id)}" value="${RR.esc(t.hosts.join(', '))}" placeholder="usernames" autocapitalize="off" spellcheck="false"></div>
           <button class="rr-btn rr-btn--ghost" type="button" data-act="hosts">Save hosts</button>
           <button class="rr-btn rr-btn--ghost" type="button" data-act="del">Delete</button></div>
       </div>`).join('') : '<p class="note">No talks in this room yet.</p>';
-    $('talks').querySelectorAll('.talk').forEach((row) => {
+    $('talks').querySelectorAll('.v-talk').forEach((row) => {
       const id = row.dataset.id;
       row.querySelector('[data-act="hosts"]').addEventListener('click', async () => {
         try { const t = await RR.api(`/staff/sessions/${encodeURIComponent(id)}/hosts`, { method: 'PUT', body: { hosts: hostsOf(row.querySelector('input').value) } }); say(`Hosts of "${t.title}": ${t.hosts.join(', ') || 'none'}.`); } catch (x) { fail(x); }

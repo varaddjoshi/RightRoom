@@ -12,7 +12,7 @@
   /* Host view (P2, src/routes/venue.js). Built only from rr.css tokens and components. */
   .meta { color: var(--rr-muted); font-size: var(--rr-t-sm); margin: 0; }
   .grid2 { display: grid; gap: var(--rr-s3); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  .talk h2 { margin: 0; font: 800 var(--rr-t-lg)/1.2 var(--rr-font-sign); }
+  .host-talk h2 { margin: 0; font: 800 var(--rr-t-lg)/1.2 var(--rr-font-sign); }
 </style>
 </head>
 <body>
@@ -34,7 +34,7 @@
   const field = (t, key, label, input) => `<div class="fld"><label for="${key}-${RR.esc(t.id)}">${label}</label>${input(`${key}-${RR.esc(t.id)}`)}</div>`;
 
   function card(t, roomName) {
-    return `<form class="rr-panel talk rr-btn-stack" data-id="${RR.esc(t.id)}">
+    return `<form class="rr-panel host-talk rr-btn-stack" data-id="${RR.esc(t.id)}">
       <div><h2>${RR.esc(t.title)}</h2>
         <p class="meta">${RR.esc(roomName)} · ${when(t)} · <a href="/r/${encodeURIComponent(t.room_id)}">Room page</a></p></div>
       ${field(t, 'title', 'Title', (id) => `<input id="${id}" maxlength="200" required value="${RR.esc(t.title)}">`)}
@@ -60,7 +60,7 @@
         return;
       }
       $('talks').innerHTML = talks.map((t) => card(t, names.get(t.room_id) || t.room_id)).join('');
-      $('talks').querySelectorAll('form.talk').forEach((f) => f.addEventListener('submit', async (e) => {
+      $('talks').querySelectorAll('form.host-talk').forEach((f) => f.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = f.dataset.id, v = (k) => f.querySelector(`#${CSS.escape(`${k}-${id}`)}`).value;
         err.hidden = msg.hidden = true;
