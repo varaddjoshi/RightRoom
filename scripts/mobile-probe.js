@@ -1,7 +1,8 @@
-// Injected by scripts/mobile-check.sh into a temp copy of a page. Writes a JSON report into a hidden pre#mobile-report element.
+// Run inside each page by scripts/mobile-run.js. Writes a JSON report into a hidden pre#mobile-report element.
 (function () {
   function run() {
-    const W = window.innerWidth;
+    // Phones widen the layout viewport to fit overflowing content, so compare against the width under test.
+    const W = window.__mobileWidth || window.innerWidth;
     const shown = el => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden' &&
       !(el.parentElement && el.parentElement.closest('details:not([open])') && !el.closest('summary')); // closed <details> content still reports boxes in Chrome
     const name = el => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') +
@@ -24,7 +25,8 @@
 
     const taps = all.filter(el => el.matches('button, a[href], summary, input:not([type=hidden]), select, textarea, [role=button]'))
       .filter(el => {
-        if (el.matches('a') && el.closest('p, li')) return false; // inline links are exempt (WCAG 2.5.8)
+        // Links inside a sentence are exempt (WCAG 2.5.8); nav and list links are not.
+        if (el.matches('a') && [...el.parentElement.childNodes].some(n => n !== el && n.nodeType === 3 && n.textContent.trim())) return false;
         let r = el.getBoundingClientRect();
         const label = el.closest('label');
         if (el.matches('input[type=checkbox], input[type=radio]') && label) r = label.getBoundingClientRect();
@@ -42,14 +44,22 @@
     }).map(el => name(el) + ` ${el.scrollWidth}>${el.clientWidth}`);
 
     // Text covered by a button or link it doesn't belong to (shown as "spill" in the table too).
+    // Only counts when the button is really painted on top: elementFromPoint at the middle of the overlap.
     const tapEls = all.filter(el => el.matches('button, a[href], summary, [role=button]'));
     const textEls = all.filter(el => [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()));
-    const hit = (a, b) => a.left < b.right - 2 && b.left < a.right - 2 && a.top < b.bottom - 2 && b.top < a.bottom - 2;
     for (const t of textEls) for (const b of tapEls) {
       if (b.contains(t) || t.contains(b)) continue;
-      // Text sits on top of the button only if the button is above it in paint order; a covering button is the bug.
-      if (hit(t.getBoundingClientRect(), b.getBoundingClientRect())) spill.push(name(t) + ' covered by ' + name(b));
+      const a = t.getBoundingClientRect(), c = b.getBoundingClientRect();
+      const left = Math.max(a.left, c.left), right = Math.min(a.right, c.right);
+      const top = Math.max(a.top, c.top), bottom = Math.min(a.bottom, c.bottom);
+      if (right - left < 2 || bottom - top < 2) continue;
+      const pageY = (top + bottom) / 2 + scrollY;
+      scrollTo(0, pageY - innerHeight / 2);
+      const x = (left + right) / 2, y = pageY - scrollY;
+      const at = x >= 0 && x < innerWidth ? document.elementFromPoint(x, y) : null;
+      if (at && b.contains(at)) spill.push(name(t) + ' covered by ' + name(b));
     }
+    scrollTo(0, 0);
 
     const wideMedia = all.filter(el => el.matches('img, svg, video, canvas, input, textarea, select') && el.parentElement)
       .filter(el => el.getBoundingClientRect().width > el.parentElement.getBoundingClientRect().width + 1).map(name);
