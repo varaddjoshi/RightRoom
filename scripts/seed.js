@@ -2,6 +2,9 @@
 //
 //   node scripts/seed.js            create missing indexes, then write the seed documents (safe to rerun:
 //                                   fixed document IDs, so a rerun overwrites instead of duplicating)
+//   --data <file>                   seed file; default scripts/seed-data.kubecon.json (the real KubeCon NA 2026
+//                                   schedule from scripts/import-sessionize.js). scripts/seed-data.json is the
+//                                   stand-in demo set with relative times and Room 204 full.
 //   node scripts/seed.js --reset    delete every index with this prefix first. On the live prefix (rr_) this wipes
 //                                   real users, queues and check-ins, so it also needs --confirm-live.
 //
@@ -11,22 +14,29 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 const { es, INDEX, PREFIX, SEMANTIC, ensureIndexes, dropIndexes } = require('../src/es');
-const data = require('./seed-data.json');
+const DATA_FILE = (() => {
+  const i = process.argv.indexOf('--data');
+  return i > 0 ? path.resolve(process.argv[i + 1]) : path.join(__dirname, 'seed-data.kubecon.json');
+})();
+const data = require(DATA_FILE);
 
 const EVENT = data.event.id;
 const LABEL = 'stand_in';
+const SPACES_LABEL = data.labels?.spaces || LABEL;
+const SESSIONS_LABEL = data.labels?.sessions || LABEL;
 const MIN = 60 * 1000;
 
 function statusFor(taken, capacity) {
   if (taken >= capacity) return 'full';
   if (taken >= 0.8 * capacity) return 'filling';
-  return 'seats_free';
+  return 'free';
 }
 
-// Walking minutes between rooms: corridor distance plus 2 minutes per floor by lift.
-// The route is step-free when the destination room is (every floor has a lift).
+// Walking minutes between rooms (stand-in): corridor distance plus 2 minutes per floor by lift, plus 5 to
+// cross to another building. The route is step-free when the destination room is (every floor has a lift).
 function walk(from, to) {
-  const minutes = Math.max(1, Math.abs(from.x - to.x) + 2 * Math.abs(from.floor - to.floor));
+  const otherBuilding = from.building && to.building && from.building !== to.building;
+  const minutes = Math.max(1, Math.abs(from.x - to.x) + 2 * Math.abs(from.floor - to.floor) + (otherBuilding ? 5 : 0));
   return { to: to.id, minutes, step_free: !!to.step_free };
 }
 
@@ -43,7 +53,7 @@ function zones(capacity, taken) {
 }
 
 function buildDocs(now) {
-  const stamp = { event_id: EVENT, label: LABEL, created_at: now.toISOString(), updated_at: now.toISOString() };
+  const stamp = { event_id: EVENT, label: SPACES_LABEL, created_at: now.toISOString(), updated_at: now.toISOString() };
   const docs = []; // [index, id, body]
   const v = data.venue;
 
@@ -52,12 +62,12 @@ function buildDocs(now) {
     staff_correction: v.taken, status: statusFor(v.taken, v.capacity), status_source: 'auto',
     rule: v.rule, priorities: ['access_needs'], step_free: true, captions: false,
     // Event-wide time limits: none by default (decisions 31, 32). Organisers set them on S1.
-    policy: data.venue.policy || {},
+    policy: v.policy || {},
   }]);
 
   for (const r of data.rooms) {
     docs.push([INDEX.spaces, r.id, {
-      ...stamp, type: 'room', name: r.name, floor: r.floor, capacity: r.capacity, taken: r.taken,
+      ...stamp, type: 'room', name: r.name, building: r.building || null, floor: r.floor, capacity: r.capacity, taken: r.taken,
       // Stand-in count: there are no real check-ins yet, so the whole count sits in the staff correction.
       staff_correction: r.taken, access_seats: r.access_seats, access_taken: 0,
       status: statusFor(r.taken, r.capacity), status_source: 'auto',
@@ -69,15 +79,23 @@ function buildDocs(now) {
     }]);
   }
 
-  const slots = Object.fromEntries(data.slots.map((s) => [s.id, s]));
+  // Sessions have absolute times (imported schedule) or a slot relative to now (stand-in demo set).
+  const slots = Object.fromEntries((data.slots || []).map((s) => [s.id, s]));
   for (const s of data.sessions) {
-    const slot = slots[s.slot];
-    const start = new Date(now.getTime() + slot.start_min * MIN);
-    const end = new Date(start.getTime() + slot.duration_min * MIN);
-    docs.push([INDEX.sessions, `s-${s.room}-${s.slot}`, {
-      ...stamp, title: s.title, abstract: s.abstract, speakers: [], tags: s.tags, track: s.track,
+    let start;
+    let end;
+    if (s.start) {
+      start = new Date(s.start);
+      end = new Date(s.end);
+    } else {
+      const slot = slots[s.slot];
+      start = new Date(now.getTime() + slot.start_min * MIN);
+      end = new Date(start.getTime() + slot.duration_min * MIN);
+    }
+    docs.push([INDEX.sessions, s.id || `s-${s.room}-${s.slot}`, {
+      ...stamp, label: SESSIONS_LABEL, title: s.title, abstract: s.abstract || '', speakers: s.speakers || [], tags: s.tags || [], track: s.track,
       level: s.level, room_id: s.room, start: start.toISOString(), end: end.toISOString(),
-      topic: `${s.title}. ${s.abstract} Tags: ${s.tags.join(', ')}.`,
+      topic: `${s.title}. ${s.abstract || ''}${(s.tags || []).length ? ` Tags: ${s.tags.join(', ')}.` : ''}`,
     }]);
   }
 
@@ -98,7 +116,7 @@ function buildDocs(now) {
 async function main() {
   const reset = process.argv.includes('--reset');
   const now = new Date();
-  console.log(`Seeding prefix "${PREFIX}" (semantic ${SEMANTIC ? 'on' : 'off'})${reset ? ' after reset' : ''}`);
+  console.log(`Seeding prefix "${PREFIX}" from ${path.basename(DATA_FILE)} (${data.event.name}; semantic ${SEMANTIC ? 'on' : 'off'})${reset ? ' after reset' : ''}`);
 
   if (reset && PREFIX === 'rr_' && !process.argv.includes('--confirm-live')) {
     throw new Error('--reset on the live prefix rr_ deletes real data; add --confirm-live, or set ES_INDEX_PREFIX to a test prefix');
@@ -118,9 +136,9 @@ async function main() {
   }
 
   const count = (index) => docs.filter((d) => d[0] === index).length;
-  console.log(`Wrote ${count(INDEX.spaces)} spaces, ${count(INDEX.sessions)} sessions, ${count(INDEX.queue)} queue entries (label: ${LABEL}).`);
+  console.log(`Wrote ${count(INDEX.spaces)} spaces (${SPACES_LABEL}), ${count(INDEX.sessions)} sessions (${SESSIONS_LABEL}), ${count(INDEX.queue)} queue entries.`);
   const full = data.rooms.filter((r) => r.taken >= r.capacity).map((r) => r.name);
-  console.log(`Full now: ${full.join(', ') || 'none'}. Try: node scripts/try-redirect.js r204`);
+  console.log(`Full now: ${full.join(', ') || 'none'}. Try: node scripts/try-redirect.js ${data.rooms[0].id}`);
 }
 
 if (require.main === module) {

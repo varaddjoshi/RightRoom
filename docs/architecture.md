@@ -105,6 +105,7 @@ Freeze this first so P2 and P3 can build in parallel. P3 can mock any endpoint b
 | `GET /api/event`, `POST /api/event/register` | Attendee | A3 | Venue status and my queue entry with position and reason |
 | `GET /api/sessions` | Anyone | A4 | Sessions with room status and Wi-Fi median |
 | `GET /api/floors` | Anyone (staff and organiser get extra fields) | A4 map view, S2 floor map, S1 venue board, D1 | Rooms grouped by floor: id, title, capacity, taken, status, access note; staff and organiser also get staff on door and queue length |
+| `GET /api/search?q=&floor=&stepFree=&free=&soon=&mine=&status=&limit=` | Anyone (`mine` needs sign-in; staff and organiser get staff on door and queue length) | A4 search, S1 | `{source, query, results: [{room, sessionTitle, floor, status, taken, capacity, free, stepFree, access, startsAt, risk, why[], score}], took}` |
 | `GET /api/forecast`, `GET /api/forecast/backtest` | Anyone | A4, S1 | Fill forecast per session (expected fill, chance it fills, likely minute, risk, the 3 past talks it is based on); leave-one-out backtest. Stand-in, mounted at /api once Phase 1 lands |
 | `GET /api/wifi` | Anyone | A4, A6, S1 | Wi-Fi medians by room and zone over `db().wifi` (stand-in plus readings posted to `POST /api/spaces/:id/wifi`). Mounted at /api once Phase 1 lands |
 | `GET /api/sessions/:room/topics` | Anyone | A4, A6, S1 | Top 1 to 3 word topics over `db().comments` (comments are posted to `POST /api/spaces/:id/comments`; hidden ones skipped). Mounted at /api once Phase 1 lands |
@@ -132,6 +133,10 @@ Freeze this first so P2 and P3 can build in parallel. P3 can mock any endpoint b
 | `POST /api/sim/checkins`, `/sim/queue`, `/sim/rush`, `/sim/end-session`, `/sim/reset` | Staff (reset: organiser) | D2 | Stand-in check-ins and queue, the 50-for-5 load test, end a session, reset the mock |
 
 Live events on `/api/stream`: `status` (space, taken, capacity, status), `position` (handle, position, reason), `offer` (offer ID, zone, seconds left), `offer_passed`, `announcement`. Each event carries the server timestamp so the browser can report delivery time to Dash0 for SLO 1.
+
+## Search
+
+`GET /api/search` (`src/search.js`) runs one hybrid query on P1's sessions index when `ELASTICSEARCH_URL` is set: a `multi_match` on title, tags and abstract (fuzzy) plus a `semantic` query on the `topic` field when semantic search is on, combined in a `bool.should`. Each hit is joined with the live room state (status, free seats, risk from the forecast), then the filters for floor, step-free, free seats, starting soon, status and "my interests" apply. If Elasticsearch is not configured or fails, the same filters run over an in-memory text match on the live rooms. Every result carries `why`, the reasons it matched, so search explains itself like every other decision. Interests are only a filter, never a ranking signal.
 
 ## Mock insights
 

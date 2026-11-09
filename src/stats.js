@@ -72,7 +72,7 @@ async function floors({ staff = false, now = new Date() } = {}) {
       item.open_offers = offered[r.id] || 0;
       item.staff_on_door = !!(r.staff_console_open_until && new Date(r.staff_console_open_until) > now);
       item.access_seats_left = Math.max(0, (r.access_seats || 0) - (r.access_taken || 0));
-      item.needs_staff = r.status !== 'seats_free' && !item.staff_on_door;
+      item.needs_staff = r.status !== 'free' && !item.staff_on_door;
     }
     if (!byFloor.has(r.floor)) byFloor.set(r.floor, []);
     byFloor.get(r.floor).push(item);

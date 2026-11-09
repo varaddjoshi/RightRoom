@@ -45,4 +45,17 @@ function topTerms(comments, background, size = 5) {
   return kept.map(({ term, count }) => ({ term, count }));
 }
 
-module.exports = { topTerms };
+// Fallback when there are too few comments to compare: the room's own most frequent terms.
+function frequentTerms(comments, size = 5) {
+  const ranked = [...docFreq(comments)]
+    .sort(([a, x], [b, y]) => y - x || b.split(' ').length - a.split(' ').length || a.localeCompare(b));
+  const kept = [];
+  for (const [term, count] of ranked) {
+    if (kept.some(k => k.term.includes(term))) continue;
+    kept.push({ term, count });
+    if (kept.length === size) break;
+  }
+  return kept;
+}
+
+module.exports = { topTerms, frequentTerms };

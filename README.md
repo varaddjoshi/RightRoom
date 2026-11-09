@@ -50,8 +50,8 @@ npm start
 curl localhost:3000/health      # "store":"elasticsearch"
 ```
 
-- The state is one document, id `EVENT_ID` (default `cnh-2026`), in index `<ES_INDEX_PREFIX>engine_state` (default `rr_engine_state`). It's saved after changes and once more at shutdown.
-- **Try it without touching the demo's state:** `ES_INDEX_PREFIX=rr_test_ npm start`.
+- The state is one document, id `EVENT_ID` (default `cnh-2026`). It's saved after changes and once more at shutdown.
+- **Your laptop never touches the demo's state.** Locally the index is your own, `<ES_INDEX_PREFIX>engine_state_local_<your user>` (for example `rr_engine_state_local_raj`). Only the cluster sets `STATE_INDEX=rr_engine_state` (in `deploy/deployment.yaml`), and the whole team shares one Elasticsearch cluster.
 - **Start over from the seed:** `RESET_STATE=1 npm start`, or the organiser's reset (`POST /api/sim/reset`).
 - If Elasticsearch can't be reached at start, the app runs in memory and saves nothing (`/health` says `"memory (elasticsearch unreachable)"`), so a bad connection never overwrites good saved state.
 - This doesn't write the per-entity indexes from `src/es.js` (P1) yet.
@@ -69,7 +69,7 @@ docker run --rm -p 8080:8080 --env-file .env -e PORT=8080 rightroom    # http://
 npm test                                                        # seat rules, plus the HTTP load test in-process
 node scripts/loadtest.js --url http://localhost:3000            # 50 people try for 5 seats
 node scripts/loadtest.js --url http://localhost:3000 --pass-on  # also: an offer passes on after 60s (about a minute)
-node scripts/loadtest.js --url https://pantheon.cnh.radarhq.io  # against the cluster
+node scripts/loadtest.js --url https://pantheon.cnh.radarhq.io --live  # the cluster: non-local URLs need --live
 ```
 
 The load test signs in as staff (`RR_USER`, default `dana`; `RR_PASSWORD`, default `DEMO_PASSWORD` or `rightroom-demo`). It uses its own test room, never a real one, and removes it afterwards. It passes only if:
@@ -77,7 +77,7 @@ The load test signs in as staff (`RR_USER`, default `dana`; `RR_PASSWORD`, defau
 - the room shows 5 of 5 taken;
 - a Full status reaches a live stream subscriber.
 
-With `--pass-on`, it also passes only if the unclaimed offer reaches the next person's stream after about 60 seconds. Exit code 0 means every check passed.
+With `--pass-on`, it also passes only if the unclaimed offer reaches the next person's stream after about 60 seconds, and that stream stays open the whole minute. It keeps at most 64 requests in flight (`--concurrency`), which stays under macOS's connection-queue limit. Exit code 0 means every check passed.
 
 ### Try the API by hand
 
@@ -97,6 +97,7 @@ curl -N -b jar 'localhost:3000/api/stream?space=310'            # live events: s
 | `PORT` | `3000` (`8080` in the image) | HTTP port |
 | `ELASTICSEARCH_URL`, `ELASTICSEARCH_API_KEY` | unset: in memory | Where the state is saved |
 | `ES_INDEX_PREFIX` | `rr_` | Index prefix; use `rr_test_` for experiments |
+| `STATE_INDEX` | `<prefix>engine_state_local_<user>` | Index of the saved state. The cluster sets `rr_engine_state` |
 | `EVENT_ID` | `cnh-2026` | Which saved state to use |
 | `RESET_STATE` | unset | `1` starts from the seed and replaces the saved state |
 | `DEMO_PASSWORD` | `rightroom-demo` | Password of the demo users. **Set it on the cluster**: the default is public in this repo |

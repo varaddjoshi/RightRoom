@@ -37,12 +37,21 @@ spec:
             - secretRef:
                 name: app-credentials
                 optional: true
+            # Browser monitoring token (DASH0_BROWSER_TOKEN, src/rum.js). Its own Secret, so adding or changing it
+            # never touches app-credentials: re-applying a partial app-credentials in Radar could delete its other
+            # keys. Created by hand, never committed (docs/deploy.md). optional: monitoring is simply off without it.
+            - secretRef:
+                name: browser-credentials
+                optional: true
           # Listed here so they win over the same names in the Secret.
           env:
             - name: PORT
               value: "8080"
             - name: TEAM_NAME
               value: "pantheon"
+            # The demo's saved state (src/store.js). Only the cluster uses this index; laptops get their own.
+            - name: STATE_INDEX
+              value: "rr_engine_state"
           resources:
             requests:
               cpu: 100m
