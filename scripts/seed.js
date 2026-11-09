@@ -2,7 +2,8 @@
 //
 //   node scripts/seed.js            create missing indexes, then write the seed documents (safe to rerun:
 //                                   fixed document IDs, so a rerun overwrites instead of duplicating)
-//   node scripts/seed.js --reset    delete every index with this prefix first (wipes live data, demo only)
+//   node scripts/seed.js --reset    delete every index with this prefix first. On the live prefix (rr_) this wipes
+//                                   real users, queues and check-ins, so it also needs --confirm-live.
 //
 // Reads ELASTICSEARCH_URL / ELASTICSEARCH_API_KEY / ES_INDEX_PREFIX from the environment or .env.
 // Session times are relative to now, so there is always a session running and one about to start.
@@ -102,6 +103,9 @@ async function main() {
   const now = new Date();
   console.log(`Seeding prefix "${PREFIX}" (semantic ${SEMANTIC ? 'on' : 'off'})${reset ? ' after reset' : ''}`);
 
+  if (reset && PREFIX === 'rr_' && !process.argv.includes('--confirm-live')) {
+    throw new Error('--reset on the live prefix rr_ deletes real data; add --confirm-live, or set ES_INDEX_PREFIX to a test prefix');
+  }
   if (reset) await dropIndexes();
   const created = await ensureIndexes();
   if (created.length) console.log('Created indexes:', created.join(', '));

@@ -58,10 +58,12 @@ async function candidateSessions({ spaceId, now, queryText, scanMin }) {
   const must_not = [{ term: { room_id: spaceId } }];
   const base = { index: INDEX.sessions, size: 50, _source: { excludes: ['topic'] } };
 
+  // The text query only scores (should), never filters: every session that passes the time filter comes back,
+  // and ones with no match just score 0 and land in the lowest topic band.
   const keywordQuery = queryText
-    ? { multi_match: { query: queryText, fields: ['title^2', 'abstract', 'tags^2'] } }
-    : { match_all: {} };
-  const run = (must) => es().search({ ...base, query: { bool: { must, filter, must_not } } });
+    ? [{ multi_match: { query: queryText, fields: ['title^2', 'abstract', 'tags^2'] } }]
+    : [];
+  const run = (should) => es().search({ ...base, query: { bool: { should, filter, must_not, minimum_should_match: 0 } } });
 
   let res;
   let method = 'keyword';
@@ -74,7 +76,7 @@ async function candidateSessions({ spaceId, now, queryText, scanMin }) {
       res = null;
     }
   }
-  if (!res) res = await run([keywordQuery]);
+  if (!res) res = await run(keywordQuery);
   if (!queryText) method = 'none';
   return { method, hits: res.hits.hits.map((h) => ({ id: h._id, score: h._score || 0, ...h._source })) };
 }
