@@ -146,7 +146,7 @@ function api({ store, engine }) {
     const space = req.query.space === '*' || db().spaces.has(String(req.query.space)) ? String(req.query.space) : '*';
     stream.subscribe(req, res, { space, handle: req.user?.handle });
   });
-  r.post('/ack', h((req) => ({ delivery_ms: stream.ack(req.body?.event_id) })));
+  r.post('/ack', h((req) => ({ delivery_ms: stream.ack(req.body?.event_id, undefined, req.user?.handle) })));
 
   // Simulator (D2). Everything it adds is a stand-in.
   r.post('/sim/checkins', requireRole('staff'), h((req) => {

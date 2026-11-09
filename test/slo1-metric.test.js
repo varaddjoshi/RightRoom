@@ -19,21 +19,48 @@ const { withinSlo1 } = require('../src/metrics');
 
 test('a delivery inside 10 s is recorded as within SLO 1, tagged with its event type', () => {
   const ev = stream.publish('offer', { offer: 'o1' }, { handle: 'ann' });
-  assert.equal(stream.ack(ev.event_id, ev.at + 1200), 1200);
+  assert.equal(stream.ack(ev.event_id, ev.at + 1200, 'ann'), 1200);
   assert.deepEqual(histograms.at(-1), { name: 'rightroom.slo1.delivery_time', value: 1200, attrs: { 'event.type': 'offer' } });
   assert.deepEqual(counters.at(-1), { name: 'rightroom.slo1.deliveries', value: 1, attrs: { 'event.type': 'offer', 'slo1.within_10s': true } });
 });
 
 test('a delivery over 10 s is recorded as outside SLO 1', () => {
   const ev = stream.publish('status', { space: '204' }, { space: '204' });
-  stream.ack(ev.event_id, ev.at + 12_000);
+  stream.ack(ev.event_id, ev.at + 12_000, 'ann');
   assert.equal(counters.at(-1).attrs['slo1.within_10s'], false);
   assert.equal(counters.at(-1).attrs['event.type'], 'status');
 });
 
+test('each event counts once per handle: a repeat ack is answered but not counted again', () => {
+  const ev = stream.publish('status', { space: '204' }, { space: '204' });
+  const before = counters.length;
+  assert.equal(stream.ack(ev.event_id, ev.at + 300, 'ann'), 300);
+  assert.equal(counters.length, before + 1);
+  for (let i = 0; i < 20; i++) assert.equal(stream.ack(ev.event_id, ev.at + 400 + i, 'ann'), 400 + i); // spam from one handle
+  assert.equal(counters.length, before + 1, 'repeats from the same handle add nothing');
+  assert.equal(histograms.filter((h) => h.value >= 400 && h.value < 420).length, 0, 'and record no delivery time');
+});
+
+test('two different people acking the same event are both counted', () => {
+  const ev = stream.publish('status', { space: '204' }, { space: '204' });
+  const before = counters.length;
+  stream.ack(ev.event_id, ev.at + 200, 'ann');
+  stream.ack(ev.event_id, ev.at + 250, 'bob');
+  assert.equal(counters.length, before + 2);
+});
+
+test('an ack with no signed-in handle is answered but never reaches the metric', () => {
+  const ev = stream.publish('status', { space: '204' }, { space: '204' });
+  const before = { c: counters.length, h: histograms.length };
+  assert.equal(stream.ack(ev.event_id, ev.at + 500), 500);
+  assert.equal(stream.ack(ev.event_id, ev.at + 500, undefined), 500);
+  assert.equal(counters.length, before.c);
+  assert.equal(histograms.length, before.h);
+});
+
 test('an unknown or expired event id records nothing', () => {
   const before = counters.length;
-  assert.equal(stream.ack(999_999), null);
+  assert.equal(stream.ack(999_999, undefined, 'ann'), null);
   assert.equal(counters.length, before);
 });
 
