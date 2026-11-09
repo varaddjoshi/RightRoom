@@ -191,7 +191,14 @@ const MAPPINGS = {
 };
 
 // Single shard, no replicas: one small event, and it keeps a fresh cluster green.
+// Elastic Serverless manages shards itself and rejects these, so they are only sent to other clusters.
 const SETTINGS = { number_of_shards: 1, number_of_replicas: 0 };
+
+let serverless;
+async function isServerless() {
+  if (serverless === undefined) serverless = (await es().info()).version?.build_flavor === 'serverless';
+  return serverless;
+}
 
 // Creates any missing index. Safe to run on every start. Returns the names it created.
 async function ensureIndexes() {
@@ -200,7 +207,8 @@ async function ensureIndexes() {
     const index = INDEX[name];
     if (await es().indices.exists({ index })) continue;
     try {
-      await es().indices.create({ index, settings: SETTINGS, mappings: { properties: MAPPINGS[name] } });
+      const settings = (await isServerless()) ? undefined : SETTINGS;
+      await es().indices.create({ index, settings, mappings: { properties: MAPPINGS[name] } });
       created.push(index);
     } catch (e) {
       // Another process created it first.

@@ -17,7 +17,7 @@
 // This only reads. The engine (P2) reserves the seats as offers for whoever it redirects.
 
 const { es, INDEX, SEMANTIC } = require('./es');
-const { effectivePolicy, doorWindow, claimMinutes } = require('./policy');
+const { effectivePolicy, doorWindow, claimMinutes, claimDeadline } = require('./policy');
 
 const MIN = 60 * 1000;
 const OPENING_SOON_MIN = 20;
@@ -128,7 +128,12 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
   const spaces = roomIds.length
     ? (await es().mget({ index: INDEX.spaces, ids: roomIds })).docs
     : [];
-  const maxScore = Math.max(0, ...hits.map((h) => h.score));
+  // ELSER scores bunch together (every session scores something), so scale between the lowest and highest
+  // candidate room: only rooms near the top count as a similar topic.
+  const roomScores = [...byRoom.values()].map((s) => s.score);
+  const maxScore = roomScores.length ? Math.max(...roomScores) : 0;
+  const minScore = roomScores.length ? Math.min(...roomScores) : 0;
+  const spread = maxScore - minScore;
 
   const eligible = [];
   const rejected = [];
@@ -152,9 +157,11 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
       const arrival = new Date(now.getTime() + walk.minutes * MIN);
       const door = doorWindow(session, policy);
       const hold = claimMinutes(policy, { accessNeed });
+      // If the engine offered the seat now, when would the hold run out? (The clock starts at the door opening.)
+      const deadline = claimDeadline({ claimedAt: now, session, policy, accessNeed });
       if (now >= door.close) reason = door.organiser_close ? 'Door closed' : 'Session over';
       else if (arrival >= door.close) reason = door.organiser_close ? 'Door closes before you arrive' : 'Session ends before you arrive';
-      else if (hold !== null && walk.minutes > hold) reason = `Seat is held ${hold} min, walk is ${walk.minutes} min`;
+      else if (hold !== null && arrival > deadline) reason = `Seat is held ${hold} min, walk is ${walk.minutes} min`;
       else session.door = door;
     }
 
@@ -177,8 +184,9 @@ async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], no
       continue;
     }
 
-    const rel = maxScore > 0 ? session.score / maxScore : 0;
-    const band = method === 'none' ? 0 : rel >= 0.8 ? 2 : rel >= 0.5 ? 1 : 0;
+    // With one candidate, or all scoring the same, nothing stands out: everyone is band 0 unless it's the only one.
+    const rel = spread > 1e-6 ? (session.score - minScore) / spread : roomScores.length === 1 && maxScore > 0 ? 1 : 0;
+    const band = method === 'none' ? 0 : rel >= 0.7 ? 2 : rel >= 0.35 ? 1 : 0;
     const matched = (session.tags || []).filter((t) => interestSet.has(String(t).toLowerCase()));
 
     const reasons = [];

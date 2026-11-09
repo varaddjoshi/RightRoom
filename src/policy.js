@@ -46,12 +46,19 @@ function claimMinutes(policy, { accessNeed = false } = {}) {
   return Number(base) + (policy.add_walk_time ? WALK_AVERAGE_MIN : 0);
 }
 
-// When an unscanned claim expires: the earliest of claim + claim window, the door close and the session end.
+// When the claim clock starts: the claim time, or the door opening if that is later
+// (nobody can scan in before the door opens, so the hold can't run out before then).
+function claimClockStart({ claimedAt, session, policy }) {
+  const { open } = doorWindow(session, policy);
+  return new Date(Math.max(new Date(claimedAt).getTime(), open ? open.getTime() : -Infinity));
+}
+
+// When an unscanned claim expires: the earliest of clock start + claim window, the door close and the session end.
 function claimDeadline({ claimedAt, session, policy, accessNeed = false }) {
   const limits = [doorWindow(session, policy).close.getTime()];
   const mins = claimMinutes(policy, { accessNeed });
-  if (mins !== null) limits.push(new Date(claimedAt).getTime() + mins * MIN);
+  if (mins !== null) limits.push(claimClockStart({ claimedAt, session, policy }).getTime() + mins * MIN);
   return new Date(Math.min(...limits));
 }
 
-module.exports = { WALK_AVERAGE_MIN, KEYS, effectivePolicy, doorWindow, isDoorOpen, claimMinutes, claimDeadline };
+module.exports = { WALK_AVERAGE_MIN, KEYS, effectivePolicy, doorWindow, isDoorOpen, claimMinutes, claimClockStart, claimDeadline };
