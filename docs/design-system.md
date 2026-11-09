@@ -2,6 +2,11 @@
 
 The look is venue signage: dark sign panels, signal-yellow actions, condensed capitals for labels, and every status written in words with a shape. Everything lives in `public/rr.css`; open `public/design-system.html` to see each component working.
 
+## Where to see it
+
+- `public/design-system.html`: every component working.
+- `public/mockups/screen-map.html`: every screen by persona and journey stage, plus the floor view. Example data only.
+
 ## Using it
 
 Add one line to every page:
@@ -59,6 +64,6 @@ One theme only, by choice: dark signage reads well on phones at a door and on th
 | `.rr-route`, `.rr-why`, `.rr-access` | A5 redirect |
 | `.rr-offer`, `.rr-code` | A5 seat offer and claimed state |
 | `.rr-zones` | A6 check-in, S2 zone fill |
-| `.rr-counter` | S2 staff counter |
+| `.rr-counter` | S2 count correction for walk-ins who didn't scan |
 | `.rr-announce` | A7, S1 |
 | `.rr-sr` | Screen-reader-only text anywhere |

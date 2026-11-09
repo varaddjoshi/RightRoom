@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RightRoom Screen Map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* RightRoom design system: wayfinding signs.
+   Dark signage panels, signal-yellow actions, status always in words plus a shape.
+   One theme on purpose: it reads like the venue's own signs on phones and the big screen. */
+
+
+:root {
+  color-scheme: dark;
+
+  /* Colour. Every text pair meets WCAG AA; status fills take --rr-on-status text. */
+  --rr-bg: #121518;        /* page ground */
+  --rr-panel: #1d2226;     /* sign panels, cards */
+  --rr-panel-2: #272d32;   /* raised rows, inputs */
+  --rr-line: #737e88;      /* outlines and dividers, 3:1 or more on every surface */
+  --rr-ink: #f3f5f6;       /* main text */
+  --rr-muted: #a7b0b8;     /* secondary text, 6:1 on panel-2 */
+  --rr-signal: #ffcc00;    /* primary action, focus ring */
+  --rr-on-signal: #121518; /* text on signal yellow */
+  --rr-free: #6cc4ff;      /* Seats free: blue, so it never relies on red vs green */
+  --rr-filling: #ffb020;   /* Filling */
+  --rr-full: #ff5468;      /* Full */
+  --rr-on-status: #121518; /* text on any status fill */
+  --rr-access: #c3a6ff;    /* accessibility seats and step-free routes */
+
+  /* Type */
+  --rr-font-sign: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --rr-font-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --rr-font-code: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --rr-t-xs: 0.8125rem;  /* 13px labels */
+  --rr-t-sm: 0.9375rem;  /* 15px reasons, meta */
+  --rr-t-md: 1.0625rem;  /* 17px body */
+  --rr-t-lg: 1.375rem;   /* 22px button text, row titles */
+  --rr-t-xl: 1.875rem;   /* 30px screen titles */
+  --rr-t-2xl: 2.75rem;   /* 44px positions, codes */
+  --rr-t-3xl: 4.5rem;    /* 72px live counts */
+
+  /* Space, radius, sizes */
+  --rr-s1: 4px; --rr-s2: 8px; --rr-s3: 12px; --rr-s4: 16px;
+  --rr-s5: 24px; --rr-s6: 32px; --rr-s7: 48px;
+  --rr-r1: 2px;  /* signs, chips */
+  --rr-r2: 6px;  /* buttons, panels */
+  --rr-tap: 64px;     /* every attendee button is at least this tall */
+  --rr-tap-xl: 96px;  /* staff counter buttons */
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--rr-bg);
+  color: var(--rr-ink);
+  font: 400 var(--rr-t-md)/1.5 var(--rr-font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible { outline: 3px solid var(--rr-signal); outline-offset: 3px; }
+
+/* Screen frame: one column, phone first */
+.rr-screen {
+  max-width: 480px;
+  margin: 0 auto;
+  padding-block: var(--rr-s5);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: var(--rr-s5);
+}
+
+/* Eyebrow label: ROOM 204 · FLOOR 2 */
+.rr-eyebrow {
+  font: 700 var(--rr-t-xs)/1.2 var(--rr-font-sign);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rr-muted);
+}
+
+/* Sign: the header panel of every screen */
+.rr-sign {
+  background: var(--rr-panel);
+  border-top: 6px solid var(--rr-signal);
+  border-radius: 0; /* square, like a real sign; a radius fights the yellow top band */
+  padding: var(--rr-s4);
+  display: grid;
+  gap: var(--rr-s2);
+}
+.rr-sign h1, .rr-title {
+  margin: 0;
+  font: 700 var(--rr-t-xl)/1.1 var(--rr-font-sign);
+  text-wrap: balance;
+}
+
+/* Buttons: full width, at least 64px, label plus arrow */
+.rr-btn {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rr-s3);
+  width: 100%;
+  min-height: var(--rr-tap);
+  padding: var(--rr-s3) var(--rr-s5);
+  border: 2px solid transparent;
+  border-radius: var(--rr-r2);
+  font: 700 var(--rr-t-lg)/1.1 var(--rr-font-sign);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  background: var(--rr-signal);
+  color: var(--rr-on-signal);
+  transition: transform 80ms ease-out, filter 120ms;
+}
+.rr-btn::after { content: "\2192"; content: "\2192" / ""; font-size: 1.2em; } /* "/ ''" keeps the arrow out of the button's spoken name */
+.rr-btn:hover { filter: brightness(1.06); }
+.rr-btn:active { transform: translateY(2px); }
+.rr-btn[disabled], .rr-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; transform: none; }
+.rr-btn--ghost { background: transparent; color: var(--rr-ink); border-color: var(--rr-line); }
+.rr-btn--ghost:hover { border-color: var(--rr-ink); filter: none; }
+.rr-btn--full { background: var(--rr-full); color: var(--rr-on-status); }
+.rr-btn--plain::after { content: none; }
+.rr-btn-stack { display: grid; gap: var(--rr-s3); }
+
+/* Status chip: shape + word + colour, never colour alone */
+.rr-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rr-s2);
+  padding: var(--rr-s1) var(--rr-s3);
+  border-radius: var(--rr-r1);
+  font: 800 var(--rr-t-sm)/1.4 var(--rr-font-sign);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rr-on-status);
+}
+.rr-status[data-status="free"] { background: var(--rr-free); }
+.rr-status[data-status="free"]::before { content: "\25CF"; }    /* ● */
+.rr-status[data-status="filling"] { background: var(--rr-filling); }
+.rr-status[data-status="filling"]::before { content: "\25B2"; } /* ▲ */
+.rr-status[data-status="full"] { background: var(--rr-full); }
+.rr-status[data-status="full"]::before { content: "\25A0"; }    /* ■ */
+
+/* Live count: 47 / 50 */
+.rr-count {
+  display: flex;
+  align-items: baseline;
+  gap: var(--rr-s2);
+  font: 800 var(--rr-t-3xl)/1 var(--rr-font-sign);
+  font-variant-numeric: tabular-nums;
+}
+.rr-count small { font-size: var(--rr-t-xl); color: var(--rr-muted); font-weight: 600; }
+
+/* Data honesty label: Live, Real, Stand-in */
+.rr-label {
+  display: inline-block;
+  padding: 2px var(--rr-s2);
+  border: 1px solid var(--rr-line);
+  border-radius: var(--rr-r1);
+  font: 600 var(--rr-t-xs)/1.6 var(--rr-font-code);
+  color: var(--rr-muted);
+}
+.rr-label[data-kind="live"] { color: var(--rr-free); border-color: var(--rr-free); }
+
+/* Queue position: #12 plus the reason */
+.rr-position { display: grid; gap: var(--rr-s1); }
+.rr-position strong {
+  font: 800 var(--rr-t-2xl)/1 var(--rr-font-sign);
+  font-variant-numeric: tabular-nums;
+}
+.rr-position p { margin: 0; color: var(--rr-muted); font-size: var(--rr-t-sm); }
+
+/* Redirect route row */
+.rr-route {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--rr-s3);
+  padding: var(--rr-s4);
+  background: var(--rr-panel-2);
+  border-radius: var(--rr-r2);
+}
+.rr-route__arrow { font: 800 var(--rr-t-2xl)/1 var(--rr-font-sign); color: var(--rr-signal); }
+.rr-route__to { font: 700 var(--rr-t-lg)/1.15 var(--rr-font-sign); text-transform: uppercase; }
+.rr-route__meta { color: var(--rr-muted); font-size: var(--rr-t-sm); }
+.rr-route__time {
+  font: 800 var(--rr-t-xl)/1 var(--rr-font-sign);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.rr-route__time small { display: block; font-size: var(--rr-t-xs); color: var(--rr-muted); letter-spacing: 0.1em; }
+
+/* Access tag: step-free, near captions, accessible seat */
+.rr-access {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rr-s1);
+  font: 700 var(--rr-t-xs)/1.4 var(--rr-font-sign);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rr-access);
+}
+
+/* "Why this?" disclosure, built on <details> */
+.rr-why { border-top: 1px solid var(--rr-line); padding-top: var(--rr-s3); }
+.rr-why summary {
+  cursor: pointer;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  font: 700 var(--rr-t-md)/1.2 var(--rr-font-sign);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rr-signal);
+}
+.rr-why ul { margin: 0; padding-left: var(--rr-s5); display: grid; gap: var(--rr-s2); color: var(--rr-muted); }
+.rr-why .rr-rejected { text-decoration: line-through; text-decoration-color: var(--rr-line); }
+
+/* Seat offer: zone, countdown, claim */
+.rr-offer {
+  background: var(--rr-panel);
+  border: 3px solid var(--rr-signal);
+  border-radius: var(--rr-r2);
+  padding: var(--rr-s5) var(--rr-s4);
+  display: grid;
+  gap: var(--rr-s4);
+}
+.rr-offer__timer {
+  height: 10px;
+  background: var(--rr-panel-2);
+  border-radius: var(--rr-r1);
+  overflow: hidden;
+}
+.rr-offer__timer > span {
+  display: block;
+  height: 100%;
+  width: var(--rr-left, 100%);
+  background: var(--rr-signal);
+  transition: width 1s linear;
+}
+.rr-code {
+  font: 600 var(--rr-t-2xl)/1 var(--rr-font-code);
+  letter-spacing: 0.2em;
+}
+
+/* Zone grid: 3 x 3, every cell a labelled button */
+.rr-zones {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--rr-s2);
+}
+.rr-zones button {
+  min-height: var(--rr-tap);
+  border: 2px solid var(--rr-line);
+  border-radius: var(--rr-r1);
+  background: var(--rr-panel-2);
+  color: var(--rr-ink);
+  font: 600 var(--rr-t-sm)/1.2 var(--rr-font-sign);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.rr-zones button[aria-pressed="true"] { background: var(--rr-signal); color: var(--rr-on-signal); border-color: var(--rr-signal); }
+.rr-zones button[data-access]::after { content: " \267F"; color: var(--rr-access); }
+.rr-zones button[aria-pressed="true"][data-access]::after { color: var(--rr-on-signal); }
+.rr-zones-front { grid-column: 1 / -1; text-align: center; font: 700 var(--rr-t-xs)/1 var(--rr-font-sign); letter-spacing: 0.3em; color: var(--rr-muted); }
+
+/* Staff counter: huge +/- around the true total */
+.rr-counter {
+  display: grid;
+  grid-template-columns: minmax(64px, var(--rr-tap-xl)) minmax(0, 1fr) minmax(64px, var(--rr-tap-xl));
+  align-items: center;
+  gap: var(--rr-s3);
+  text-align: center;
+}
+.rr-counter button {
+  height: var(--rr-tap-xl);
+  border: 0;
+  border-radius: var(--rr-r2);
+  font: 800 var(--rr-t-2xl)/1 var(--rr-font-sign);
+  cursor: pointer;
+  background: var(--rr-panel-2);
+  color: var(--rr-ink);
+}
+.rr-counter .rr-count { font-size: var(--rr-t-2xl); } /* 44px fits between the buttons from 300px up */
+.rr-counter button:last-child { background: var(--rr-signal); color: var(--rr-on-signal); }
+
+/* Announcement strip */
+.rr-announce {
+  display: grid;
+  gap: var(--rr-s1);
+  padding: var(--rr-s3) var(--rr-s4);
+  background: var(--rr-panel);
+  border-radius: var(--rr-r1);
+}
+.rr-announce[data-urgency="urgent"] { background: var(--rr-signal); color: var(--rr-on-signal); }
+.rr-announce[data-urgency="urgent"] .rr-eyebrow { color: var(--rr-on-signal); }
+
+/* Panel for grouped content */
+.rr-panel {
+  background: var(--rr-panel);
+  border-radius: var(--rr-r2);
+  padding: var(--rr-s4);
+  display: grid;
+  gap: var(--rr-s3);
+}
+
+/* Screen-reader-only text */
+.rr-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-btn, .rr-offer__timer > span { transition: none; }
+}
+
+/* Layout: persons stacked; inside each, journey stages as rows; each row scrolls sideways through phone-sized screens. */
+body { padding-block: 32px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.pg-head, .pg-person, .pg-foot { max-width: 1200px; margin: 0 auto; }
+.pg-head { display: grid; gap: var(--rr-s3); padding-bottom: var(--rr-s6); border-bottom: 6px solid var(--rr-signal); }
+.pg-head h1 { margin: 0; font: 800 clamp(2.5rem, 7vw, 4.5rem)/0.95 var(--rr-font-sign); text-wrap: balance; }
+.pg-head p { margin: 0; max-width: 65ch; color: var(--rr-muted); }
+.pg-nav { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
+.pg-nav a { display: inline-flex; align-items: center; min-height: 48px; padding: 0 var(--rr-s4); border: 2px solid var(--rr-line); border-radius: var(--rr-r2); color: var(--rr-ink); text-decoration: none; font: 700 var(--rr-t-md)/1 var(--rr-font-sign); text-transform: uppercase; letter-spacing: 0.06em; }
+.pg-nav a:hover { border-color: var(--rr-signal); color: var(--rr-signal); }
+.pg-person { padding-top: var(--rr-s7); display: grid; gap: var(--rr-s6); scroll-margin-top: 16px; }
+.pg-person-head { display: grid; gap: var(--rr-s2); }
+.pg-person-head h2 { margin: 0; font: 800 var(--rr-t-2xl)/1 var(--rr-font-sign); text-transform: uppercase; }
+.pg-person-head p { margin: 0; color: var(--rr-muted); font-style: italic; max-width: 65ch; }
+.pg-stage { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: var(--rr-s5); align-items: start; border-top: 1px solid var(--rr-line); padding-top: var(--rr-s5); }
+.pg-stage-head { display: grid; gap: var(--rr-s2); position: sticky; top: 16px; }
+.pg-stage-head h3 { margin: 0; font: 700 var(--rr-t-xl)/1.05 var(--rr-font-sign); }
+.pg-stage-head p { margin: 0; color: var(--rr-muted); font-size: var(--rr-t-sm); }
+.pg-when { justify-self: start; padding: 2px var(--rr-s2); background: var(--rr-signal); color: var(--rr-on-signal); border-radius: var(--rr-r1); font: 800 var(--rr-t-xs)/1.4 var(--rr-font-sign); letter-spacing: 0.12em; text-transform: uppercase; }
+.pg-row { display: flex; gap: var(--rr-s5); overflow-x: auto; padding-bottom: var(--rr-s3); align-items: flex-start; }
+.ph { flex: 0 0 300px; margin: 0; display: grid; gap: var(--rr-s2); }
+.ph.wide { flex-basis: 620px; }
+.ph figcaption { font: 600 var(--rr-t-sm)/1.3 var(--rr-font-body); color: var(--rr-muted); }
+.ph figcaption b { display: inline-block; margin-right: 6px; padding: 0 6px; border: 1px solid var(--rr-line); border-radius: var(--rr-r1); font: 600 var(--rr-t-xs)/1.6 var(--rr-font-code); color: var(--rr-ink); }
+.ph-s { display: grid; gap: var(--rr-s3); align-content: start; min-height: 560px; padding: var(--rr-s4) 14px var(--rr-s5); background: var(--rr-bg); border: 2px solid var(--rr-line); border-radius: 28px; }
+.ph.wide .ph-s { min-height: 0; border-radius: var(--rr-r2); }
+.ph-s .rr-sign h1 { font-size: var(--rr-t-xl); }
+.ph-s .rr-count { font-size: 3.5rem; }
+.ph-s .rr-btn { min-height: 56px; font-size: 1.125rem; }
+.line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rr-s3); }
+.m0 { margin: 0; }
+.muted { color: var(--rr-muted); }
+.small { font-size: var(--rr-t-xs); }
+.big { font: 800 var(--rr-t-2xl)/1 var(--rr-font-sign); }
+.note { margin: 0; color: var(--rr-muted); font-size: var(--rr-t-sm); }
+.fld { display: grid; gap: var(--rr-s1); }
+.fld label { font: 700 var(--rr-t-xs)/1.2 var(--rr-font-sign); letter-spacing: 0.1em; text-transform: uppercase; color: var(--rr-muted); }
+.fld input, .fld textarea { width: 100%; min-height: 52px; padding: var(--rr-s3); background: var(--rr-panel-2); color: var(--rr-ink); border: 2px solid var(--rr-line); border-radius: var(--rr-r2); font: 400 var(--rr-t-md)/1.4 var(--rr-font-body); resize: vertical; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
+.chips button, .chips span { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--rr-s3); border: 2px solid var(--rr-line); border-radius: var(--rr-r1); background: var(--rr-panel-2); color: var(--rr-ink); font: 600 var(--rr-t-sm)/1 var(--rr-font-body); cursor: pointer; }
+.chips.static span { min-height: 32px; cursor: default; }
+.chips button[aria-pressed="true"] { background: var(--rr-signal); border-color: var(--rr-signal); color: var(--rr-on-signal); }
+.tog { display: flex; align-items: center; gap: var(--rr-s2); min-height: 44px; font-size: var(--rr-t-sm); }
+.tog input { width: 22px; height: 22px; accent-color: var(--rr-signal); }
+.talk { display: flex; justify-content: space-between; align-items: center; gap: var(--rr-s3); padding: var(--rr-s3); background: var(--rr-panel); border-radius: var(--rr-r2); }
+.talk > div { display: grid; gap: 2px; min-width: 0; }
+.talk b { font: 700 var(--rr-t-lg)/1.1 var(--rr-font-sign); }
+.talk span:not(.rr-status) { color: var(--rr-muted); font-size: var(--rr-t-xs); }
+.talk.alert { outline: 2px solid var(--rr-signal); outline-offset: -2px; }
+.talk .rr-status { flex: none; font-size: var(--rr-t-xs); }
+.q { display: flex; justify-content: space-between; align-items: center; gap: var(--rr-s2); min-height: 40px; border-top: 1px solid var(--rr-line); }
+.rr-code.sm { font-size: var(--rr-t-lg); letter-spacing: 0.15em; }
+.bar { display: grid; grid-template-columns: 96px 1fr 32px; align-items: center; gap: var(--rr-s2); font-size: var(--rr-t-sm); }
+.bar i { display: block; height: 12px; width: var(--w); background: var(--rr-free); border-radius: var(--rr-r1); }
+.bar b { text-align: right; font-variant-numeric: tabular-nums; }
+.wall { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--rr-s5); align-items: center; }
+.wall .rr-count { font-size: var(--rr-t-3xl); }
+.pg-foot { padding-top: var(--rr-s7); color: var(--rr-muted); font-size: var(--rr-t-sm); }
+@media (max-width: 720px) {
+  .pg-stage { grid-template-columns: 1fr; }
+  .pg-stage-head { position: static; }
+  .ph { flex-basis: 280px; }
+  .ph.wide { flex-basis: 280px; }
+  .wall { grid-template-columns: 1fr; }
+}
+
+/* Floor view: floors stacked top-down like the building, room tiles sized by capacity. */
+.seg { display: flex; border: 2px solid var(--rr-line); border-radius: var(--rr-r2); overflow: hidden; }
+.seg button { flex: 1; min-height: 44px; border: 0; background: transparent; color: var(--rr-ink); font: 700 var(--rr-t-sm)/1 var(--rr-font-sign); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--rr-signal); color: var(--rr-on-signal); }
+.board { display: grid; gap: var(--rr-s4); }
+.board-sum { color: var(--rr-muted); font-size: var(--rr-t-sm); }
+.fl { display: grid; gap: var(--rr-s2); }
+.fl-h { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: var(--rr-s1) var(--rr-s2); padding-bottom: var(--rr-s1); border-bottom: 1px solid var(--rr-line); }
+.fl-h b { font: 800 var(--rr-t-lg)/1 var(--rr-font-sign); letter-spacing: 0.08em; }
+.fl-h span { color: var(--rr-muted); font-size: var(--rr-t-xs); }
+.fl-h .here { color: var(--rr-signal); font-weight: 600; }
+.fl-rooms { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
+.tile { flex: var(--cap) 1 120px; min-width: 0; min-height: 64px; display: grid; gap: 4px; align-content: start; padding: var(--rr-s2) var(--rr-s3); background: var(--rr-panel); color: var(--rr-ink); border: 2px solid var(--rr-line); border-radius: var(--rr-r2); font: inherit; text-align: left; cursor: pointer; }
+.tile:hover { border-color: var(--rr-ink); }
+.tile.needs { border-color: var(--rr-signal); }
+.tile-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px; }
+.tile-n { font: 800 var(--rr-t-xl)/1 var(--rr-font-sign); font-variant-numeric: tabular-nums; }
+.tile .rr-status { padding: 2px 6px; font-size: 0.75rem; }
+.tile-t { font: 600 var(--rr-t-sm)/1.2 var(--rr-font-body); }
+.tile-m { color: var(--rr-muted); font-size: var(--rr-t-xs); font-variant-numeric: tabular-nums; }
+.tile-x { color: var(--rr-signal); font: 700 var(--rr-t-xs)/1.3 var(--rr-font-sign); letter-spacing: 0.06em; text-transform: uppercase; }
+.meter { height: 6px; background: var(--rr-panel-2); border-radius: var(--rr-r1); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--rr-free); }
+.tile[data-status="filling"] .meter i { background: var(--rr-filling); }
+.tile[data-status="full"] .meter i { background: var(--rr-full); }
+</style>
+</head>
+<body>
+<header class="pg-head">
+  <span class="rr-eyebrow">RightRoom · screens by person and journey stage · example data</span>
+  <h1>RightRoom Screen Map</h1>
+  <p>Every screen from the journey map, in the wayfinding design system, laid out in the order each person meets them. Sam is an attendee who prefers step-free routes, Leo is door staff, Dana is the organiser. All names and numbers are examples.</p>
+  <nav class="pg-nav" aria-label="People">
+    <a href="#floors">Floor view · everyone</a><a href="#attendee">Attendee · Sam</a><a href="#staff">Door staff · Leo</a><a href="#organiser">Organiser · Dana</a><a href="#shared">Shared screens</a>
+  </nav>
+</header>
+
+<!-- ================= FLOOR VIEW ================= -->
+<section class="pg-person" id="floors" aria-labelledby="h-fl">
+  <div class="pg-person-head"><span class="rr-eyebrow">Everyone</span><h2 id="h-fl">Floor view</h2><p>Every room on every floor at a glance, stacked like the building. Tile width follows capacity. Attendees see walking time; staff and organisers also see who is on each door and the queue.</p></div>
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>Where is there space?</h3><p>Same board, three levels of detail.</p></div>
+   <div class="pg-row">
+    <figure class="ph" data-board="attendee"><figcaption><b>A4</b> Map view</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Now · 11:05</span><h1>Rooms by floor</h1></div>
+      <div class="seg" role="group" aria-label="View"><button type="button" data-mode="list" aria-pressed="false">List</button><button type="button" data-mode="map" aria-pressed="true">Map</button></div>
+      <div class="board"></div>
+    </div></figure>
+    <figure class="ph" data-board="staff"><figcaption><b>S2</b> Floor map</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Staff · Now · 11:05</span><h1>Doors by floor</h1></div>
+      <div class="seg" role="group" aria-label="View"><button type="button" data-mode="list" aria-pressed="false">List</button><button type="button" data-mode="map" aria-pressed="true">Map</button></div>
+      <div class="board"></div>
+    </div></figure>
+    <figure class="ph wide" data-board="organiser"><figcaption><b>S1</b> Venue board</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Organiser · Live · 11:05</span><h1>Venue board</h1></div>
+      <p class="m0 board-sum"></p>
+      <div class="seg" role="group" aria-label="View"><button type="button" data-mode="list" aria-pressed="false">List</button><button type="button" data-mode="map" aria-pressed="true">Map</button></div>
+      <div class="board"></div>
+    </div></figure>
+   </div></div>
+</section>
+
+<!-- ================= ATTENDEE ================= -->
+<section class="pg-person" id="attendee" aria-labelledby="h-att">
+  <div class="pg-person-head"><span class="rr-eyebrow">Persona 1</span><h2 id="h-att">Attendee · Sam</h2><p>"Get into the talks I care about without wasting time at doors, and know why if I can't."</p></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">Before</span><h3>Before arriving</h3><p>The night before, at home.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>A1</b> Sign in</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">RightRoom · KubeCon day</span><h1>Sign in</h1></div>
+      <div class="fld"><label for="u1">Username (your public handle)</label><input id="u1" value="blue-otter"></div>
+      <div class="fld"><label for="p1">Password</label><input id="p1" type="password" value="example-pass"></div>
+      <button class="rr-btn" type="button">Sign in</button>
+      <button class="rr-btn rr-btn--ghost" type="button">Create an account</button>
+      <p class="note">No email or name is stored. Scanning a room QR? You can continue as a guest.</p>
+    </div></figure>
+    <figure class="ph"><figcaption><b>A2</b> Profile and interests</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">blue-otter</span><h1>What are you here for?</h1></div>
+      <div class="chips" role="group" aria-label="Interests">
+        <button type="button" aria-pressed="true">Kubernetes</button><button type="button" aria-pressed="true">Observability</button><button type="button" aria-pressed="false">Security</button><button type="button" aria-pressed="false">Platform eng</button><button type="button" aria-pressed="true">eBPF</button><button type="button" aria-pressed="false">Rust</button>
+      </div>
+      <span class="rr-eyebrow">Access preferences</span>
+      <div class="chips" role="group" aria-label="Access preferences">
+        <button type="button" aria-pressed="true">&#9855; Step-free</button><button type="button" aria-pressed="false">Near captions</button>
+      </div>
+      <p class="note">Interests only shape suggestions. They never decide who gets a seat.</p>
+      <button class="rr-btn" type="button">Save</button>
+    </div></figure>
+    <figure class="ph"><figcaption><b>A3</b> Event home · register</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Venue · Hall A</span><h1>KubeCon hack day</h1>
+        <div class="line"><span class="rr-status" data-status="filling">Filling</span><span class="rr-label" data-kind="live">LIVE</span></div></div>
+      <div class="rr-count" aria-label="171 of 180 registered">171<small>/ 180</small></div>
+      <div class="rr-panel"><span class="rr-eyebrow">The rule</span><p class="m0">Admitted in order of registration. 6 places are held for stated access needs, listed publicly.</p></div>
+      <button class="rr-btn" type="button">Register</button>
+    </div></figure>
+    <figure class="ph"><figcaption><b>A3</b> Waitlisted (another attendee)</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Venue · Hall A</span><h1>You're on the waitlist</h1></div>
+      <div class="rr-position"><span class="rr-eyebrow">Your place</span><strong>#4</strong><p>Admitted in order of registration. We'll update this page and notify you before you travel.</p></div>
+      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button">Allow notifications</button>
+      <button class="rr-btn rr-btn--ghost" type="button">Watch the stream instead</button>
+    </div></figure>
+    <figure class="ph"><figcaption><b>A3</b> Admitted</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Venue · Hall A</span><h1>You're in</h1><div class="line"><span class="rr-status" data-status="free">Admitted</span></div></div>
+      <div class="rr-panel"><p class="m0">Scan in at the venue door by <b>9:30</b> to keep your place. After that it goes to the next person on the waitlist.</p></div>
+      <button class="rr-btn" type="button">See the schedule</button>
+    </div></figure>
+   </div></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">Arrival</span><h3>Venue door</h3><p>9:20 at the entrance.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>A5</b> Venue scan-in</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Venue entrance</span><h1>Welcome, blue-otter</h1></div>
+      <div class="rr-panel"><span class="rr-status" data-status="free">Place kept</span><p class="m0">You scanned in at 9:20. Your admission is confirmed for the day.</p></div>
+      <button class="rr-btn" type="button">See the schedule</button>
+    </div></figure>
+    <figure class="ph"><figcaption><b>A7</b> Announcements</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Floor 2 and all floors</span><h1>Announcements</h1></div>
+      <div class="rr-announce" data-urgency="urgent"><span class="rr-eyebrow">Urgent · Floor 2 · 9:12</span><span>West lift is out of service. Use the east lift for step-free access.</span></div>
+      <div class="rr-announce"><span class="rr-eyebrow">Info · All floors · 9:00</span><span>Lunch is in the atrium from 12:00.</span></div>
+      <div class="rr-announce"><span class="rr-eyebrow">Info · Floor 3 · 8:45</span><span>Room 305 has live captions all day.</span></div>
+    </div></figure>
+   </div></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>Planning the day</h3><p>10:55, between talks.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>A4</b> Schedule</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Now · 11:00</span><h1>Schedule</h1></div>
+      <div class="talk"><div><b>eBPF deep dive</b><span>Room 204 · Floor 2 · &#9733; starred</span><span>Wi-Fi weak at back left · topics: verifier, tracing</span></div><span class="rr-status" data-status="filling">Filling</span></div>
+      <div class="talk"><div><b>Observability at scale</b><span>Room 210 · Floor 2</span><span>9 seats free · Wi-Fi good</span></div><span class="rr-status" data-status="free">Seats free</span></div>
+      <div class="talk"><div><b>Supply chain security</b><span>Room 305 · Floor 3 · captions</span><span>Stairs only</span></div><span class="rr-status" data-status="full">Full</span></div>
+      <div class="talk"><div><b>Rust in the kernel</b><span>Room 118 · Floor 1</span><span>41 of 50 in</span></div><span class="rr-status" data-status="filling">Filling</span></div>
+      <p class="note"><span class="rr-label" data-kind="live">LIVE</span> statuses · <span class="rr-label">CROWD-SOURCED</span> Wi-Fi</p>
+    </div></figure>
+   </div></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>Room door</h3><p>11:05, Room 204 is full.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>A5</b> Full · redirect</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Room 204 · Floor 2</span><h1>eBPF deep dive</h1>
+        <div class="line"><span class="rr-status" data-status="full">Full</span><span>50 of 50 · <span class="rr-label" data-kind="live">LIVE</span></span></div></div>
+      <div class="rr-route"><span class="rr-route__arrow" aria-hidden="true">&#9654;</span>
+        <div><div class="rr-route__to">Room 210</div><div class="rr-route__meta">Observability at scale · 9 seats free</div><span class="rr-access">&#9855; Step-free via east lift</span></div>
+        <div class="rr-route__time">2<small>MIN</small></div></div>
+      <details class="rr-why"><summary>Why this?</summary><ul>
+        <li>Matches your interest: Observability.</li><li>Step-free route, as you asked.</li><li>9 seats free; 3 people are being sent there.</li>
+        <li class="rr-rejected">Room 305: stairs only.</li><li class="rr-rejected">Room 118: 6 minutes away, less similar topic.</li></ul></details>
+      <div class="rr-btn-stack">
+        <button class="rr-btn" type="button">Go to Room 210</button>
+        <button class="rr-btn rr-btn--ghost" type="button">Wait for Room 204</button>
+        <button class="rr-btn rr-btn--ghost" type="button">Something different: Rust panel</button>
+        <button class="rr-btn rr-btn--ghost" type="button">Watch the stream</button>
+      </div>
+    </div></figure>
+    <figure class="ph"><figcaption><b>A5</b> In the queue</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Room 204 · Floor 2</span><h1>eBPF deep dive</h1><div class="line"><span class="rr-status" data-status="full">Full</span></div></div>
+      <div class="rr-position"><span class="rr-eyebrow">Your place for the next seat</span><strong>#3</strong><p>Seats go first come, within accessibility fit. Keep this page open; your phone buzzes when a seat is yours.</p></div>
+      <button class="rr-btn rr-btn--ghost" type="button">Leave the queue</button>
+    </div></figure>
+   </div></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>Getting a seat</h3><p>11:12, someone leaves an accessible seat.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>A5</b> Seat offer · 60 seconds</figcaption><div class="ph-s">
+      <div class="rr-offer"><span class="rr-eyebrow" role="alert">Seat offer · Room 204</span>
+        <h2 class="rr-title">Front, Left <span class="rr-access">&#9855; Accessible seat</span></h2>
+        <div class="rr-offer__timer" aria-hidden="true"><span id="bar" style="--rr-left:70%"></span></div>
+        <p class="m0"><strong id="secs">42</strong> seconds to claim. If you don't, it goes to the next person.</p>
+        <button class="rr-btn" type="button" id="claim">Claim my seat</button></div>
+      <p class="note">Offered to you ahead of #1 and #2 because it's an accessible seat and you asked for step-free.</p>
+    </div></figure>
+    <figure class="ph"><figcaption><b>A5</b> Claimed · show at the door</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Room 204 · Floor 2</span><h1>Your seat</h1></div>
+      <div class="rr-panel"><span class="rr-eyebrow">Show this at the door</span><div class="rr-code">KQ7M</div><p class="m0 muted">blue-otter · Front, Left · accessible seat</p></div>
+      <p class="note">Scan "I'm in the room" within 10 minutes or the seat goes to the next person.</p>
+    </div></figure>
+   </div></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>In the room</h3><p>Seated at the front left.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>A6</b> Check in · pick zone</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Room 204 · I'm in the room</span><h1>Where are you sitting?</h1></div>
+      <div class="rr-zones" role="group" aria-label="Where are you sitting?"><span class="rr-zones-front">STAGE</span>
+        <button type="button" aria-pressed="true" data-access>Front left</button><button type="button" aria-pressed="false">Front centre</button><button type="button" aria-pressed="false">Front right</button>
+        <button type="button" aria-pressed="false">Middle left</button><button type="button" aria-pressed="false">Middle centre</button><button type="button" aria-pressed="false">Middle right</button>
+        <button type="button" aria-pressed="false">Back left</button><button type="button" aria-pressed="false">Back centre</button><button type="button" aria-pressed="false">Back right</button></div>
+      <label class="tog"><input type="checkbox" id="wifi" checked> Share a 1-second Wi-Fi test for this zone</label>
+      <p class="note">Your scan is what counts you in, so the room's status stays right for everyone outside.</p>
+      <button class="rr-btn" type="button">Check in</button>
+    </div></figure>
+    <figure class="ph"><figcaption><b>A6</b> Checked in · Wi-Fi · comment</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Room 204 · Front left</span><h1>You're checked in</h1></div>
+      <div class="rr-panel"><span class="rr-eyebrow">Your Wi-Fi reading</span><p class="m0"><b class="big">38</b> Mbps · 40 ms</p><p class="m0 muted">Room median 21 Mbps <span class="rr-label">CROWD-SOURCED</span></p></div>
+      <div class="fld"><label for="c1">Comment on this session</label><textarea id="c1" rows="2">Slides too small to read from the back rows.</textarea></div>
+      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button">Post comment</button>
+      <button class="rr-btn rr-btn--ghost" type="button">I'm leaving</button>
+    </div></figure>
+   </div></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">After</span><h3>Leaving</h3><p>11:45, the session ends.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>A6</b> Session ended</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Room 204</span><h1>Thanks for coming</h1></div>
+      <div class="rr-panel"><p class="m0">You've been checked out. Your check-in has been deleted.</p></div>
+      <div class="rr-panel"><span class="rr-eyebrow">What people said</span><div class="chips static"><span>slides too small</span><span>verifier</span><span>tracing</span></div></div>
+      <p class="note">You can still comment for 24 hours.</p>
+      <button class="rr-btn" type="button">What's next for me</button>
+    </div></figure>
+   </div></div>
+</section>
+
+<!-- ================= DOOR STAFF ================= -->
+<section class="pg-person" id="staff" aria-labelledby="h-staff">
+  <div class="pg-person-head"><span class="rr-eyebrow">Persona 2</span><h2 id="h-staff">Door staff · Leo</h2><p>"Wherever I'm needed, keep the queue moving and hand empty seats on fast. The app does the counting."</p></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>Arriving at a door</h3><p>10:52, sent to Room 204.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>S2</b> Console opened by staff QR</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Staff · Room 204 · Floor 2</span><h1>You're on this door</h1></div>
+      <div class="line"><div class="rr-count" aria-label="46 of 50 seats taken">46<small>/ 50</small></div><span class="rr-label" data-kind="live">LIVE</span></div>
+      <div class="line"><span class="rr-status" data-status="filling">Filling</span><span class="muted">counted from check-ins</span></div>
+      <div class="rr-panel"><p class="m0">The count runs itself from scans. You don't need to count. Use the buttons only for someone who walks in without scanning or leaves without tapping "I'm leaving".</p></div>
+      <span class="rr-eyebrow">Correct the count</span>
+      <div class="rr-counter"><button type="button" aria-label="Remove one person who left without tapping">&minus;</button>
+        <div class="rr-count" aria-live="polite"><span class="cnt">0</span><small>adj.</small></div>
+        <button type="button" aria-label="Add one person who walked in without scanning">+</button></div>
+    </div></figure>
+   </div></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>Room filling</h3><p>11:03, the app thinks the room is full.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>S2</b> Confirm Full?</figcaption><div class="ph-s">
+      <div class="rr-offer"><span class="rr-eyebrow" role="alert">Room 204 looks full</span>
+        <div class="rr-count">50<small>/ 50 checked in</small></div>
+        <p class="m0">You're on this door, so you get a say. Confirm to show Full and start sending people to other rooms. No answer in <b>30</b> seconds confirms it. With nobody on the door it goes out straight away.</p>
+        <button class="rr-btn rr-btn--full rr-btn--plain" type="button">Confirm room is full</button>
+        <button class="rr-btn rr-btn--ghost" type="button">Not yet, 2 free</button></div>
+    </div></figure>
+    <figure class="ph"><figcaption><b>S2</b> Full · queue</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Staff · Room 204</span><h1>Full</h1><div class="line"><span class="rr-status" data-status="full">Full</span><span>50 of 50</span></div></div>
+      <div class="rr-panel"><span class="rr-eyebrow">Queue at the door</span>
+        <div class="q"><span>#1 red-fox</span><span class="muted">waiting</span></div>
+        <div class="q"><span>#2 guest-7c</span><span class="muted">waiting</span></div>
+        <div class="q"><span>#3 blue-otter</span><span class="rr-access">&#9855; step-free</span></div></div>
+      <p class="note">7 people redirected in the last 5 minutes.</p>
+    </div></figure>
+   </div></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>Seats free up</h3><p>Two empty seats at the back right.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>S2</b> Release seats</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Staff · Room 204</span><h1>Release seats</h1></div>
+      <span class="rr-eyebrow">Where are they?</span>
+      <div class="rr-zones" role="group" aria-label="Zone of the free seats"><span class="rr-zones-front">STAGE</span>
+        <button type="button" aria-pressed="false" data-access>Front left</button><button type="button" aria-pressed="false">Front centre</button><button type="button" aria-pressed="false">Front right</button>
+        <button type="button" aria-pressed="false">Middle left</button><button type="button" aria-pressed="false">Middle centre</button><button type="button" aria-pressed="false">Middle right</button>
+        <button type="button" aria-pressed="false">Back left</button><button type="button" aria-pressed="false">Back centre</button><button type="button" aria-pressed="true">Back right</button></div>
+      <button class="rr-btn" type="button">Offer 2 seats to the queue</button>
+      <p class="note">Up to 2 can be released: capacity 50 minus 48 taken.</p>
+    </div></figure>
+    <figure class="ph"><figcaption><b>S2</b> Check a claim code</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Staff · Room 204</span><h1>Claimed seats</h1></div>
+      <div class="rr-panel"><div class="q"><span class="rr-code sm">KQ7M</span><span>blue-otter · Front left</span></div>
+        <div class="q"><span class="rr-code sm">P2XD</span><span>red-fox · Back right</span></div></div>
+    </div></figure>
+   </div></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">After</span><h3>Moving on</h3><p>11:25, another room needs help.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>S2</b> Leave this door</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Staff · Room 204</span><h1>Leave this door?</h1></div>
+      <div class="rr-panel"><p class="m0">The count carries on from check-ins without you. Room 204 stays Full until the session ends or a seat is freed.</p></div>
+      <div class="rr-announce" data-urgency="urgent"><span class="rr-eyebrow">Needs staff</span><span>Room 118 is filling with nobody at the door.</span></div>
+      <button class="rr-btn" type="button">Leave this door</button>
+    </div></figure>
+   </div></div>
+</section>
+
+<!-- ================= ORGANISER ================= -->
+<section class="pg-person" id="organiser" aria-labelledby="h-org">
+  <div class="pg-person-head"><span class="rr-eyebrow">Persona 3</span><h2 id="h-org">Organiser · Dana</h2><p>"Set fair rules once, before doors open, and learn what to run next time."</p></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">Before</span><h3>Before the event</h3><p>The day before.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>S1</b> Space setup</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Organiser · Setup</span><h1>Room 204</h1></div>
+      <div class="fld"><label for="cap">Capacity (fire limit)</label><input id="cap" value="50"></div>
+      <div class="fld"><label for="rule">Published rule</label><textarea id="rule" rows="2">First come, within accessibility fit.</textarea></div>
+      <div class="fld"><label for="acc">Accessible seats</label><input id="acc" value="4 · Front left"></div>
+      <button class="rr-btn" type="button">Save and publish rule</button>
+      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button">Print staff QR codes</button>
+    </div></figure>
+   </div></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>Doors open and sessions</h3><p>9:00 to the end of the day.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>S1</b> Overview · rooms</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Organiser · Live</span><h1>All rooms</h1></div>
+      <div class="talk"><div><b>Venue</b><span>176 of 180 in · 4 waitlisted</span></div><span class="rr-status" data-status="filling">Filling</span></div>
+      <div class="talk"><div><b>Room 204</b><span>Leo on the door</span></div><span class="rr-status" data-status="full">Full</span></div>
+      <div class="talk alert"><div><b>Room 118</b><span>Queue of 6 · no staff at the door</span></div><span class="rr-status" data-status="filling">Filling</span></div>
+      <div class="talk"><div><b>Room 210</b><span>No staff needed</span></div><span class="rr-status" data-status="free">Seats free</span></div>
+    </div></figure>
+    <figure class="ph"><figcaption><b>S1</b> Post an announcement</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Organiser</span><h1>New announcement</h1></div>
+      <div class="fld"><label for="ann">Message</label><textarea id="ann" rows="3">West lift is out of service. Use the east lift for step-free access.</textarea></div>
+      <div class="chips" role="group" aria-label="Floor"><button type="button" aria-pressed="false">All floors</button><button type="button" aria-pressed="true">Floor 2</button></div>
+      <div class="chips" role="group" aria-label="Urgency"><button type="button" aria-pressed="true">Urgent</button><button type="button" aria-pressed="false">Info</button></div>
+      <button class="rr-btn" type="button">Post to Floor 2</button>
+    </div></figure>
+   </div></div>
+
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">After</span><h3>After the event</h3><p>Planning the next one.</p></div>
+   <div class="pg-row">
+    <figure class="ph"><figcaption><b>S1</b> Interests and topics</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Organiser · After</span><h1>What people wanted</h1></div>
+      <div class="rr-panel"><span class="rr-eyebrow">Interest counts</span>
+        <div class="bar"><span>Observability</span><i style="--w:100%"></i><b>52</b></div>
+        <div class="bar"><span>eBPF</span><i style="--w:71%"></i><b>37</b></div>
+        <div class="bar"><span>Platform eng</span><i style="--w:17%"></i><b>9</b></div>
+        <p class="m0 muted small">Groups under 5 are hidden.</p></div>
+      <div class="rr-panel"><span class="rr-eyebrow">Room 204 topics</span><div class="chips static"><span>slides too small</span><span>verifier</span></div><p class="m0 muted small">Wi-Fi at back left: median 4 Mbps</p></div>
+    </div></figure>
+   </div></div>
+</section>
+
+<!-- ================= SHARED ================= -->
+<section class="pg-person" id="shared" aria-labelledby="h-sh">
+  <div class="pg-person-head"><span class="rr-eyebrow">Everyone</span><h2 id="h-sh">Shared screens</h2><p>On the wall outside each room, and the demo helper.</p></div>
+  <div class="pg-stage"><div class="pg-stage-head"><span class="pg-when">During</span><h3>Big screen</h3><p>Readable from across the room.</p></div>
+   <div class="pg-row">
+    <figure class="ph wide"><figcaption><b>D1</b> Big-screen room status</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Room 204 · Floor 2 · now</span><h1>eBPF deep dive</h1></div>
+      <div class="wall"><div><div class="rr-count">50<small>/ 50</small></div><span class="rr-status" data-status="full">Full</span> <span class="rr-label" data-kind="live">LIVE</span></div>
+        <div class="rr-route"><span class="rr-route__arrow" aria-hidden="true">&#9654;</span><div><div class="rr-route__to">Room 210 has seats</div><div class="rr-route__meta">Observability at scale · 9 free</div><span class="rr-access">&#9855; Step-free via east lift</span></div><div class="rr-route__time">2<small>MIN</small></div></div></div>
+    </div></figure>
+    <figure class="ph"><figcaption><b>D2</b> Check-in simulator</figcaption><div class="ph-s">
+      <div class="rr-sign"><span class="rr-eyebrow">Demo only</span><h1>Simulator</h1></div>
+      <p class="note">Adds stand-in people so the demo works without a crowd. Everything it adds is labelled <span class="rr-label">STAND-IN</span>.</p>
+      <button class="rr-btn" type="button">Add 10 check-ins to Room 204</button>
+      <button class="rr-btn rr-btn--ghost" type="button">Add 5 to the waitlist</button>
+      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button">Run 50 people for 5 seats</button>
+    </div></figure>
+   </div></div>
+</section>
+
+<footer class="pg-foot"><p>Screen IDs match docs/journey-map.md. Styles are public/rr.css from PR #7. Example data only.</p></footer>
+
+<script>
+  document.querySelectorAll('.rr-zones').forEach(g => g.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    g.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  }));
+  document.querySelectorAll('.chips:not(.static) button').forEach(b => b.addEventListener('click', () => {
+    b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true');
+  }));
+  document.querySelectorAll('.rr-counter').forEach(c => {
+    const n = c.querySelector('.cnt'); if (!n) return;
+    c.querySelectorAll('button').forEach((b, i) => b.addEventListener('click', () => {
+      const v = +n.textContent + (i ? 1 : -1); n.textContent = (v > 0 ? '+' : '') + v;
+    }));
+  });
+  let left = 42; const secs = document.getElementById('secs'), bar = document.getElementById('bar');
+  const t = setInterval(() => { left = left > 0 ? left - 1 : 60; secs.textContent = left; bar.style.setProperty('--rr-left', (left / 60 * 100) + '%'); }, 1000);
+  document.getElementById('claim').addEventListener('click', () => clearInterval(t));
+
+  // Floor view: one data array, rendered per role and mode.
+  const ROOMS = [
+    { floor: 3, id: '305', title: 'Supply chain security', cap: 60, n: 60, st: 'full', access: 'Stairs only · captions', step: false, staff: null, queue: 4, walk: '7 min, stairs' },
+    { floor: 3, id: '310', title: 'Helm workshop', cap: 40, n: 12, st: 'free', access: 'Step-free', step: true, staff: null, queue: 0, walk: '8 min' },
+    { floor: 2, id: '204', title: 'eBPF deep dive', cap: 50, n: 50, st: 'full', access: 'Step-free via east lift', step: true, staff: 'Leo', queue: 3, walk: 'You are here' },
+    { floor: 2, id: '210', title: 'Observability at scale', cap: 40, n: 31, st: 'free', access: 'Step-free', step: true, staff: null, queue: 0, walk: '2 min' },
+    { floor: 2, id: '220', title: 'Lightning talks', cap: 40, n: 34, st: 'filling', access: 'Step-free', step: true, staff: null, queue: 0, walk: '3 min' },
+    { floor: 1, id: '118', title: 'Rust in the kernel', cap: 50, n: 41, st: 'filling', access: 'Step-free', step: true, staff: null, queue: 6, walk: '5 min' },
+    { floor: 1, id: '101', title: 'Keynote hall', cap: 300, n: 120, st: 'free', access: 'Step-free', step: true, staff: null, queue: 0, walk: '6 min' },
+  ];
+  const WORD = { free: 'Seats free', filling: 'Filling', full: 'Full' };
+  const free = r => r.cap - r.n;
+  const needsStaff = r => r.queue > 0 && !r.staff;
+  const chip = r => `<span class="rr-status" data-status="${r.st}">${WORD[r.st]}</span>`;
+  const accessNote = r => `<span class="tile-m">${r.step ? '&#9855; ' : ''}${r.access}</span>`;
+  const staffNote = r => `<span class="tile-m">${r.staff ? r.staff + ' on door' : 'No staff'}${r.queue ? ' · Queue ' + r.queue : ''}</span>` + (needsStaff(r) ? '<span class="tile-x">Needs staff</span>' : '');
+  function extras(r, role) {
+    return role === 'attendee' ? `<span class="tile-m">${r.walk === 'You are here' ? r.walk : r.walk + ' walk'}</span>` : staffNote(r);
+  }
+  function renderBoard(fig) {
+    const role = fig.dataset.board, mode = fig.dataset.mode || 'map';
+    const floors = [...new Set(ROOMS.map(r => r.floor))].sort((a, b) => b - a);
+    fig.querySelector('.board').innerHTML = floors.map(f => {
+      const rooms = ROOMS.filter(r => r.floor === f);
+      const seats = rooms.reduce((s, r) => s + free(r), 0);
+      const here = role === 'attendee' && f === 2 ? '<span class="here">You are here · Floor 2</span>' : '';
+      const head = `<div class="fl-h"><b>FLOOR ${f}</b>${here}<span>${rooms.length} rooms · ${seats} seats free</span></div>`;
+      const body = mode === 'map'
+        ? `<div class="fl-rooms">${rooms.map(r => `<button type="button" class="tile${needsStaff(r) && role !== 'attendee' ? ' needs' : ''}" data-status="${r.st}" style="--cap:${r.cap}">
+            <span class="tile-top"><span class="tile-n">${r.id}</span>${chip(r)}</span>
+            <span class="tile-t">${r.title}</span>
+            <span class="meter" aria-hidden="true"><i style="width:${Math.round(r.n / r.cap * 100)}%"></i></span>
+            <span class="tile-m">${r.n} of ${r.cap}</span>${accessNote(r)}${extras(r, role)}</button>`).join('')}</div>`
+        : rooms.map(r => `<div class="talk${needsStaff(r) && role !== 'attendee' ? ' alert' : ''}"><div><b>Room ${r.id} · ${r.title}</b><span>${r.n} of ${r.cap} · ${r.step ? '&#9855; ' : ''}${r.access}</span><span>${role === 'attendee' ? r.walk : (r.staff ? r.staff + ' on door' : 'No staff') + (r.queue ? ' · Queue ' + r.queue : '')}</span></div>${chip(r)}</div>`).join('');
+      return `<div class="fl">${head}${body}</div>`;
+    }).join('');
+  }
+  document.querySelectorAll('[data-board]').forEach(fig => {
+    renderBoard(fig);
+    fig.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+      fig.dataset.mode = b.dataset.mode;
+      fig.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      renderBoard(fig);
+    }));
+  });
+  const sum = document.querySelector('.board-sum');
+  if (sum) {
+    const full = ROOMS.filter(r => r.st === 'full').length, uncovered = ROOMS.filter(needsStaff).length;
+    sum.textContent = `${ROOMS.length} rooms on 3 floors · ${ROOMS.reduce((s, r) => s + free(r), 0)} seats free · ${full} full · ${uncovered} queues with no staff`;
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+name: CI
+
+# Runs on every pull request and on pushes to main. Build and deploy is a separate
+# workflow (deploy.yaml). Keep this one fast: it has no secrets and never touches
+# Elasticsearch or Dash0, so a failing run can never pollute demo data.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check every JavaScript file
+        run: |
+          find . -name '*.js' -not -path './node_modules/*' -not -path './.git/*' -print0 \
+            | xargs -0 -r -n1 node --check
+
+      - name: Smoke test (npm start boots and /health answers)
+        env:
+          PORT: "3999"
+          # No Elasticsearch or Dash0 values on purpose: the app must still start.
+          OTEL_TRACES_EXPORTER: none
+          OTEL_METRICS_EXPORTER: none
+          OTEL_LOGS_EXPORTER: none
+        run: |
+          # Boot through the real start script, so the OpenTelemetry preload is exercised
+          # (with exporters disabled) exactly as it is in production.
+          npm start > server.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 20); do
+            if curl -fsS "http://localhost:$PORT/health" > health.json; then
+              cat health.json
+              grep -q '"status":"ok"' health.json
+              kill "$pid"; pkill -f 'server.js' || true
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "server did not answer /health in 10s"; cat server.log
+          kill "$pid" 2>/dev/null; pkill -f 'server.js' || true
+          exit 1

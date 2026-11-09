@@ -31,3 +31,7 @@ instead of failing. Real environment variables (for example on the host) overrid
 - Scope for the hackathon demo: one event day, about 20 sessions, 6 rooms.
 - Past talks come from public talk lists; attendance numbers are seeded, and the demo says so.
 - AI coding assistants were used and disclosed, per the hackathon rules.
+
+## Deploy
+
+RightRoom runs on our hackathon cluster `pantheon` at https://pantheon.cnh.radarhq.io. Merging a PR to `main` builds the image and Argo CD deploys it. One-time steps, credentials and limits: [docs/deploy.md](docs/deploy.md).

@@ -89,7 +89,7 @@ These are where the hackathon is won or lost. P2 owns them and the load test pro
 1. A seat is never given twice. Making an offer reserves the seat first: one scripted update on the `spaces` document adds 1 to `taken` only while `taken < capacity` (a single-document update, so concurrent requests can't both pass). Claiming then changes only the `offers` document, with `if_seq_no` and `if_primary_term`, from Offered to Claimed, and only if `held_until` is still in the future. Writes use `refresh: wait_for`. A failed claim leaves the person in the queue.
 2. Offers expire. The sweeper runs every 2 seconds, marks offers past `held_until` as Expired, and hands the reserved seat to the next person in queue order (accessibility fit first for accessibility seats) without releasing it in between. With nobody left in the queue it subtracts 1 from `taken`.
 3. Redirects never send more people than there are free seats. Open offers are already counted in `taken` (rule 1), so free seats are `capacity - taken`. The redirect query only returns rooms where that covers everyone being redirected there at that moment, and the engine reserves those places as offers.
-4. Room status follows the rule in `docs/journey-map.md` on main: Seats free under 80 percent and Filling from 80 percent, both pushed straight away. At capacity, Full is pushed only after staff confirm, after 30 seconds with no answer, or straight away when no staff are on that room. With nobody counting at the door, the count is check-ins only and the status reads "Filling (from check-ins)", never Full. Redirects start only once Full is pushed. Open decisions D3 (push Full straight away with a "not full" override) and D4 (Full from check-ins at capacity) would change this rule; update it here if Hitesh accepts them.
+4. Room status follows the rule in `docs/journey-map.md`. The count is automatic: check-ins plus any staff correction plus held offers. Seats free under 80 percent, Filling from 80 percent, Full at capacity, all pushed straight away. Only when a staff console is open for that room does Full wait for the staff member's answer, up to 30 seconds. Redirects start once Full is pushed.
 5. Interests never decide who gets a seat. They only rank redirect suggestions.
 
 ## API contract
@@ -103,6 +103,7 @@ Freeze this first so P2 and P3 can build in parallel. P3 can mock any endpoint b
 | `GET /api/me`, `PUT /api/me` | Signed in | A2 | Handle, interests, needs |
 | `GET /api/event`, `POST /api/event/register` | Attendee | A3 | Venue status and my queue entry with position and reason |
 | `GET /api/sessions` | Anyone | A4 | Sessions with room status and Wi-Fi median |
+| `GET /api/floors` | Anyone (staff and organiser get extra fields) | A4 map view, S2 floor map, S1 venue board, D1 | Rooms grouped by floor: id, title, capacity, taken, status, access note; staff and organiser also get staff on door and queue length |
 | `GET /api/spaces/:id` | Anyone | A5, D1 | Capacity, taken, status, zone fill, rule |
 | `POST /api/spaces/:id/queue` | Attendee or guest | A5 | My position and reason |
 | `GET /api/spaces/:id/redirect` | Attendee or guest | A5 | Suggestion, reasons, rejected options with reasons, something different, overflow |
