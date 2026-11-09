@@ -22,6 +22,14 @@ npm start
 
 Fill in `.env` with your real Elasticsearch and Dash0 values. Never commit `.env`.
 
+### Running with the mock API
+
+The app currently runs on an in-memory mock of the API in `docs/architecture.md`, so every screen works without Elasticsearch. State resets on restart.
+
+- Demo users: `dana` (organiser), `leo` (staff), `sam` (attendee, step-free). Password `rightroom-demo`, or whatever `DEMO_PASSWORD` is set to.
+- Optional `.env` values: `DEMO_PASSWORD`, `ORGANISERS` and `STAFF` (comma-separated usernames; defaults `dana` and `leo`), `SESSION_SECRET` (keeps people signed in across restarts).
+- `npm test` runs the seat rules, including the 50-people-for-5-seats load test.
+
 ## Notes
 
 - Scope for the hackathon demo: one event day, about 20 sessions, 6 rooms.

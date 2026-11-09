@@ -109,13 +109,20 @@ Freeze this first so P2 and P3 can build in parallel. P3 can mock any endpoint b
 | `GET /api/spaces/:id/redirect` | Attendee or guest | A5 | Suggestion, reasons, rejected options with reasons, something different, overflow |
 | `POST /api/offers/:id/claim` | The offered handle | A5 | Claimed with zone and code, or why not |
 | `POST /api/spaces/:id/checkin` | Attendee or guest | A6 | Checked in, zone |
+| `POST /api/spaces/:id/leave` | Attendee or guest | A6 | "I'm leaving": checked out, seat offered to the queue |
+| `DELETE /api/spaces/:id/queue` | Attendee or guest | A5 | Left the queue |
+| `POST /api/spaces/:id/wifi`, `GET`/`POST /api/spaces/:id/comments` | Signed in | A6 (Extras) | Wi-Fi reading and room median; comment topics |
 | `POST /api/staff/spaces/:id/count` | Staff | S2 | New total after `{delta}` |
 | `POST /api/staff/spaces/:id/override` | Staff | S2 | Status after "full" or "not full" |
 | `POST /api/staff/spaces/:id/release` | Staff | S2 | Offers created for `{n, zone}` |
+| `GET /api/staff/spaces/:id` | Staff | S2 | Room view plus correction, who is on the door, queue with claim codes |
+| `POST /api/staff/spaces/:id/console` | Staff | S2 | `{action: open\|leave}`: staff on or off this door |
+| `POST /api/staff/spaces/:id/confirm` | Staff | S2 | `{answer: full\|not_yet, n, zone}`: answer to "Room looks full, confirm?" |
 | `PUT /api/staff/spaces/:id` | Organiser | S1 | Updated capacity, rule, priorities |
 | `GET /api/announcements`, `POST /api/announcements` | Anyone, organiser | A7, S1 | Announcements |
 | `GET /api/stream?space=:id` | Anyone | All live screens | Server-sent events |
-| `POST /api/sim/checkins` | Demo | D2 | Stand-in check-ins added |
+| `POST /api/ack` | Any page | All live screens | `{event_id}`: the server times delivery on its own clock (SLO 1) |
+| `POST /api/sim/checkins`, `/sim/queue`, `/sim/rush`, `/sim/end-session`, `/sim/reset` | Staff (reset: organiser) | D2 | Stand-in check-ins and queue, the 50-for-5 load test, end a session, reset the mock |
 
 Live events on `/api/stream`: `status` (space, taken, capacity, status), `position` (handle, position, reason), `offer` (offer ID, zone, seconds left), `offer_passed`, `announcement`. Each event carries the server timestamp so the browser can report delivery time to Dash0 for SLO 1.
 
