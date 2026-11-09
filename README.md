@@ -173,3 +173,7 @@ RightRoom runs on our hackathon cluster `pantheon` at https://pantheon.cnh.radar
 - sets Sam's interests and step-free preference but leaves Sam unregistered, so the attendee journey can be walked live.
 
 It prints each room's count, status and queue, plus where to start as Sam, Leo and Dana. Rerun it any time to get back to the same state.
+
+## QR scanner
+
+`/scan` opens the camera and reads RightRoom door, room and staff codes in the app. It uses the browser's `BarcodeDetector` where available and falls back to [jsQR](https://github.com/cozmo/jsQR) 1.4.0 (Apache License 2.0), vendored at `public/vendor/jsqr.js` and loaded only when needed. Only same-site `/r/...` and `/staff/...` links are followed. The camera needs HTTPS or `localhost`; on a plain-HTTP LAN address the page offers the phone's camera app or a paste-the-link field instead.
