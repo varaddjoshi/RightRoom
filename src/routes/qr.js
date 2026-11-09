@@ -2,8 +2,15 @@
 // People scan them with the phone camera, so all we need is the image; the URL inside is the screen's address.
 const express = require('express');
 const QRCode = require('qrcode');
+const presence = require('../presence');
 
-const PATHS = { door: (id) => `/r/${id}`, in: (id) => `/r/${id}/in`, staff: (id) => `/staff/room/${id}` };
+// The codes that check you in carry a key for that room and day (src/presence.js): "I'm in the room" for rooms,
+// and the entrance's door code for the venue, which is its scan-in (decision 30).
+const PATHS = {
+  door: (id) => (id === 'venue' ? `/r/venue?k=${presence.roomKey('venue')}` : `/r/${id}`),
+  in: (id) => `/r/${id}/in?k=${presence.roomKey(id)}`,
+  staff: (id) => `/staff/room/${id}`,
+};
 
 function qrRouter({ store, requireRole }) {
   const r = express.Router();

@@ -1,6 +1,7 @@
 // Thin HTTP layer over the engine. Input is validated here (the trust boundary); rules live in src/engine.js.
 const express = require('express');
 const auth = require('../auth');
+const presence = require('../presence');
 const stream = require('../stream');
 const { topTerms, frequentTerms } = require('../topics');
 const { ZONES } = require('../mock/seed');
@@ -15,10 +16,10 @@ function api({ store, engine }) {
     try { res.json(fn(req, res)); }
     catch (e) {
       if (!e.status) console.error(e);
-      res.status(e.status || 500).json({ error: e.status ? e.message : 'Something went wrong.' });
+      res.status(e.status || 500).json({ error: e.status ? e.message : 'Something went wrong.', ...e.extra });
     }
   };
-  const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
+  const fail = (message, status = 400, extra) => { throw Object.assign(new Error(message), { status, extra }); };
   const signedIn = (req) => req.user || fail('Sign in first.', 401);
   const int = (v, min, max, name) => {
     const n = Number(v);
@@ -71,7 +72,14 @@ function api({ store, engine }) {
   // Signed in: a suggestion plus that person's one hold. Signed out (D1 big screen): read-only, no hold (issue #23).
   r.get('/spaces/:id/redirect', h((req) => engine.redirect(sid(req), req.user || null)));
   r.post('/offers/:id/claim', h((req) => engine.claim(req.params.id, signedIn(req).handle, req.body?.version)));
-  r.post('/spaces/:id/checkin', h((req) => engine.checkin(sid(req), signedIn(req), zone(req.body?.zone))));
+  r.post('/spaces/:id/checkin', h((req) => {
+    const u = signedIn(req);
+    // Checking in needs the key from the QR code inside the room (src/presence.js), so nobody counts in remotely.
+    if (!presence.verify(sid(req), req.body?.k ?? req.query.k)) return fail('Scan the code inside the room to check in.', 403, { needScan: true });
+    return engine.checkin(sid(req), u, zone(req.body?.zone));
+  }));
+  // Staff-only key for scripts and the printed sheet; the same key the "I'm in the room" code carries.
+  r.get('/staff/spaces/:id/presence-key', requireRole('staff'), h((req) => ({ space: sid(req), k: presence.roomKey(sid(req)) })));
   r.post('/spaces/:id/leave', h((req) => engine.leave(sid(req), signedIn(req).handle)));
 
   // Extras on A6: crowd-sourced Wi-Fi and comments (stored without a handle).
