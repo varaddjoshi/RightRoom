@@ -94,7 +94,7 @@
   const me = await RR.requireLogin('staff');
   const ZONES = ['front-left', 'front-centre', 'front-right', 'middle-left', 'middle-centre', 'middle-right', 'back-left', 'back-centre', 'back-right'];
   for (const s of [$('rel-zone'), $('ny-zone')]) s.innerHTML = '<option value="">Any seat</option>' + ZONES.map((z) => `<option value="${z}">${RR.zoneName(z)}</option>`).join('');
-  let mode = 'map', v = null, ticker = null;
+  let mode = 'map', v = null, ticker = null, notices = [];
 
   const act = async (path, body) => {
     err.hidden = true;
@@ -131,7 +131,7 @@
       const cs = (s.comments || []).filter((c) => !c.hidden);
       $('comments').innerHTML = cs.length ? cs.map((c) => `<div class="cmt"><p>${RR.esc(c.text)}</p><button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" data-hide="${Number(c.id)}" aria-label="Hide this comment">Hide</button></div>`).join('') : '<p class="note">No comments yet.</p>';
       $('comments').querySelectorAll('[data-hide]').forEach((b) => b.addEventListener('click', () => act(`/staff/comments/${b.dataset.hide}/hide`)));
-      RR.floorBoard($('board'), floors, { role: me.role, mode, onPick: (id) => { if (id !== room) location.href = `/staff/room/${encodeURIComponent(id)}`; } });
+      RR.floorBoard($('board'), floors, { role: me.role, mode, notices, onPick: (id) => { if (id !== room) location.href = `/staff/room/${encodeURIComponent(id)}`; } });
       if (s.pendingConfirm != null) showConfirm(s.pendingConfirm); else { $('confirm').hidden = true; clearInterval(ticker); }
       document.querySelector('main').removeAttribute('aria-busy');
     } catch (e) { RR.showError(err, e); }
@@ -154,7 +154,10 @@
   }));
 
   try { await RR.api(`/staff/spaces/${encodeURIComponent(room)}/console`, { method: 'POST', body: { action: 'open' } }); } catch (e) { RR.showError(err, e); }
+  notices = await RR.api('/announcements').catch(() => []);
   await refresh();
+  const myFloor = (await RR.api('/floors').catch(() => [])).find((f) => f.rooms.some((r) => r.id === room))?.floor ?? null;
+  RR.watchNotices({ floor: myFloor, onChange: (a) => { notices = [a, ...notices]; refresh(); } });
   RR.live(room, { status: refresh, position: refresh, offer_passed: refresh, confirm: (d) => { refresh().then(() => showConfirm(d.seconds)); } });
 })();
 </script>

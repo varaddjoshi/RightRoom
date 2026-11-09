@@ -92,7 +92,7 @@
   $('who').textContent = `Organiser · ${me.handle}`;
   const ZONES = ['front-left', 'front-centre', 'front-right', 'middle-left', 'middle-centre', 'middle-right', 'back-left', 'back-centre', 'back-right'];
   $('zones').innerHTML = ZONES.map((z) => `<label><input type="checkbox" value="${z}">${RR.zoneName(z)}</label>`).join('');
-  let mode = 'map', rooms = [], urgency = 'info';
+  let mode = 'map', rooms = [], urgency = 'info', notices = [];
   const pct = (x) => (x == null ? 'n/a' : `${Math.round(x * 100)}%`);
   // Insights endpoints may not be mounted yet; say so quietly instead of breaking the page.
   const soft = async (path, el, render) => {
@@ -120,7 +120,7 @@
     const all = floors.flatMap((f) => f.rooms);
     const needs = all.filter((r) => r.queue > 0 && !r.staffOn).length;
     $('sum').textContent = `${all.length} rooms · ${all.reduce((s, r) => s + r.free, 0)} seats free · ${all.filter((r) => r.staffOn).length} staffed · ${needs} need staff`;
-    RR.floorBoard($('board'), floors, { role: 'organiser', mode, onPick: pick });
+    RR.floorBoard($('board'), floors, { role: 'organiser', mode, notices, onPick: pick });
   }
 
   $('room').addEventListener('change', () => pick($('room').value));
@@ -179,6 +179,10 @@
   } catch (e) { RR.showError($('int'), e); }
 
   RR.live('*', { status: () => refreshBoard().catch(() => {}) });
+  // Organisers write the announcements, so they see them on the board without a pop-up.
+  notices = await RR.api('/announcements').catch(() => []);
+  refreshBoard().catch(() => {});
+  RR.watchNotices({ pop: false, onChange: (a) => { notices = [a, ...notices]; refreshBoard().catch(() => {}); } });
 })();
 </script>
 </body>

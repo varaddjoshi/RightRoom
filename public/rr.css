@@ -251,10 +251,13 @@ body {
 .rr-offer__timer > span {
   display: block;
   height: 100%;
-  width: var(--rr-left, 100%);
+  width: 100%;
   background: var(--rr-signal);
-  transition: width 1s linear;
+  transform: scaleX(var(--rr-scale, 1)); /* 1 = full time left, 0 = expired */
+  transform-origin: left;
+  transition: transform 1s linear, background-color var(--rr-dur) var(--rr-ease);
 }
+.rr-offer__timer > span.is-low { background: var(--rr-full); } /* last 10 seconds */
 .rr-code {
   font: 600 var(--rr-t-2xl)/1 var(--rr-font-code);
   letter-spacing: 0.2em;
@@ -335,6 +338,54 @@ body {
   .rr-btn, .rr-offer__timer > span { transition: none; }
 }
 
+/* Motion: calm and functional. Live changes get a short tick, the seat offer is the one authored moment
+   (the panel rises while its yellow band sweeps across, like a sign lighting up). Transform and opacity only;
+   everything rests visible, so nothing depends on an animation finishing. Classes are added by RR in app.js. */
+:root {
+  --rr-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --rr-dur-fast: 120ms;
+  --rr-dur: 200ms;
+  --rr-dur-slow: 320ms;
+}
+@keyframes rr-fade { from { opacity: 0; } }
+@keyframes rr-tick { from { opacity: 0.35; transform: translateY(-0.2em); } }
+@keyframes rr-rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes rr-pop { from { opacity: 0; transform: scale(0.98); } }
+@keyframes rr-ring { from { opacity: 0.7; transform: scale(1); } to { opacity: 0; transform: scale(1.35, 1.6); } }
+@keyframes rr-sweep { from { transform: scaleX(0); } }
+
+body > main { animation: rr-fade var(--rr-dur-fast) ease-out; }
+.rr-tick { animation: rr-tick var(--rr-dur) var(--rr-ease); }
+.rr-status { position: relative; }
+.rr-status.rr-pulse { animation: rr-fade var(--rr-dur) ease-out; }
+.rr-status.rr-pulse::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 2px currentColor; color: var(--rr-ink);
+  animation: rr-ring var(--rr-dur-slow) var(--rr-ease) forwards;
+}
+.rr-offer { position: relative; overflow: hidden; }
+.rr-offer.rr-arrive { animation: rr-rise var(--rr-dur-slow) var(--rr-ease); }
+.rr-offer.rr-arrive::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 6px; background: var(--rr-signal);
+  transform-origin: left; animation: rr-sweep var(--rr-dur-slow) var(--rr-ease) both;
+}
+.rr-code.rr-reveal { animation: rr-pop var(--rr-dur) var(--rr-ease); }
+.rr-enter .tile { animation: rr-rise var(--rr-dur-fast) var(--rr-ease) both; animation-delay: calc(var(--i, 0) * 30ms); }
+.rr-swap { animation: rr-fade 160ms ease-out; }
+.rr-dialog[open] { animation: rr-pop var(--rr-dur) var(--rr-ease); }
+.rr-dialog[open]::backdrop { animation: rr-fade var(--rr-dur) ease-out; }
+@media (hover: hover) {
+  .rr-btn:not([disabled]):not([aria-disabled="true"]):hover, .tile:hover { transform: translateY(-1px); }
+  .rr-btn:not([disabled]):not([aria-disabled="true"]):active { transform: translateY(2px); }
+  .tile { transition: transform var(--rr-dur-fast) var(--rr-ease), border-color var(--rr-dur-fast) ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body > main, .rr-tick, .rr-status.rr-pulse, .rr-status.rr-pulse::after, .rr-offer.rr-arrive, .rr-offer.rr-arrive::before,
+  .rr-code.rr-reveal, .rr-enter .tile, .rr-swap, .rr-dialog[open], .rr-dialog[open]::backdrop { animation: none; }
+  .rr-status.rr-pulse::after { content: none; }
+  .tile, .rr-btn:hover, .tile:hover { transition: none; transform: none; }
+}
+
 /* Page helpers and floor board, moved from public/mockups/screen-map.html so screens share them */
 .line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rr-s3); }
 .m0 { margin: 0; }
@@ -373,6 +424,17 @@ body {
 .fl-h span { color: var(--rr-muted); font-size: var(--rr-t-xs); }
 .fl-h .here { color: var(--rr-signal); font-weight: 600; }
 .fl-rooms { display: flex; flex-wrap: wrap; gap: var(--rr-s2); }
+/* Floors stacked with room to breathe, so a floor label never sits tight against the tiles above it. */
+.fl-board { display: grid; gap: var(--rr-s6); }
+.fl-all { display: grid; gap: var(--rr-s2); }
+.notice-badge { min-height: 44px; padding: 0 var(--rr-s3); border: 2px solid var(--rr-line); border-radius: var(--rr-r1); background: var(--rr-panel-2); color: var(--rr-ink); font: 700 var(--rr-t-sm)/1 var(--rr-font-sign); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.notice-badge[data-urgent] { background: var(--rr-signal); border-color: var(--rr-signal); color: var(--rr-on-signal); }
+.rr-dialog { width: min(92vw, 520px); padding: var(--rr-s5) var(--rr-s4); background: var(--rr-panel); color: var(--rr-ink); border: 2px solid var(--rr-line); border-top: 6px solid var(--rr-signal); border-radius: 0; }
+.rr-dialog[open] { display: grid; gap: var(--rr-s3); }
+.rr-dialog::backdrop { background: rgb(0 0 0 / 0.6); }
+.rr-dialog h2 { margin: 0; }
+.rr-dialog .rr-announce:not([data-urgency]) { background: var(--rr-panel-2); }
+.rr-dialog-all { display: inline-flex; align-items: center; min-height: 44px; color: var(--rr-signal); font-weight: 600; }
 .tile { flex: var(--cap) 1 120px; min-width: 0; min-height: 64px; display: grid; gap: 4px; align-content: start; padding: var(--rr-s2) var(--rr-s3); background: var(--rr-panel); color: var(--rr-ink); border: 2px solid var(--rr-line); border-radius: var(--rr-r2); font: inherit; text-align: left; cursor: pointer; }
 .tile:hover { border-color: var(--rr-ink); }
 .tile.needs { border-color: var(--rr-signal); }

@@ -177,7 +177,7 @@
   const tick = setInterval(() => {
     left = Math.max(0, left - 1);
     secs.textContent = left;
-    bar.style.setProperty('--rr-left', (left / 60 * 100) + '%');
+    bar.style.setProperty('--rr-scale', left / 60); bar.classList.toggle('is-low', left <= 10);
     if ([30, 10].includes(left)) srTime.textContent = left + ' seconds left to claim your seat.';
     if (!left) { srTime.textContent = 'Offer expired. It has gone to the next person.'; clearInterval(tick); }
   }, 1000);

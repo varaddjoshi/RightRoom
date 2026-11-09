@@ -44,7 +44,8 @@
       const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
       if (!$('secs')) return clearInterval(timer);
       $('secs').textContent = left;
-      $('bar').style.setProperty('--rr-left', `${(left / 60) * 100}%`);
+      $('bar').style.setProperty('--rr-scale', left / 60);
+      $('bar').classList.toggle('is-low', left <= 10);
       // Only a few announcements, so a screen reader user can still hear the Claim button.
       if (left === 30 || left === 10) $('sr').textContent = `${left} seconds left to claim your seat.`;
       if (!left) { $('sr').textContent = 'Offer expired. It has gone to the next person.'; clearInterval(timer); }
