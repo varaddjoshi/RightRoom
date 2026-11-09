@@ -18,6 +18,7 @@
 
 const { es, INDEX, SEMANTIC } = require('./es');
 const { effectivePolicy, doorWindow, claimMinutes, claimDeadline } = require('./policy');
+const clock = require('./clock');
 
 const MIN = 60 * 1000;
 const OPENING_SOON_MIN = 20;
@@ -100,7 +101,7 @@ function timeReason(session, now) {
   return `On now${closesIn}`;
 }
 
-async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], now = new Date() } = {}) {
+async function redirect({ spaceId, groupSize = 1, needs = [], interests = [], now = clock.now() } = {}) {
   if (!spaceId) throw new Error('spaceId is required');
   groupSize = Math.max(1, Number(groupSize) || 1);
   const needSet = new Set(needs);

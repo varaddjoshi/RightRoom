@@ -1,16 +1,35 @@
 # RightRoom
 
-One app that puts each talk in the right-size room before a conference, gets people into free seats during it, and learns from real attendance afterwards.
+RightRoom makes every "who gets in" decision at a conference visible and fair: the venue door, a session room, a seat. Each space shows its live count, its queue and the rule that decides who gets a place. Each person sees their own position and the reason. Seats are offered, claimed and passed on automatically, and a seat is never given to two people.
 
-Tracks: Elasticsearch + Dash0 + Merge Forward, Radar optional.
+Built at the Cloud Native Hackathon, Nov 9, 2026. Tracks: Elasticsearch, Dash0, Merge Forward and Gitar, and Radar (it runs on our team cluster). Live: https://pantheon.cnh.radarhq.io
 
 ## What it does
 
-- **Before:** Demand forecast from similar past talks in Elasticsearch. Flags mismatches like "80-seat room; similar talks drew about 300", with one-click room swap / overflow plan.
-- **During:** Live room status (Full / Filling / Seats free), nearest similar session with seats, and seat release by text with access fit and a short claim window.
-- **After:** Check-ins compared with the forecast and saved for the next event.
+- **Before arriving:** see the venue's live count and the published admission rule, join the waitlist and see your position and the reason.
+- **At a room door:** see live whether a room is Full, Filling or has seats free. If it is full, you are sent to the nearest similar session with free seats, matched to your interests, with the walking time and step-free routes if you need them. "Why this?" shows the reasons and the options that were rejected. A redirect never sends more people to a room than it has free seats.
+- **Getting a seat:** join the queue from the door; a seat offer reaches your phone with 60 seconds to claim; a missed offer passes to the next person automatically.
+- **Inside the room:** check in anonymously; the count updates live for everyone.
+- **Door staff and organisers:** a +/- counter and a "room full" switch, one-tap release of empty seats, and a board for rules, capacities and announcements.
+- **For everyone:** every status is in words, not only colour; needs are stated as preferences ("step-free"), never a diagnosis; accessibility seats go only to people who need them. No real names are asked for or stored: people use a handle.
 
-Access is part of the seat logic, not a filter on top: protected access spaces, step-free routing, clear view of the caption screen, front row kept clear for lip-reading / interpreters, no disclosure, and text-first offers.
+The decisions behind this, and who approved each, are in [docs/journey-map.md](docs/journey-map.md); the plan is [docs/project.md](docs/project.md), the design [docs/architecture.md](docs/architecture.md) and [docs/design-system.md](docs/design-system.md).
+
+## What is real and what is stand-in
+
+The app labels its numbers Live, Real or Stand-in, and so do we:
+
+- **Live:** the seat engine and everything people do in it: queues, offers, claims, pass-on, check-ins, room status and live updates. That is running code, not a recording. What you do in the demo is live.
+- **Real:** the KubeCon NA 2026 schedule (talks, descriptions, speakers, times, rooms) imported into Elasticsearch from the public Sessionize feed.
+- **Stand-in:** room capacities, access seats, walking times, the fill forecast and its history, Wi-Fi readings, comment topics, interest counts, redirect and override rates, and the simulated people in queues and check-ins (`/sim`, `scripts/demo.sh`). Stand-in numbers say so on screen.
+- **Not known:** why anyone was waitlisted at this venue this morning. The point is that the reason was never shown.
+
+## How we measure it
+
+- **Dash0 traces** from the server (service `rightroom`).
+- **Delivery time (SLO 1, "updates reach phones within 10 seconds"):** screens confirm each live event they show; the server records the time as two Dash0 metrics, `rightroom.slo1.delivery_time` and `rightroom.slo1.deliveries`, counted once per person per event so repeated or forged requests cannot inflate them. **Known gap:** it only counts events a phone confirmed. The platform in front of the app cuts every live connection after 15 seconds and the phone reconnects about 2 seconds later, so an event published during that gap is not confirmed and is not counted. The number therefore looks better than reality until missed events are replayed on reconnect (in progress), after which a late event shows its true delay.
+- **Browser monitoring** (service `rightroom-web`) for page loads, errors and API calls, linked to the server traces. It is off unless `DASH0_BROWSER_TOKEN` is set; see [docs/deploy.md](docs/deploy.md).
+- **Load test:** 50 people try for 5 seats at once and exactly 5 win. It runs in CI on every PR (`npm test`) and against the live site on demand (see "Tests and the load test").
 
 ## Setup
 
@@ -115,9 +134,29 @@ Each code is also an image at `/qr/:room.svg?kind=door|in|staff` (staff codes ne
 
 ## Notes
 
-- Scope for the hackathon demo: one event day, about 20 sessions, 6 rooms.
-- Past talks come from public talk lists; attendance numbers are seeded, and the demo says so.
-- AI coding assistants were used and disclosed, per the hackathon rules.
+- Scope for the hackathon demo: one event day. The real KubeCon schedule is imported into Elasticsearch.
+- Everyone on the team can explain the architecture ([docs/architecture.md](docs/architecture.md)).
+- No personal data, tokens or keys are in the repo or the demo: `.env` is gitignored, and no real names are asked for or stored (people use a handle).
+
+## AI tools we used
+
+Four people built this, each with their own AI coding agent, and we say so openly:
+
+- **Claude Code (Anthropic)** wrote much of the code, tests and docs. Each of us (Hitesh, Revanth, Varad, Raj) ran our own agent; the models were Claude Opus 5.5 and Claude Sonnet 5.5. Commits made with it carry a `Co-Authored-By: Claude ...` trailer: `git log --grep='Co-Authored-By: Claude'` lists them.
+- **How we worked with it:** the four of us made the product decisions and approved them; the agents proposed, built and documented them. The agents coordinated through a team chat (SwarmChat), where every plan, decision, change and blocker was posted, so the decisions and who approved each are on record.
+- **Gitar (AI code review)** reviewed our pull requests. From 12:56 on Nov 9, `main` changed only through pull requests (one earlier docs commit, `ec13962`, went straight to `main`). Gitar also made one automatic fix commit (`1e66787`, preloading the OpenTelemetry instrumentation). Its review instructions for this project are in [.gitar/review/main.md](.gitar/review/main.md).
+- **Radar Cloud's MCP server:** our agents also used it to check the state of our cluster after deploys.
+
+## Rules and what existed before the start
+
+The hackathon rule is that all code is written after 11:00 on Nov 9. We want you to be able to check that, so here is everything in the repo from before 11:00 MST, from `git log --before='2026-11-09 11:00 -0700'` (6 commits, Nov 8 23:08 to Nov 9 00:26):
+
+- a skeleton `README.md` and `env.example` (both since reworked);
+- a committed `node_modules` folder (installed third-party packages, not code we wrote; removed from the repo since);
+- a 15-line `server.js`: an Express app with a hello page and a `/health` check, and a `package.json` with the dependencies (Express, the Elasticsearch client, OpenTelemetry auto-instrumentation, dotenv). It was a test that the Dash0 and Gitar setup worked; Gitar's one automatic fix to its start script is also in this group;
+- `.gitignore` changes.
+
+Every other commit, including the first one with product content (12:04 MST), comes after 11:00. The seat engine, API, screens, Elasticsearch code, the Dash0 telemetry set-up (`src/telemetry-env.js`), deploy and tests were all written after the start. The open question is whether this small scaffold counts as "code written before 11:00"; we list it so the judges can decide.
 
 ## Deploy
 

@@ -5,6 +5,7 @@
 // zoneFill(spaceId)       check-ins per zone in one room, for the zone grid and big screen.
 
 const { es, INDEX } = require('./es');
+const clock = require('./clock');
 
 async function currentTitles(roomIds, now) {
   if (!roomIds.length) return {};
@@ -39,7 +40,7 @@ function accessNote(room) {
   return parts.join(', ');
 }
 
-async function floors({ staff = false, now = new Date() } = {}) {
+async function floors({ staff = false, now = clock.now() } = {}) {
   const res = await es().search({
     index: INDEX.spaces,
     size: 500,
