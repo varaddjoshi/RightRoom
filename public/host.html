@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My talks · RightRoom</title>
+<link rel="stylesheet" href="/rr.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#1b2a4a">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<style>
+  /* Host view (P2, src/routes/venue.js). Built only from rr.css tokens and components. */
+  .meta { color: var(--rr-muted); font-size: var(--rr-t-sm); margin: 0; }
+  .grid2 { display: grid; gap: var(--rr-s3); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .talk h2 { margin: 0; font: 800 var(--rr-t-lg)/1.2 var(--rr-font-sign); }
+</style>
+</head>
+<body>
+<main class="rr-screen rr-screen--wide" id="main">
+  <div class="rr-sign rr-span"><span class="rr-eyebrow" id="who">Host</span><h1>My talks</h1>
+    <p class="note">Edit what attendees read about your talks. The organiser sets the room and the time, and picks who hosts each talk.</p>
+  </div>
+  <div id="talks" class="rr-span rr-btn-stack" aria-live="polite"><p class="note">Loading…</p></div>
+  <p class="rr-panel rr-span m0" id="msg" role="status" hidden></p>
+  <p class="rr-panel rr-span m0" id="err" role="alert" hidden></p>
+</main>
+<script src="/app.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const hm = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const err = $('err'), msg = $('msg');
+  const list = (v) => v.split(',').map((x) => x.trim()).filter(Boolean);
+  const when = (t) => `${new Date(t.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${hm(t.start)}–${hm(t.end)}`;
+  const field = (t, key, label, input) => `<div class="fld"><label for="${key}-${RR.esc(t.id)}">${label}</label>${input(`${key}-${RR.esc(t.id)}`)}</div>`;
+
+  function card(t, roomName) {
+    return `<form class="rr-panel talk rr-btn-stack" data-id="${RR.esc(t.id)}">
+      <div><h2>${RR.esc(t.title)}</h2>
+        <p class="meta">${RR.esc(roomName)} · ${when(t)} · <a href="/r/${encodeURIComponent(t.room_id)}">Room page</a></p></div>
+      ${field(t, 'title', 'Title', (id) => `<input id="${id}" maxlength="200" required value="${RR.esc(t.title)}">`)}
+      ${field(t, 'abstract', 'Abstract', (id) => `<textarea id="${id}" rows="5" maxlength="4000">${RR.esc(t.abstract)}</textarea>`)}
+      ${field(t, 'speakers', 'Speakers (comma-separated)', (id) => `<input id="${id}" value="${RR.esc(t.speakers.join(', '))}">`)}
+      ${field(t, 'tags', 'Tags (comma-separated, lowercase, e.g. observability, ebpf)', (id) => `<input id="${id}" value="${RR.esc(t.tags.join(', '))}" autocapitalize="off" spellcheck="false">`)}
+      <div class="grid2">
+        ${field(t, 'track', 'Track', (id) => `<input id="${id}" maxlength="60" value="${RR.esc(t.track || '')}">`)}
+        ${field(t, 'level', 'Level', (id) => `<select id="${id}">${['', 'intro', 'intermediate', 'advanced'].map((l) => `<option value="${l}"${(t.level || '') === l ? ' selected' : ''}>${l || 'Not set'}</option>`).join('')}</select>`)}
+      </div>
+      <button class="rr-btn" type="submit">Save talk</button>
+    </form>`;
+  }
+
+  (async () => {
+    const me = await RR.requireLogin();
+    $('who').textContent = `${me.handle} · host`;
+    try {
+      const [{ talks }, floors] = await Promise.all([RR.api('/host/sessions'), RR.api('/floors').catch(() => [])]);
+      const names = new Map(floors.flatMap((f) => f.rooms).map((r) => [r.id, RR.roomName(r)]));
+      if (!talks.length) {
+        $('talks').innerHTML = `<p class="rr-panel m0">You don't host any talks yet. An organiser adds you as a host on <b>Venue setup</b>, using your username <b>${RR.esc(me.handle)}</b>.</p>`;
+        return;
+      }
+      $('talks').innerHTML = talks.map((t) => card(t, names.get(t.room_id) || t.room_id)).join('');
+      $('talks').querySelectorAll('form.talk').forEach((f) => f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = f.dataset.id, v = (k) => f.querySelector(`#${CSS.escape(`${k}-${id}`)}`).value;
+        err.hidden = msg.hidden = true;
+        try {
+          const t = await RR.api(`/host/sessions/${encodeURIComponent(id)}`, { method: 'PUT', body: {
+            title: v('title'), abstract: v('abstract'), speakers: list(v('speakers')), tags: list(v('tags')).map((x) => x.toLowerCase()),
+            track: v('track') || null, level: v('level') || null } });
+          f.querySelector('h2').textContent = t.title;
+          msg.textContent = `Saved "${t.title}". Attendees see it now.`;
+          msg.hidden = false;
+        } catch (x) { RR.showError(err, x); }
+      }));
+    } catch (x) { RR.showError(err, x); }
+  })();
+</script>
+</body>
+</html>

@@ -111,3 +111,32 @@ test('hosts: the organiser assigns a talk, and the host edits only its details',
     assert.equal((await call('GET', `/api/talks/${id}`)).status, 404);
   });
 });
+
+test('demo logins: organiser opens the venue view, host already hosts talks it can edit', async () => {
+  await withServer(async ({ call, login }) => {
+    const org = await login('organiser');
+    assert.equal((await call('GET', '/api/me', null, org)).data.role, 'organiser');
+    assert.equal((await call('GET', '/api/staff/venue', null, org)).status, 200);
+
+    const host = await login('host');
+    const me = (await call('GET', '/api/me', null, host)).data;
+    assert.equal(me.role, 'attendee');
+    assert.ok(me.hosting.length > 0, 'the host demo login hosts the talks of one demo room');
+    const { talks } = (await call('GET', '/api/host/sessions', null, host)).data;
+    assert.equal((await call('PUT', `/api/host/sessions/${talks[0].id}`, { abstract: 'Edited by the host.' }, host)).data.abstract, 'Edited by the host.');
+    assert.equal((await call('GET', '/api/staff/venue', null, host)).status, 403);
+
+    for (const handle of ['organiser', 'host']) assert.equal((await call('POST', '/api/signup', { handle, password: 'long-enough-pw' })).status, 409);
+  });
+});
+
+test('the organiser and host views are served', async () => {
+  const server = app.listen(0);
+  try {
+    for (const path of ['/staff/venue', '/host']) {
+      const res = await fetch(`http://127.0.0.1:${server.address().port}${path}`);
+      assert.equal(res.status, 200, path);
+      assert.match(await res.text(), path === '/host' ? /My talks/ : /Venue setup/);
+    }
+  } finally { server.closeAllConnections(); server.close(); }
+});

@@ -49,10 +49,6 @@ spec:
               value: "8080"
             - name: TEAM_NAME
               value: "pantheon"
-            # The demo runs as Tuesday 11:45 at KubeCon (Varad's decision; src/clock.js): almost no real talks run in our
-            # Monday slot. The clock starts there when the pod starts and ticks in real time. Remove to use real time.
-            - name: DEMO_CLOCK
-              value: "2026-11-10T11:45:00-07:00"
             # The demo's saved state (src/store.js). Only the cluster uses this index; laptops get their own.
             - name: STATE_INDEX
               value: "rr_engine_state"

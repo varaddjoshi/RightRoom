@@ -423,9 +423,28 @@ async function setHosts(db, id, hosts) {
   return talkView(s);
 }
 
+// The 'host' demo login hosts the talks of one demo room, so the host view has something to edit. Only when it hosts
+// nothing yet, so an organiser's later changes stick. DEMO_HOST_ROOM picks the room; by default 255 BC on the real
+// venue (Varad's demo room) or 310 in the stand-in seed.
+async function ensureDemoHost(db, handle = 'host', { max = 6, log = console } = {}) {
+  if (!db.users?.has(handle) || !(db.sessions instanceof Map)) return [];
+  if ([...db.sessions.values()].some((s) => (s.host_handles || []).includes(handle))) return [];
+  const rooms = [process.env.DEMO_HOST_ROOM, 'r-2-255-bc', '310'].filter(Boolean);
+  const withTalks = (id) => [...db.sessions.values()].some((s) => s.room_id === id);
+  const room = rooms.find((id) => db.spaces.has(id) && withTalks(id)) || [...db.spaces.values()].find((r) => r.type === 'room' && !r.test && withTalks(r.id))?.id;
+  if (!room) return [];
+  const talks = [...db.sessions.values()].filter((s) => s.room_id === room).sort((a, b) => Date.parse(a.start) - Date.parse(b.start)).slice(0, max);
+  for (const s of talks) {
+    s.host_handles = [...new Set([...(s.host_handles || []), handle])];
+    await writeTalk(db, s);
+  }
+  log.log(`[catalog] Demo login '${handle}' hosts ${talks.length} talks in ${room}.`);
+  return talks.map((s) => s.id);
+}
+
 const hosting = (db, handle) => [...(db.sessions?.values() || [])].filter((s) => (s.host_handles || []).includes(handle)).map((s) => s.id);
 
 module.exports = {
   ensureSessions, loadFromES, refreshTitles, currentTalk, venueView, updateVenue, createRoom, updateRoom, deleteRoom,
-  listTalks, getTalk, talkView, createTalk, updateTalk, deleteTalk, setHosts, hosting, roomFromDoc, HOST_FIELDS, esOn,
+  listTalks, getTalk, talkView, createTalk, updateTalk, deleteTalk, setHosts, hosting, ensureDemoHost, roomFromDoc, HOST_FIELDS, esOn,
 };

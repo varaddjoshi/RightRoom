@@ -13,12 +13,14 @@ require('./src/slo2').instrument({ engine, store }); // SLO 2 and the other Dash
 auth.ensureDemoUsers(store.db);
 const catalog = require('./src/catalog'); // venue, rooms and talks; organisers and hosts edit them
 catalog.ensureSessions(store.db);
+catalog.ensureDemoHost(store.db, 'host', { log: { log() {} } }); // the 'host' demo login hosts one room's talks
 // "Reset demo" re-seeds the live state; the venue and talks come back from Elasticsearch when it's on.
 const seedReset = store.reset;
 store.reset = (now) => {
   const db = seedReset(now);
-  if (catalog.esOn()) catalog.loadFromES(db).catch((e) => console.error(`[catalog] Reload after reset failed: ${e.message}`));
-  else catalog.ensureSessions(db);
+  auth.ensureDemoUsers(db);
+  const venue = catalog.esOn() ? catalog.loadFromES(db) : Promise.resolve(catalog.ensureSessions(db));
+  venue.then(() => catalog.ensureDemoHost(db)).catch((e) => console.error(`[catalog] Reload after reset failed: ${e.message}`));
   return db;
 };
 
@@ -43,7 +45,7 @@ app.use('/api', require('./src/routes/venue').venueRouter({ store, engine }));
 const PAGES = {
   '/login': 'login', '/me': 'me', '/event': 'event', '/sessions': 'sessions', '/news': 'news',
   '/r/:room': 'room', '/r/:room/in': 'in',
-  '/host': 'host', '/staff/room/:room': 'staff-room', '/staff/setup': 'staff-setup', '/staff/qr': 'staff-qr', '/screen/:room': 'screen', '/sim': 'sim', '/scan': 'scan',
+  '/host': 'host', '/staff/venue': 'venue', '/staff/room/:room': 'staff-room', '/staff/setup': 'staff-setup', '/staff/qr': 'staff-qr', '/screen/:room': 'screen', '/sim': 'sim', '/scan': 'scan',
 };
 for (const [url, page] of Object.entries(PAGES)) {
   app.get(url, (req, res) => res.sendFile(path.join(__dirname, 'public', `${page}.html`), (e) => e && res.status(404).send('Page not built yet.')));
@@ -61,6 +63,7 @@ async function main() {
     try { await catalog.loadFromES(store.db); } catch (e) { console.error(`[catalog] Could not load the venue from Elasticsearch (${e.message}); keeping the rooms from the saved state.`); }
   }
   catalog.ensureSessions(store.db);
+  await catalog.ensureDemoHost(store.db).catch((e) => console.error(`[catalog] Demo host: ${e.message}`));
   setInterval(() => catalog.refreshTitles(store.db), 30_000).unref(); // room titles follow the talk on now
   store.startAutosave();
   require('./src/heat').startMirror(() => store.db); // anonymous check-ins into Elasticsearch for the zone heatmap
