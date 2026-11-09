@@ -6,6 +6,7 @@ const stream = require('./src/stream');
 const { createEngine } = require('./src/engine');
 const { redirect } = require('./src/mock/redirect');
 const { api } = require('./src/routes/api');
+const { fillStandIns } = require('./src/mock/insights-seed');
 
 const PORT = process.env.PORT || 3000;
 const engine = createEngine({ store, redirect, publish: stream.publish });
@@ -20,7 +21,7 @@ store.reset = (now) => {
   const db = seedReset(now);
   auth.ensureDemoUsers(db);
   const venue = catalog.esOn() ? catalog.loadFromES(db) : Promise.resolve(catalog.ensureSessions(db));
-  venue.then(() => catalog.ensureDemoHost(db)).catch((e) => console.error(`[catalog] Reload after reset failed: ${e.message}`));
+  venue.then(() => { catalog.ensureDemoHost(db); fillStandIns(db); }).catch((e) => console.error(`[catalog] Reload after reset failed: ${e.message}`));
   return db;
 };
 
@@ -66,6 +67,7 @@ async function main() {
   }
   catalog.ensureSessions(store.db);
   await catalog.ensureDemoHost(store.db).catch((e) => console.error(`[catalog] Demo host: ${e.message}`));
+  fillStandIns(store.db); // stand-in Wi-Fi, heat, comments and attendees for rooms that have none yet
   setInterval(() => catalog.refreshTitles(store.db), 30_000).unref(); // room titles follow the talk on now
   store.startAutosave();
   require('./src/heat').startMirror(() => store.db); // anonymous check-ins into Elasticsearch for the zone heatmap

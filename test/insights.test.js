@@ -101,3 +101,18 @@ test('router serves labelled reads over an injected db', async () => {
     server.close();
   }
 });
+
+test('fillStandIns covers rooms with unknown ids and adds attendees, once', () => {
+  const db = { spaces: new Map([['kc-a', { id: 'kc-a', type: 'room', floor: 1, capacity: 90 }], ['venue', { id: 'venue', type: 'venue' }]]),
+    checkins: new Map(), users: new Map(), wifi: [], comments: [], seq: 0 };
+  seed.fillStandIns(db);
+  assert.equal(db.wifi.filter((w) => w.space === 'kc-a').length, 18);
+  assert.ok(db.heatStandIns.get('kc-a').size > 0);
+  assert.ok(db.comments.some((c) => c.space === 'kc-a'));
+  assert.ok(!db.wifi.some((w) => w.space === 'venue'));
+  assert.equal(db.users.size, 120);
+  assert.ok([...db.users.values()].every((u) => !u.hash && u.standIn));
+  const sizes = [db.wifi.length, db.comments.length, db.users.size];
+  seed.fillStandIns(db);
+  assert.deepEqual([db.wifi.length, db.comments.length, db.users.size], sizes);
+});
