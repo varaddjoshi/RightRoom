@@ -9,6 +9,7 @@ const { api } = require('./src/routes/api');
 
 const PORT = process.env.PORT || 3000;
 const engine = createEngine({ store, redirect, publish: stream.publish });
+require('./src/slo2').instrument({ engine, store }); // SLO 2 and the other Dash0 proof numbers; wraps engine methods, changes nothing
 auth.ensureDemoUsers(store.db);
 
 const app = express();
