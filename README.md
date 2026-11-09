@@ -27,7 +27,7 @@ The app labels its numbers Live, Real or Stand-in, and so do we:
 ## How we measure it
 
 - **Dash0 traces** from the server (service `rightroom`).
-- **Delivery time (SLO 1, "updates reach phones within 10 seconds"):** screens confirm each live event they show; the server records the time as two Dash0 metrics, `rightroom.slo1.delivery_time` and `rightroom.slo1.deliveries`, counted once per person per event so repeated or forged requests cannot inflate them.
+- **Delivery time (SLO 1, "updates reach phones within 10 seconds"):** screens confirm each live event they show; the server records the time as two Dash0 metrics, `rightroom.slo1.delivery_time` and `rightroom.slo1.deliveries`, counted once per person per event so repeated or forged requests cannot inflate them. **Known gap:** it only counts events a phone confirmed. The platform in front of the app cuts every live connection after 15 seconds and the phone reconnects about 2 seconds later, so an event published during that gap is not confirmed and is not counted. The number therefore looks better than reality until missed events are replayed on reconnect (in progress), after which a late event shows its true delay.
 - **Browser monitoring** (service `rightroom-web`) for page loads, errors and API calls, linked to the server traces. It is off unless `DASH0_BROWSER_TOKEN` is set; see [docs/deploy.md](docs/deploy.md).
 - **Load test:** 50 people try for 5 seats at once and exactly 5 win. It runs in CI on every PR (`npm test`) and against the live site on demand (see "Tests and the load test").
 
