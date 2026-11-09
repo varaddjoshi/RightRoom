@@ -149,4 +149,48 @@ function seedInto(db) {
   return db;
 }
 
-module.exports = { ZONES, SESSIONS, WIFI, COMMENTS, USERS, TAG_LABELS, LOG, TABLES, ALERTS, SOLO, seedInto };
+// The fixed stand-ins above use the demo room ids, so rooms loaded from Elasticsearch (the real schedule) get none.
+// This gives every room that has no Wi-Fi, heat or comments its own stand-ins, and adds stand-in attendees
+// (no password, so nobody can sign in as one; the 'stand-in' prefix is reserved at sign-up). Safe to rerun.
+const GENERIC = ['Great talk, clear slides.', 'Slides too small from the back.', 'Room got warm.', 'Wi-Fi was patchy at the back.',
+  'Would like the slides shared.', 'Good questions from the audience.', 'Ran a few minutes over.', 'Easy to find a seat.'];
+const NEEDS = ['step-free', 'captions', 'aisle', 'quiet', 'front', 'hearing-loop'];
+const STAND_IN_USERS = 120;
+
+function fillStandIns(db, now = Date.now()) {
+  const r = prng(99);
+  const heat = (db.heatStandIns ??= new Map());
+  for (const sp of db.spaces.values()) {
+    if (sp.type !== 'room' || sp.test) continue;
+    if (!db.wifi.some((w) => w.space === sp.id)) {
+      const base = 10 + r() * 45; // typical Mbps for this room
+      for (const zone of ZONES) for (let i = 0; i < 2; i++) {
+        const weak = zone.startsWith('back') && r() < 0.3;
+        db.wifi.push({ space: sp.id, zone, floor: sp.floor, mbps: Math.round(weak ? 2 + r() * 5 : base * (0.7 + r() * 0.6)),
+          ms: Math.round(weak ? 150 + r() * 100 : 20 + r() * 40), at: now - Math.round(r() * 3600_000), standIn: true, source: S });
+      }
+    }
+    // Heatmap only (never taken seats): fronts fuller than backs, capped at each zone's share of the room.
+    if (!heat.has(sp.id) && !db.checkins.get(sp.id)?.size) {
+      const m = new Map(), per = Math.max(1, Math.ceil(sp.capacity / ZONES.length)), fill = 0.3 + r() * 0.6;
+      for (const zone of ZONES) {
+        const n = Math.min(per, Math.round(per * fill * { front: 1.3, middle: 1, back: 0.6 }[zone.split('-')[0]]));
+        for (let i = 0; i < n; i++) m.set(`stand-in-zone-${sp.id}-${zone}-${i}`, { zone, at: now, standIn: true });
+      }
+      heat.set(sp.id, m);
+    }
+    if (!db.comments.some((c) => c.space === sp.id)) {
+      for (let i = 0; i < 4; i++) db.comments.push({ id: ++db.seq, space: sp.id, text: GENERIC[Math.floor(r() * GENERIC.length)], at: now - i * 60000, hidden: false, standIn: true, source: S });
+    }
+  }
+  const tags = Object.keys(COUNTS);
+  for (let i = 1; i <= STAND_IN_USERS; i++) {
+    const handle = `stand-in-user-${i}`;
+    if (db.users.has(handle)) continue;
+    const interests = [...new Set([tags[Math.floor(r() * r() * tags.length)], tags[Math.floor(r() * tags.length)]])];
+    db.users.set(handle, { handle, role: 'attendee', interests, needs: r() < 0.15 ? [NEEDS[Math.floor(r() * NEEDS.length)]] : [], starred: [], standIn: true });
+  }
+  return db;
+}
+
+module.exports = { ZONES, SESSIONS, WIFI, COMMENTS, USERS, TAG_LABELS, LOG, TABLES, ALERTS, SOLO, seedInto, fillStandIns };
