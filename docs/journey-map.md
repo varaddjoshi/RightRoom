@@ -194,7 +194,7 @@ Cut from the top when behind: S1 schedule import, team finder, forecast, saved-n
 
 ## Open items
 
-project.md is out of date with these decisions. Update it to match:
+project.md was brought in line with these decisions on Nov 9 (sign-in is username and password with roles, which replaced decision 4's GitHub/Google). Keep both docs in step when a decision changes:
 
 | project.md says | Replace with | Decision |
 |---|---|---|

@@ -9,15 +9,15 @@ Announcements were missed or heard late.
 The same problem at every conference: rooms fill up and people get turned away with nowhere to go. Seats sit empty while people wait outside, because a "full" room often isn't. The APA turned people away from overcrowded sessions; on Cvent's forum a session showed FULL at 47 of 50.
 Root cause: the venue's live state is invisible until you're at the door, and the rules that decide who gets a place are hidden.
 Main feature: a fair allocation engine. Every scarce space (venue, room, table) has a capacity, a live count, a queue and a published rule. Attendees always see their position and the reason. Seats are offered, claimed and passed on automatically, and never double-booked.
-Personas: attendees, and the event staff who run the doors (organisers and room hosts).
-What no past winner did: none of the Patch the Conference winners made allocation fair and explainable, used live data, or measured outcomes with SLOs. The closest, Unstuck Live, suggested other sessions when one was full; Doorway adds published rules, seat offers, no-stampede redirects and proof under load.
+Personas: attendees, organisers (laptop, set rules and capacity) and door staff (phone, any door, no room assignment). See docs/journey-map.md.
+What no past winner did: none of the Patch the Conference winners made allocation fair and explainable, used live data, or measured outcomes with SLOs. The closest, Unstuck Live, suggested other sessions when one was full; RightRoom adds published rules, seat offers, no-stampede redirects and proof under load.
 Hero feature: getting a place, fairly
 About 60% of build time and 2 of the 3 demo minutes go here. Must ships for sure; Extra only if there's time.
 Attendee: venue door (before arriving)
 Must: see live capacity ("162 of 180 in") and the admission rule
 Must: join the waitlist and see my position and reason ("#12, admitted in order of arrival")
 Must: any priority, such as access needs, is shown publicly
-Must: get a text-first update when admitted, or when remote is the only option, before travelling
+Must: get an update on the open page (plus a browser notification where allowed; no SMS) when admitted, or when remote is the only option, before travelling
 Attendee: room door (during)
 Must: see whether a room is Full, Filling or has Seats free, live
 Must: if it's full, get sent to the nearest similar session with free seats, matched to my interests, with walking time and step-free routes if needed
@@ -34,17 +34,20 @@ Must: scan "I'm in the room" to check in anonymously; the big-screen room status
 Must: checked out automatically when I check in elsewhere or the session ends
 Event staff (organisers and room hosts)
 Must: set capacity and the rule for each space, with any priorities shown publicly
-Must: a +/− counter at the door (the true total) and a "room full" switch
-Must: release empty seats with one tap, which sends offers to the queue
+Must: the count is automatic from "I'm in the room" scans; Full goes out at capacity, with a 30-second confirm only when staff have the door console open; +/− is an optional correction and the Full switch an override
+Must: release empty seats with one tap, which sends offers to the queue first, never past capacity
 Must: see accessibility seat status
 Supporting features, accessibility and proof
 Supporting features
 Must: announcements tagged by floor and urgency, text-first (staff post, attendees read)
-Must: data deleted after each session; attendees only ever have a random handle
+Must: username and password sign-in with roles (attendee, staff, organiser); only the chosen public handle is ever shown; guest handle for room QR scans
+Must: registration (a place in the venue queue), interests, and an "I'm leaving" button that frees the seat to the queue
+Must: check-ins deleted after each session; comments and Wi-Fi readings kept without the handle; accounts and interests kept until the user deletes them
 Extra: tables as spaces ("table for 4, floor 2"), reusing the same engine
-Extra: zone map inside a room (Front / Middle / Back × Left / Centre / Right)
+Extra: zone map inside a room (Front / Middle / Back × Left / Centre / Right), built together with Wi-Fi readings
 Extra: saved-need alerts ("tell me when a seat or table matching X frees up")
-Extra: Wi-Fi readings by floor (real data, one line in the demo)
+Extra: crowd-sourced Wi-Fi readings by room and zone (real data, one line in the demo)
+Extra: comments turned into session and room topics
 Extra: predicted fill risk from similar past talks, with a backtest
 Extra: team finder for solo attendees
 Built for everyone (Merge Forward)
@@ -60,11 +63,12 @@ Must: SLO 2 — anyone turned away is offered a seat within 30 seconds, and acce
 Must: redirect success rate: did people go where we sent them?
 Must: load test where 50 people try for 5 seats and exactly 5 win
 Must: one Agent0 finding from the check-in rush
+Must: staff override rate: how often staff said "not yet" to an automatic Full
 Must: every number labelled Live, Real or Stand-in
 Sponsor tracks
 Each tool does a job the product needs. Criteria are from the CNH hackathon page.
 Track
-How Doorway uses it
+How RightRoom uses it
 Fit
 Elasticsearch
 All state lives in one spaces index. One redirect query combines similarity, interests, free seats and distance. Claims use version checks (if_seq_no) and holds expire. Aggregations power the staff dashboard; the percolator powers alerts (extra).
@@ -92,15 +96,15 @@ type (venue, room, table), floor, capacity, live count, rule, accessibility seat
 queue
 handle, space, position, arrival time, priority flag, reason shown, status
 offers
-space, handle, held_until, status (Offered, Claimed, Expired, Passed on)
+space, handle, zone, held_until, claim code, status (Offered, Claimed, Expired, Passed on)
 checkins
-handle, space, time — deleted after the session
+handle, space, zone, time; deleted after the session
 announcements
 text, floor, urgency, time
 sessions
 title, abstract, embedding, room, time
 
-No real names are stored: each person gets a random handle. Secrets live in a gitignored .env.
+Also: users (handle, password hash, role, interests, needs), comments, wifi_readings; every index carries event_id. No real names or emails are stored: people pick a public handle. Secrets live in a gitignored .env.
 Team and build plan
 Person
 Owns
@@ -121,10 +125,10 @@ Done when
 Data model frozen; app at a public URL; first traces in Dash0
 A request shows in Dash0
 12:15–1:30
-Venue waitlist with the published rule; room status from check-ins and the host counter
+Venue waitlist with the published rule; room status from check-ins (automatic count)
 "#12, because…" shows; a room flips to Full live
 Lunch / panel
-If possible, count people into the 2:00 panel room with the host counter for real data
+If possible, count people into the 2:00 panel room with "I'm in the room" scans for real data
 —
 2:30–3:30
 Redirect ("Why this?", no stampede); seat release and claim with auto pass-on
@@ -146,7 +150,7 @@ Say
 Show
 Track
 0:00–0:20
-"This morning people were waitlisted at the door with no reason, and none of us could tell where there was space. Doorway makes every 'who gets in' decision visible and fair."
+"This morning people were waitlisted at the door with no reason, and none of us could tell where there was space. RightRoom makes every 'who gets in' decision visible and fair."
 Title slide
 —
 0:20–0:50
@@ -173,7 +177,7 @@ Gitar
 Use two QR codes on the slides: "I'm in the room" for the audience and "I'm at the door" for judges. Test the public URL on mobile data, and keep a check-in simulator button and a recorded run as fallbacks.
 Honesty line (say it): "Audience check-ins are live. Other attendees and waitlist entries are simulated. Venue and session data are real. We don't know why anyone was waitlisted today; the point is that the reason was never shown."
 Risks, cut order and judge questions
-Cut order if behind: team finder → forecast → Wi-Fi → alerts → zone map → tables → Radar.
+Cut order if behind: team finder → forecast → saved-need alerts → tables → comments and topics → zone map with Wi-Fi → Radar.
 Never cut: published rules with positions, seat-claim correctness, the redirect, both SLOs, screen-reader support.
 Risk
 Fallback
@@ -186,7 +190,7 @@ Use a real problem from the day; a staged fault only for the Dash0 beat, never f
 Scope creep
 Follow the cut order; no extra starts before every Must passes its checkpoint
 Name clash
-Check "Doorway" on GitHub and PyPI before submitting
+Check "RightRoom" on GitHub and PyPI before submitting
 
 Rules checklist (rules): all code written after 11:00; public repo with setup instructions; AI coding tools disclosed in the README; no personal data, tokens or keys in the repo or demo; everyone can explain the architecture.
 Likely judge questions
