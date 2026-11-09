@@ -10,6 +10,7 @@ const ORGANISERS = list(process.env.ORGANISERS, 'dana');
 const STAFF = list(process.env.STAFF, 'leo');
 const HANDLE = /^[a-z0-9][a-z0-9-]{2,23}$/;
 const NEEDS = ['step-free', 'captions'];
+const DEMO = ['dana', 'leo', 'sam'];
 
 const roleFor = (h) => (ORGANISERS.includes(h) ? 'organiser' : STAFF.includes(h) ? 'staff' : 'attendee');
 
@@ -34,6 +35,8 @@ function signup(db, handle, password) {
   handle = String(handle || '').toLowerCase();
   if (!HANDLE.test(handle) || handle.startsWith('guest-') || handle.startsWith('stand-in')) throw bad('Pick a username of 3 to 24 letters, numbers or hyphens.');
   if (String(password || '').length < 8) throw bad('Use a password of at least 8 characters.');
+  // Staff and organiser roles come from the allowlists, so those names (and the demo accounts) can't be claimed by signing up.
+  if (ORGANISERS.includes(handle) || STAFF.includes(handle) || DEMO.includes(handle)) throw bad('That username is reserved.', 409);
   if (db.users.has(handle)) throw bad('That username is taken.', 409);
   return addUser(db, handle, String(password));
 }

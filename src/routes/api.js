@@ -151,6 +151,7 @@ function api({ store, engine }) {
   // Simulator (D2). Everything it adds is a stand-in.
   r.post('/sim/checkins', requireRole('staff'), h((req) => {
     const id = bodySpace(req);
+    if (engine.space(id).type !== 'room') fail('Simulator check-ins only work for rooms.');
     const n = int(req.body?.n ?? 10, 1, 500, 'n');
     const m = db().checkins.get(id);
     for (let i = 0; i < n; i++) m.set(`stand-in-sim-${++db().seq}`, { zone: ZONES[db().seq % 9], at: Date.now(), standIn: true });

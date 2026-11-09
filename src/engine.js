@@ -138,13 +138,25 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now }) {
     if (!sp) throw err(404, 'No such space');
     if (sp.type === 'venue') return scanVenue(user.handle);
     if (zone && !ZONES.includes(zone)) throw err(400, 'Unknown zone');
+    const touched = new Set();
     // Decision 14: checking in here checks you out everywhere else.
-    for (const [sid, m] of db().checkins) if (sid !== sp.id && m.delete(user.handle)) update(space(sid));
-    const o = [...db().offers.values()].find((x) => x.space === sp.id && x.handle === user.handle && x.status === 'claimed');
-    if (o) { o.status = 'used'; zone = zone || o.zone; }
+    for (const [sid, m] of db().checkins) if (sid !== sp.id && m.delete(user.handle)) touched.add(space(sid));
+    // Settle every seat this person holds, so nobody is counted as both inside and holding an offer.
+    for (const x of db().offers.values()) {
+      if (x.handle !== user.handle || !['offered', 'claimed'].includes(x.status)) continue;
+      if (x.space === sp.id) { x.status = 'used'; zone = zone || x.zone; }
+      else { x.status = 'expired'; space(x.space).freeZones.push(x.zone); touched.add(space(x.space)); }
+    }
+    for (const q of db().queue) {
+      if (q.handle !== user.handle || q.space === 'venue') continue;
+      if (q.space === sp.id && ['waiting', 'offered', 'claimed'].includes(q.status)) q.status = 'in';
+      else if (['offered', 'claimed'].includes(q.status)) { q.status = 'left'; touched.add(space(q.space)); }
+    }
     if (!db().checkins.has(sp.id)) db().checkins.set(sp.id, new Map());
     inside(sp).set(user.handle, { zone: zone || 'middle-centre', at: now() });
-    return { checkedIn: true, space: sp.id, zone: inside(sp).get(user.handle).zone, room: update(sp) };
+    const room = update(sp);
+    for (const t of touched) update(t);
+    return { checkedIn: true, space: sp.id, zone: inside(sp).get(user.handle).zone, room };
   }
 
   // Decision 21: leaving drops the count and offers the seat; the offer replaces the check-in, so nothing is counted twice.
@@ -228,7 +240,8 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now }) {
     if (q.status === 'waiting') return { status: 'waiting', position: waiting(space('venue')).indexOf(q) + 1, reason: 'Admitted in order of registration.' };
     return { status: q.status, scannedIn: !!q.scannedIn, expiresAt: q.expiresAt };
   }
-  function myVenue(handle) { return venueEntry(db().queue.find((x) => x.space === 'venue' && x.handle === handle && x.status !== 'left')); }
+  // Latest entry wins, so a re-registration replaces an expired one.
+  function myVenue(handle) { return venueEntry(db().queue.findLast((x) => x.space === 'venue' && x.handle === handle && x.status !== 'left')); }
   function scanVenue(handle) {
     const q = db().queue.find((x) => x.space === 'venue' && x.handle === handle && x.status === 'admitted');
     if (!q) throw err(409, 'You are not admitted to the venue');
@@ -248,7 +261,7 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now }) {
       sp.freeZones.unshift(o.zone);
       const q = db().queue.find((x) => x.offer === o.id);
       // Missed offer: passed on, and the person goes back to the end of the queue.
-      if (q) { q.status = 'waiting'; q.at = t; q.offer = undefined; }
+      if (q && ['offered', 'claimed'].includes(q.status)) { q.status = 'waiting'; q.at = t; q.offer = undefined; }
       publish('offer_passed', { offer: o.id, space: o.space }, { handle: o.handle });
       touched.add(sp);
     }

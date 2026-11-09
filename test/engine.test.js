@@ -175,3 +175,29 @@ test('redirect never suggests a stairs-only room to someone who needs step-free,
   assert.ok(r.rejected.some((x) => x.room === '305'));
   assert.equal(db.spaces.get(r.suggestion.room).redirectHolds.length, 1);
 });
+
+test('checking in settles queue entries and offers here and in other rooms', () => {
+  const { engine, db } = setup();
+  engine.joinQueue('204', ann); // waiting in 204
+  engine.joinQueue('220', ann); // 220 has free seats, so ann gets an offer there
+  const elsewhere = [...db.offers.values()].find((o) => o.handle === 'ann' && o.space === '220');
+  assert.equal(elsewhere.status, 'offered');
+  const t220 = engine.taken(engine.space('220'));
+  engine.checkin('204', ann, 'back-left');
+  assert.equal(elsewhere.status, 'expired');
+  assert.equal(engine.taken(engine.space('220')), t220 - 1); // the held seat in 220 is freed
+  assert.equal(db.queue.find((q) => q.handle === 'ann' && q.space === '204').status, 'in');
+  assert.equal(engine.staffView('204').queue.some((q) => q.handle === 'ann'), false);
+  engine.release('204', 1, 'back-right');
+  assert.equal([...db.offers.values()].some((o) => o.handle === 'ann' && o.space === '204'), false); // never offered a seat they already have
+});
+
+test('re-registering after an expired admission shows the new entry', () => {
+  const { engine, tick } = setup();
+  engine.register(ann);
+  tick(31 * 60_000);
+  engine.sweep();
+  assert.equal(engine.myVenue('ann').status, 'expired');
+  assert.equal(engine.register(ann).status, 'admitted');
+  assert.equal(engine.myVenue('ann').status, 'admitted');
+});
