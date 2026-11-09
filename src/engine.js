@@ -2,6 +2,7 @@
 // Storage-agnostic: works on whatever `store.db` holds; `redirect` and `publish` are passed in so the ES versions can replace them.
 const crypto = require('node:crypto');
 const { ZONES } = require('./mock/seed');
+const { SEAT_NEEDS } = require('./auth');
 
 const OFFER_MS = 60_000;          // seat offer hold
 const CONFIRM_MS = 30_000;        // staff answer window before Full goes out
@@ -71,7 +72,7 @@ function createEngine({ store, redirect, publish = () => {}, now = Date.now, pol
       const isAccess = (z) => !!z && sp.accessZones.includes(z);
       let q = list[0];
       let zi = sp.freeZones.findIndex((z) => !isAccess(z));
-      const needy = list.find((x) => x.needs.length);
+      const needy = list.find((x) => x.needs.some((n) => SEAT_NEEDS.includes(n)));
       const ai = sp.freeZones.findIndex(isAccess);
       if (needy && ai >= 0) { q = needy; zi = ai; }
       const unzoned = sp.capacity - taken(sp) > sp.freeZones.length; // seats free without a known zone

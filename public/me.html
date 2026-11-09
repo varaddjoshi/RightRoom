@@ -14,6 +14,35 @@
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style>
+  .add { display: flex; gap: var(--rr-s2); }
+  .add input { flex: 1; min-width: 0; }
+  .add .rr-btn { width: auto; flex: none; padding: 0 var(--rr-s4); }
+  .chips .own { gap: var(--rr-s2); padding-right: 0; background: var(--rr-action); border-color: var(--rr-action); color: var(--rr-on-action); cursor: default; }
+  .chips .own button { min-height: 44px; min-width: 44px; padding: 0; justify-content: center; border: 0; background: none; color: inherit; font-size: var(--rr-t-lg); border-radius: 999px; }
+  .chips .own button:hover { background: var(--rr-action-hover); }
+  .needs { display: grid; gap: var(--rr-s4); }
+  .needs fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: var(--rr-s1); align-content: start; }
+  .needs legend { padding: 0 0 var(--rr-s1); font: 700 var(--rr-t-sm)/1.2 var(--rr-font-sign); color: var(--rr-ink); }
+  .need { display: grid; grid-template-columns: 22px 1fr; column-gap: var(--rr-s3); align-items: start; min-height: 44px; padding: var(--rr-s2) var(--rr-s3); border-radius: var(--rr-r1); cursor: pointer; align-content: start; }
+  .need:hover { background: var(--rr-panel-2); }
+  .need input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--rr-action); }
+  .need b { font: 600 var(--rr-t-md)/1.3 var(--rr-font-sign); }
+  .need span { grid-column: 2; color: var(--rr-muted); font-size: var(--rr-t-sm); }
+  @media (min-width: 720px) { .needs { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); } }
+  .starred { display: grid; gap: var(--rr-s2); margin: 0; padding: 0; list-style: none; }
+  .starred li { display: flex; gap: var(--rr-s2); align-items: stretch; }
+  .starred .talk { flex: 1; min-width: 0; }
+  .starred li > button { flex: none; width: auto; padding: 0 var(--rr-s4); }
+  .savebar { display: flex; align-items: center; gap: var(--rr-s3); flex-wrap: wrap; }
+  .savebar .rr-btn { width: auto; min-width: 160px; }
+  .savebar p { margin: 0; font-weight: 600; }
+  .savebar p[data-state="dirty"] { color: var(--rr-accent-ink); }
+  .savebar p[data-state="saved"] { color: var(--rr-free); }
+  .danger { border-color: var(--rr-full); color: var(--rr-full); }
+  .danger:hover { background: var(--rr-full); border-color: var(--rr-full); color: var(--rr-on-full); }
+  .rr-dialog p { margin: 0; }
+  .rr-dialog .row { display: flex; gap: var(--rr-s2); flex-wrap: wrap; justify-content: flex-end; }
+  .rr-dialog .row .rr-btn { width: auto; flex: 1 1 auto; }
 </style>
 </head>
 <body>
@@ -22,51 +51,159 @@
   <section class="rr-panel" aria-labelledby="h-int">
     <h2 class="rr-eyebrow m0" id="h-int">Interests</h2>
     <div class="chips" role="group" aria-labelledby="h-int" id="interests"></div>
+    <div class="fld">
+      <label for="tag">Add your own</label>
+      <div class="add">
+        <input id="tag" list="tag-list" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="24" aria-describedby="tag-help" placeholder="e.g. platform eng">
+        <button class="rr-btn rr-btn--ghost" type="button" id="tag-add">Add</button>
+      </div>
+      <datalist id="tag-list"></datalist>
+      <p class="note" id="tag-help">Press Enter or type a comma to add. Up to 3 of your own, 12 in all.</p>
+    </div>
+    <div class="chips" role="group" aria-label="Your own interests" id="own"></div>
     <p class="note">Interests only shape suggestions. They never decide who gets a seat.</p>
   </section>
-  <section class="rr-panel" aria-labelledby="h-need">
-    <h2 class="rr-eyebrow m0" id="h-need">Access preferences</h2>
-    <div class="chips" role="group" aria-labelledby="h-need" id="needs">
-      <button type="button" data-need="step-free" aria-pressed="false">&#9855; Step-free</button>
-      <button type="button" data-need="captions" aria-pressed="false">Near captions</button>
-    </div>
-    <p class="note">Shown to staff as a preference so accessible seats reach you. Never a diagnosis.</p>
+  <section class="rr-panel" aria-labelledby="h-star">
+    <h2 class="rr-eyebrow m0" id="h-star">Starred talks</h2>
+    <ul class="starred" id="starred"></ul>
+    <p class="note" id="star-empty">No starred talks yet. Star talks on the <a href="/sessions">schedule</a>; stars shape redirects, never book a seat.</p>
   </section>
-  <p class="rr-panel rr-span m0" id="msg" role="status" hidden></p>
+  <section class="rr-panel rr-span" aria-labelledby="h-need">
+    <h2 class="rr-eyebrow m0" id="h-need">Access preferences</h2>
+    <div class="needs" id="needs"></div>
+    <p class="note">Shown to staff as a preference. Never a diagnosis. Accessible seats are kept for step-free and wheelchair needs.</p>
+  </section>
   <p class="rr-panel rr-span m0" id="err" role="alert" hidden></p>
-  <div class="rr-btn-stack">
+  <div class="rr-span savebar">
     <button class="rr-btn" type="button" id="save">Save</button>
-    <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="out">Sign out</button>
+    <p id="state" role="status" aria-live="polite"></p>
   </div>
+  <section class="rr-panel" aria-labelledby="h-acct">
+    <h2 class="rr-eyebrow m0" id="h-acct">Account</h2>
+    <div class="rr-btn-stack">
+      <button class="rr-btn rr-btn--ghost rr-btn--plain" type="button" id="out">Sign out</button>
+      <button class="rr-btn rr-btn--ghost rr-btn--plain danger" type="button" id="del">Delete my account</button>
+    </div>
+    <p class="note">Deleting removes your account, interests, stars, queue places and check-ins. Comments and Wi-Fi readings were never linked to you.</p>
+  </section>
 </main>
+<dialog class="rr-dialog" id="confirm" aria-labelledby="h-confirm">
+  <h2 id="h-confirm">Delete your account?</h2>
+  <p>You lose any seat, queue place or venue admission you hold, and they go to the next person. This can't be undone.</p>
+  <p id="del-err" role="alert" hidden></p>
+  <div class="row">
+    <button class="rr-btn rr-btn--ghost" type="button" id="keep" autofocus>Keep my account</button>
+    <button class="rr-btn rr-btn--full" type="button" id="del-yes">Delete account</button>
+  </div>
+</dialog>
 <script src="/app.js"></script>
 <script>
-  const err = document.getElementById('err'), msg = document.getElementById('msg');
-  const toggle = (b) => b.addEventListener('click', () => b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'));
+  const $ = (id) => document.getElementById(id);
+  const err = $('err'), state = $('state');
+  const FREE_MAX = 3, TOTAL_MAX = 12;
+  // Ids are stored server-side (src/auth.js NEEDS); only labels and groups live here.
+  const NEEDS = [
+    ['Getting there', [['step-free', 'Step-free route', 'Lifts and ramps only, no stairs.'], ['extra-time', 'Extra walking time', 'More time to reach a room after a seat is offered.']]],
+    ['Seating', [['wheelchair', 'Wheelchair space', 'A space you can roll into, not a fixed seat.'], ['aisle', 'Aisle seat', 'Easy to get in and out.'], ['front', 'Near the front', 'Closer to the screen and speaker, for low vision.']]],
+    ['Hearing and seeing', [['captions', 'Near captions', 'A seat where live captions are easy to read.'], ['hearing-loop', 'Hearing loop', 'A room with an induction loop for hearing aids.'], ['sign-language', 'Sign-language interpreter', 'Sessions with an interpreter in view.']]],
+    ['Other', [['quiet', 'Quiet space', 'A low-sensory spot nearby to take a break.'], ['service-animal', 'Service animal', 'Room for an assistance animal at your seat.']]],
+  ];
+  $('needs').innerHTML = NEEDS.map(([g, items]) => `<fieldset><legend>${g}</legend>${items.map(([id, name, why]) =>
+    `<label class="need"><input type="checkbox" value="${id}" aria-describedby="nd-${id}"><b>${name}</b><span id="nd-${id}">${why}</span></label>`).join('')}</fieldset>`).join('');
+
+  let scheduleTags = [], own = [], starred = [], sessions = [], saved = '';
+  const norm = (s) => s.trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  const picked = () => [...document.querySelectorAll('#interests [aria-pressed="true"]')].map((b) => b.dataset.tag);
+  const needs = () => [...document.querySelectorAll('#needs input:checked')].map((i) => i.value);
+  const body = () => ({ interests: [...picked(), ...own], needs: needs(), starred });
+  const say = (text, kind) => { state.textContent = text; state.dataset.state = kind || ''; };
+  const dirty = () => { if (JSON.stringify(body()) !== saved) say('Unsaved changes', 'dirty'); else if (state.dataset.state === 'dirty') say(''); };
+
+  function renderOwn() {
+    $('own').innerHTML = own.map((t) => `<span class="own">${RR.esc(t.replace(/-/g, ' '))}<button type="button" data-tag="${RR.esc(t)}" aria-label="Remove ${RR.esc(t.replace(/-/g, ' '))}">&times;</button></span>`).join('');
+    $('own').hidden = !own.length;
+  }
+  function renderStarred() {
+    const byId = Object.fromEntries(sessions.map((s) => [s.id, s]));
+    $('starred').innerHTML = starred.map((id) => {
+      const s = byId[id] || { title: `Room ${id}` };
+      return `<li><a class="talk" href="/r/${encodeURIComponent(id)}"><div><b>${RR.esc(s.title)}</b><span>Room ${RR.esc(id)}${s.floor != null ? ` · Floor ${RR.esc(s.floor)}` : ''}</span></div></a>`
+        + `<button class="rr-btn rr-btn--ghost" type="button" data-unstar="${RR.esc(id)}" aria-label="Unstar ${RR.esc(s.title)}">Unstar</button></li>`;
+    }).join('');
+    $('star-empty').hidden = starred.length > 0;
+  }
+  function addTag(raw) {
+    err.hidden = true;
+    const t = norm(raw);
+    if (!t) return;
+    const fail = (m) => { err.textContent = m; err.hidden = false; };
+    if (!/^[a-z0-9-]{2,24}$/.test(t)) return fail('Use 2 to 24 letters, numbers or hyphens.');
+    if (scheduleTags.includes(t)) { const b = document.querySelector(`#interests [data-tag="${t}"]`); if (b.getAttribute('aria-pressed') !== 'true' && picked().length + own.length >= TOTAL_MAX) return fail(`Pick up to ${TOTAL_MAX} interests.`); b.setAttribute('aria-pressed', 'true'); }
+    else if (!own.includes(t)) {
+      if (own.length >= FREE_MAX) return fail(`You can add up to ${FREE_MAX} of your own. Remove one first.`);
+      if (picked().length + own.length >= TOTAL_MAX) return fail(`Pick up to ${TOTAL_MAX} interests.`);
+      own.push(t); renderOwn();
+    }
+    $('tag').value = '';
+    dirty();
+  }
+
   (async () => {
     const me = await RR.requireLogin();
-    document.getElementById('who').textContent = `${me.handle} · ${me.role}`;
-    // Offer the tags the schedule actually uses, plus anything already chosen.
-    const sessions = await RR.api('/sessions').catch(() => []);
-    const tags = [...new Set([...sessions.flatMap((s) => s.tags || []), ...me.interests])].sort();
-    const box = document.getElementById('interests');
-    box.innerHTML = tags.map((t) => `<button type="button" data-tag="${RR.esc(t)}" aria-pressed="${me.interests.includes(t)}">${RR.esc(t.replace(/-/g, ' '))}</button>`).join('');
-    box.querySelectorAll('button').forEach(toggle);
-    document.querySelectorAll('#needs button').forEach((b) => { b.setAttribute('aria-pressed', me.needs.includes(b.dataset.need)); toggle(b); });
+    $('who').textContent = `${me.handle} · ${me.role}`;
+    sessions = await RR.api('/sessions').catch(() => []);
+    // Offer the tags the schedule actually uses; anything else the user chose is one of their own.
+    scheduleTags = [...new Set(sessions.flatMap((s) => s.tags || []))].sort();
+    own = me.interests.filter((t) => !scheduleTags.includes(t));
+    starred = me.starred || [];
+    $('interests').innerHTML = scheduleTags.map((t) => `<button type="button" data-tag="${RR.esc(t)}" aria-pressed="${me.interests.includes(t)}">${RR.esc(t.replace(/-/g, ' '))}</button>`).join('');
+    $('tag-list').innerHTML = scheduleTags.map((t) => `<option value="${RR.esc(t.replace(/-/g, ' '))}">`).join('');
+    document.querySelectorAll('#needs input').forEach((i) => { i.checked = me.needs.includes(i.value); });
+    renderOwn(); renderStarred();
+    saved = JSON.stringify(body());
   })();
 
-  const pressed = (sel, key) => [...document.querySelectorAll(`${sel} [aria-pressed="true"]`)].map((b) => b.dataset[key]);
-  document.getElementById('save').addEventListener('click', async () => {
-    err.hidden = msg.hidden = true;
-    try {
-      await RR.api('/me', { method: 'PUT', body: { interests: pressed('#interests', 'tag'), needs: pressed('#needs', 'need') } });
-      msg.textContent = 'Saved.';
-      msg.hidden = false;
-    } catch (x) { RR.showError(err, x); }
+  $('interests').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    if (on && picked().length + own.length >= TOTAL_MAX) { err.textContent = `Pick up to ${TOTAL_MAX} interests.`; err.hidden = false; return; }
+    b.setAttribute('aria-pressed', on); dirty();
   });
-  document.getElementById('out').addEventListener('click', async () => {
+  $('own').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    own = own.filter((t) => t !== b.dataset.tag); renderOwn(); dirty(); $('tag').focus();
+  });
+  $('tag').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(e.target.value); } });
+  $('tag').addEventListener('input', (e) => { if (e.target.value.includes(',')) e.target.value.split(',').forEach(addTag); });
+  $('tag-add').addEventListener('click', () => addTag($('tag').value));
+  $('needs').addEventListener('change', dirty);
+  $('starred').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-unstar]'); if (!b) return;
+    starred = starred.filter((id) => id !== b.dataset.unstar); renderStarred(); dirty();
+  });
+  window.addEventListener('beforeunload', (e) => { if (state.dataset.state === 'dirty') e.preventDefault(); });
+
+  $('save').addEventListener('click', async () => {
+    err.hidden = true;
+    $('save').disabled = true;
+    say('Saving…');
+    try {
+      const me = await RR.api('/me', { method: 'PUT', body: body() });
+      own = me.interests.filter((t) => !scheduleTags.includes(t)); starred = me.starred; renderOwn(); renderStarred();
+      saved = JSON.stringify(body());
+      say('Saved', 'saved');
+    } catch (x) { say('Not saved', 'dirty'); RR.showError(err, x); }
+    $('save').disabled = false;
+  });
+  $('out').addEventListener('click', async () => {
     await RR.api('/logout', { method: 'POST' }).catch(() => {});
     location.href = '/login';
+  });
+  $('del').addEventListener('click', () => { $('del-err').hidden = true; $('confirm').showModal(); });
+  $('keep').addEventListener('click', () => $('confirm').close());
+  $('del-yes').addEventListener('click', async () => {
+    try { await RR.api('/me', { method: 'DELETE' }); location.href = '/login'; }
+    catch (x) { RR.showError($('del-err'), x); }
   });
 </script>
 </body>
