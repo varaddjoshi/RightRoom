@@ -1,6 +1,7 @@
 // Server-sent events. Each event carries the server time so /api/ack can measure delivery on the server's own clock (SLO 1).
 // shortcut: subscribers live in this process only; run exactly one replica.
 const { recordDelivery } = require('./metrics');
+const HEARTBEAT_MS = 10_000;
 const subs = new Set();
 const sent = new Map(); // event id -> { at: server time, type }, for /api/ack
 let nextId = 0;
@@ -11,7 +12,9 @@ function subscribe(req, res, { space, handle }) {
   res.write('retry: 2000\n\n');
   const s = { res, space, handle };
   subs.add(s);
-  const beat = setInterval(() => res.write(': ping\n\n'), 20_000);
+  // The hackathon gateway in front of https://pantheon.cnh.radarhq.io closes a connection that is quiet for 15 seconds
+  // (measured), so ping well inside that; at 20 seconds every phone reconnected every 15 and could miss events.
+  const beat = setInterval(() => res.write(': ping\n\n'), HEARTBEAT_MS);
   req.on('close', () => { clearInterval(beat); subs.delete(s); });
 }
 
@@ -50,4 +53,4 @@ function ack(eventId, now = Date.now(), who) {
   return ms;
 }
 
-module.exports = { subscribe, publish, ack, deliveries };
+module.exports = { subscribe, publish, ack, deliveries, HEARTBEAT_MS };

@@ -7,7 +7,9 @@
 // and that the offer is pushed to them. It uses its own room (/api/sim/loadtest-room), never the real ones, and
 // removes it afterwards.
 //
-//   node scripts/loadtest.js [--url http://localhost:3000] [--people 50] [--seats 5] [--pass-on]
+//   node scripts/loadtest.js [--url http://localhost:3000] [--people 50] [--seats 5] [--pass-on] [--live] [--concurrency 64]
+//
+// Any URL other than localhost needs --live (or RR_LOADTEST_LIVE=1), so nobody floods the public demo by accident.
 //
 // Signs in as a staff user: RR_USER (default dana) and RR_PASSWORD (default DEMO_PASSWORD, then "rightroom-demo").
 // Exit code 0 when every check passes, 1 otherwise.
@@ -15,24 +17,38 @@
 const ROOM = 'loadtest';
 
 function parseArgs(argv) {
-  const o = { url: process.env.RR_URL || 'http://localhost:3000', people: 50, seats: 5, passOn: false };
+  const o = { url: process.env.RR_URL || 'http://localhost:3000', people: 50, seats: 5, passOn: false, live: process.env.RR_LOADTEST_LIVE === '1', concurrency: 64 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--url') o.url = argv[++i];
+    else if (a === '--concurrency') o.concurrency = Number(argv[++i]);
     else if (a === '--people') o.people = Number(argv[++i]);
     else if (a === '--seats') o.seats = Number(argv[++i]);
     else if (a === '--pass-on') o.passOn = true;
+    else if (a === '--live') o.live = true;
     else if (a === '-h' || a === '--help') o.help = true;
     else throw new Error(`Unknown argument ${a}`);
   }
   return o;
 }
 
+// At most `max` requests in flight. Claims still race (64 at once is plenty for 5 seats), but the client never opens
+// more connections than a laptop's accept queue takes: macOS resets past 128 when client and server share a process.
+function limiter(max) {
+  let active = 0;
+  const waiting = [];
+  return async (fn) => {
+    if (active < max) active++;
+    else await new Promise((r) => waiting.push(r)); // the slot is handed over, so `active` stays the same
+    try { return await fn(); } finally { const next = waiting.shift(); if (next) next(); else active--; }
+  };
+}
+
 // One person: a cookie jar and timed JSON requests.
-function client(base, timings) {
+function client(base, timings, limit = (fn) => fn()) {
   const jar = new Map();
   const cookie = () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
-  async function req(method, path, body) {
+  const req = (method, path, body) => limit(async () => {
     const t0 = performance.now();
     const res = await fetch(base + path, {
       method,
@@ -47,7 +63,7 @@ function client(base, timings) {
     const data = await res.json().catch(() => null);
     timings.push(performance.now() - t0);
     return { status: res.status, data };
-  }
+  });
   return { req, cookie };
 }
 
@@ -56,6 +72,8 @@ function listen(base, cookie, space) {
   const events = [];
   const waiters = [];
   const ctrl = new AbortController();
+  const opened = Date.now();
+  let droppedAfter = null; // seconds, when the server or a proxy closed the stream before we did
   const ready = fetch(`${base}/api/stream?space=${encodeURIComponent(space)}`, { headers: { cookie, accept: 'text/event-stream' }, signal: ctrl.signal })
     .then(async (res) => {
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -79,18 +97,24 @@ function listen(base, cookie, space) {
             }
           }
         } catch { /* aborted at the end */ }
+        // Closed from the other end: phones would reconnect and could miss events in the gap. Fail the waits now.
+        if (!ctrl.signal.aborted) {
+          droppedAfter = Math.round((Date.now() - opened) / 1000);
+          for (const w of waiters.splice(0)) w.resolve(null);
+        }
       })();
     });
   function waitFor(match, ms) {
     const seen = events.find(match);
-    if (seen) return Promise.resolve(seen);
+    if (seen || droppedAfter !== null) return Promise.resolve(seen || null);
     return new Promise((resolve) => {
       const w = { match, resolve };
       waiters.push(w);
-      setTimeout(() => { const i = waiters.indexOf(w); if (i >= 0) { waiters.splice(i, 1); resolve(null); } }, ms).unref();
+      // Not unref'd: the wait itself keeps the process alive until it is answered or times out.
+      setTimeout(() => { const i = waiters.indexOf(w); if (i >= 0) { waiters.splice(i, 1); resolve(null); } }, ms);
     });
   }
-  return { ready, events, waitFor, close: () => ctrl.abort() };
+  return { ready, events, waitFor, dropped: () => droppedAfter, close: () => ctrl.abort() };
 }
 
 function pct(xs, p) {
@@ -99,12 +123,16 @@ function pct(xs, p) {
   return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))];
 }
 
-async function run({ url, people = 50, seats = 5, passOn = false, user = process.env.RR_USER || 'dana', password = process.env.RR_PASSWORD || process.env.DEMO_PASSWORD || 'rightroom-demo', log = console.log } = {}) {
+const isLocal = (u) => ['localhost', '127.0.0.1', '[::1]', '::1'].includes(new URL(u).hostname);
+
+async function run({ url, people = 50, seats = 5, passOn = false, live = false, concurrency = 64, user = process.env.RR_USER || 'dana', password = process.env.RR_PASSWORD || process.env.DEMO_PASSWORD || 'rightroom-demo', log = console.log } = {}) {
   const base = url.replace(/\/+$/, '');
+  if (!isLocal(base) && !live) throw new Error(`${base} is not local. Add --live (or RR_LOADTEST_LIVE=1) to load test it on purpose.`);
   const timings = [];
   const checks = [];
   const check = (ok, what) => { checks.push({ ok: !!ok, what }); log(`${ok ? 'PASS' : 'FAIL'}  ${what}`); };
-  const staff = client(base, timings);
+  const limit = limiter(Math.max(1, concurrency));
+  const staff = client(base, timings, limit);
 
   const login = await staff.req('POST', '/api/login', { handle: user, password });
   if (login.status !== 200 || !['staff', 'organiser'].includes(login.data?.role)) {
@@ -118,7 +146,7 @@ async function run({ url, people = 50, seats = 5, passOn = false, user = process
     const watch = listen(base, staff.cookie(), ROOM);
     await watch.ready;
 
-    const crowd = Array.from({ length: people }, () => client(base, timings));
+    const crowd = Array.from({ length: people }, () => client(base, timings, limit));
     const guests = await Promise.all(crowd.map((c) => c.req('POST', '/api/guest')));
     check(guests.every((g) => g.status === 200), `${people} guests signed in`);
 
@@ -147,7 +175,7 @@ async function run({ url, people = 50, seats = 5, passOn = false, user = process
     // Phase 2 (--pass-on): an unclaimed offer passes to the next person after 60 seconds, pushed to their phone.
     if (passOn) {
       await staff.req('POST', '/api/sim/loadtest-room', { seats: 1 });
-      const [a, b] = [client(base, timings), client(base, timings)];
+      const [a, b] = [client(base, timings, limit), client(base, timings, limit)];
       await a.req('POST', '/api/guest');
       await b.req('POST', '/api/guest');
       const bHandle = (await b.req('GET', '/api/me')).data?.handle;
@@ -161,6 +189,7 @@ async function run({ url, people = 50, seats = 5, passOn = false, user = process
       const t0 = Date.now();
       const got = await bPhone.waitFor((e) => e.type === 'offer' && e.data.space === ROOM, 75_000);
       const after = Math.round((Date.now() - t0) / 1000);
+      check(bPhone.dropped() === null, bPhone.dropped() === null ? 'the live stream stayed open the whole minute' : `the live stream was closed by the server or a proxy after ${bPhone.dropped()}s`);
       check(got && after >= 55 && after <= 70, `the unclaimed offer passed to the next person after ${after}s and was pushed to them${bHandle ? ` (${bHandle})` : ''}`);
       bPhone.close();
     }
@@ -177,7 +206,7 @@ async function run({ url, people = 50, seats = 5, passOn = false, user = process
 if (require.main === module) {
   let opts;
   try { opts = parseArgs(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exit(2); }
-  if (opts.help) { console.log('node scripts/loadtest.js [--url URL] [--people 50] [--seats 5] [--pass-on]'); process.exit(0); }
+  if (opts.help) { console.log('node scripts/loadtest.js [--url URL] [--people 50] [--seats 5] [--pass-on] [--live] [--concurrency 64]'); process.exit(0); }
   run(opts).then((r) => process.exit(r.ok ? 0 : 1), (e) => { console.error(`Load test could not run: ${e.message}`); process.exit(1); });
 }
 
