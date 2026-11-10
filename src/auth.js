@@ -38,6 +38,11 @@ function ensureDemoUsers(db) {
   // it hosts the talks of one demo room (src/catalog.js ensureDemoHost). Same DEMO_PASSWORD as the others.
   if (!db.users.has('organiser')) addUser(db, 'organiser', pw);
   if (!db.users.has('host')) addUser(db, 'host', pw);
+  // Way back in when nobody knows the organiser password: set ORGANISER_PASSWORD in the cluster Secret and restart.
+  // Applied on every boot, so while it's set it wins over a password changed in the app.
+  const op = process.env.ORGANISER_PASSWORD;
+  if (op && op.length >= 8) Object.assign(db.users.get('organiser'), { role: 'organiser' }, hash(op));
+  else if (op) console.warn('[auth] ORGANISER_PASSWORD is shorter than 8 characters; ignored.');
 }
 
 function signup(db, handle, password) {
