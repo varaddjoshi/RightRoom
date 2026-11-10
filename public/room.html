@@ -257,8 +257,8 @@
       } else if (me.claimed) {
         body.innerHTML = `<div class="rr-panel"><span class="rr-eyebrow">Show this at the door</span><div class="rr-code">${RR.esc(me.claimed.code)}</div><p class="m0 muted">${RR.esc(RR.zoneName(me.claimed.zone))} · hold until ${time(me.claimed.scanBy)}</p></div>
           <button class="rr-btn" type="button" id="in">I'm in my seat</button>
-          <p class="note">Scan the code in the room to count yourself in.</p>${await insightsBlock(r)}`;
-        $('in').addEventListener('click', () => openScanner(me.claimed.zone));
+          <p class="note">Tap when you're in your seat to count yourself in.</p>${await insightsBlock(r)}`;
+        $('in').addEventListener('click', () => tapIn(me.claimed.zone));
       } else if (me.queue?.status === 'offered' && me.queue.offer) {
         body.innerHTML = offerView(me.queue.offer);
         startCountdown(me.queue.offer);
@@ -292,15 +292,19 @@
       } else {
         body.innerHTML = `<div class="rr-panel"><p class="m0"><b>${Number(r.free)} seats free.</b> ${RR.esc(r.rule)}</p></div>
           <button class="rr-btn" type="button" id="in">I'm in the room</button>
-          <p class="note">Scan the code in the room to count yourself in. You can adjust your seat after.</p>
+          <p class="note">Tap when you're in the room to count yourself in. You can adjust your seat after.</p>
           ${await whyBlock(r)}${await insightsBlock(r)}`;
-        $('in').addEventListener('click', () => openScanner(null));
+        $('in').addEventListener('click', () => tapIn(null));
       }
       $('post')?.addEventListener('click', () => act(async () => { await RR.api(`/spaces/${enc(id)}/comments`, { method: 'POST', body: { text: $('c1').value } }); crowdCache = null; RR.toast('Comment posted'); }));
     } catch (x) { RR.showError($('err'), x); }
   }
   // Zone defaults to the claimed seat, else the server's middle-centre; "Adjust seat" changes it after.
   const checkIn = (zone) => act(async () => { await RR.api(`/spaces/${enc(id)}/checkin`, { method: 'POST', body: withKey(zone ? { zone } : {}) }); RR.toast("You're checked in"); });
+  // Check in straight away; open the scanner only when the server still asks for the room's code (SKIP_SCAN off).
+  const tapIn = (zone) => RR.api(`/spaces/${enc(id)}/checkin`, { method: 'POST', body: withKey(zone ? { zone } : {}) })
+    .then(() => { RR.toast("You're checked in"); return render(); })
+    .catch((x) => (x.data?.needScan ? openScanner(zone) : RR.showError($('err'), x)));
   async function act(fn) {
     $('err').hidden = true;
     try { await fn(); passed = false; await render(); } catch (x) {

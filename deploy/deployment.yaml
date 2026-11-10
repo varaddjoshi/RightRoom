@@ -61,6 +61,9 @@ spec:
             # a "Demo clock" badge while it is set. Check-in QR codes (src/presence.js) use the REAL day, so printed
             # sheets are not affected by turning this on or off. To go back to real time, delete this entry. A value
             # that is not a valid time stops the app starting.
+            # Check in with a tap, no room QR scan (src/routes/api.js). Delete this entry to require the scan again.
+            - name: SKIP_SCAN
+              value: "1"
             - name: DEMO_CLOCK
               value: "2026-11-10T11:45:00-07:00"
           resources:

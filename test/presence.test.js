@@ -39,3 +39,13 @@ test('staff can fetch a room key for scripts; attendees cannot', async () => {
   const r = await (await fetch(`${base}/api/staff/spaces/210/presence-key`, { headers: { cookie: await login('leo') } })).json();
   assert.equal(r.k, roomKey('210'));
 });
+
+test('SKIP_SCAN=1 lets people check in with a tap, no key', async () => {
+  const dana = await login('dana');
+  process.env.SKIP_SCAN = '1';
+  try {
+    const r = await checkin(dana, '118', { zone: 'front-left' });
+    assert.equal(r.status, 200);
+    assert.equal((await r.json()).checkedIn, true);
+  } finally { delete process.env.SKIP_SCAN; }
+});

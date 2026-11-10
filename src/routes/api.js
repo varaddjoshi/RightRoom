@@ -94,7 +94,8 @@ function api({ store, engine }) {
   r.post('/spaces/:id/checkin', h((req) => {
     const u = signedIn(req);
     // Checking in needs the key from the QR code inside the room (src/presence.js), so nobody counts in remotely.
-    if (!presence.verify(sid(req), req.body?.k ?? req.query.k)) return fail('Scan the code inside the room to check in.', 403, { needScan: true });
+    // SKIP_SCAN=1 turns this off (check in with a tap), e.g. while the printed codes aren't up.
+    if (process.env.SKIP_SCAN !== '1' && !presence.verify(sid(req), req.body?.k ?? req.query.k)) return fail('Scan the code inside the room to check in.', 403, { needScan: true });
     return engine.checkin(sid(req), u, zone(req.body?.zone));
   }));
   // Staff-only key for scripts and the printed sheet; the same key the "I'm in the room" code carries.
