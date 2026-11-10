@@ -28,6 +28,14 @@ function record(db, reading) {
   return reading;
 }
 
+// Bulk version of record's Elasticsearch copy, for stand-in readings added at boot. Never throws.
+function indexAll(readings) {
+  if (!hasEs() || !readings.length) return Promise.resolve();
+  const { es: client, INDEX } = es();
+  return client().bulk({ operations: readings.flatMap((r) => [{ index: { _index: INDEX.wifi_readings } }, toDoc(r)]) })
+    .catch((e) => console.warn(`[wifi] could not index stand-in readings: ${e.message}`));
+}
+
 // What the numbers are made of, for the Live / Stand-in label on screen: all stand-in, all live, or mixed.
 function labelOf(kinds) {
   const k = new Set(kinds);
@@ -118,4 +126,4 @@ async function summary(db) {
   return { source: 'memory', rooms: summarize(db.wifi) };
 }
 
-module.exports = { band, labelOf, record, summarize, summary, roomStats, zoneStats, toDoc, hasEs };
+module.exports = { band, labelOf, record, indexAll, summarize, summary, roomStats, zoneStats, toDoc, hasEs };

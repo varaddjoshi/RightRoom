@@ -21,7 +21,7 @@ store.reset = (now) => {
   const db = seedReset(now);
   auth.ensureDemoUsers(db);
   const venue = catalog.esOn() ? catalog.loadFromES(db) : Promise.resolve(catalog.ensureSessions(db));
-  venue.then(() => { catalog.ensureDemoHost(db); fillStandIns(db); }).catch((e) => console.error(`[catalog] Reload after reset failed: ${e.message}`));
+  venue.then(() => { catalog.ensureDemoHost(db); return require('./src/wifi').indexAll(fillStandIns(db)); }).catch((e) => console.error(`[catalog] Reload after reset failed: ${e.message}`));
   return db;
 };
 
@@ -67,7 +67,9 @@ async function main() {
   }
   catalog.ensureSessions(store.db);
   await catalog.ensureDemoHost(store.db).catch((e) => console.error(`[catalog] Demo host: ${e.message}`));
-  fillStandIns(store.db); // stand-in Wi-Fi, heat, comments and attendees for rooms that have none yet
+  // Stand-in Wi-Fi, heat, comments and attendees for rooms that have none yet. Wi-Fi also goes to Elasticsearch,
+  // because a room Elasticsearch already has readings for shows only those.
+  require('./src/wifi').indexAll(fillStandIns(store.db));
   setInterval(() => catalog.refreshTitles(store.db), 30_000).unref(); // room titles follow the talk on now
   store.startAutosave();
   require('./src/heat').startMirror(() => store.db); // anonymous check-ins into Elasticsearch for the zone heatmap

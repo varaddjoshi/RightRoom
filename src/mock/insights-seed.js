@@ -152,6 +152,7 @@ function seedInto(db) {
 // The fixed stand-ins above use the demo room ids, so rooms loaded from Elasticsearch (the real schedule) get none.
 // This gives every room that has no Wi-Fi, heat or comments its own stand-ins, and adds stand-in attendees
 // (no password, so nobody can sign in as one; the 'stand-in' prefix is reserved at sign-up). Safe to rerun.
+// Returns the Wi-Fi readings it added.
 const GENERIC = ['Great talk, clear slides.', 'Slides too small from the back.', 'Room got warm.', 'Wi-Fi was patchy at the back.',
   'Would like the slides shared.', 'Good questions from the audience.', 'Ran a few minutes over.', 'Easy to find a seat.'];
 const NEEDS = ['step-free', 'captions', 'aisle', 'quiet', 'front', 'hearing-loop'];
@@ -160,13 +161,14 @@ const STAND_IN_USERS = 120;
 function fillStandIns(db, now = Date.now()) {
   const r = prng(99);
   const heat = (db.heatStandIns ??= new Map());
+  const added = []; // new Wi-Fi readings, returned so the caller can index them into Elasticsearch
   for (const sp of db.spaces.values()) {
     if (sp.type !== 'room' || sp.test) continue;
-    if (!db.wifi.some((w) => w.space === sp.id)) {
+    if (db.wifi.filter((w) => w.space === sp.id).length < 5) { // a lone real reading shouldn't leave the map empty
       const base = 10 + r() * 45; // typical Mbps for this room
       for (const zone of ZONES) for (let i = 0; i < 2; i++) {
         const weak = zone.startsWith('back') && r() < 0.3;
-        db.wifi.push({ space: sp.id, zone, floor: sp.floor, mbps: Math.round(weak ? 2 + r() * 5 : base * (0.7 + r() * 0.6)),
+        added.push({ space: sp.id, zone, floor: sp.floor, mbps: Math.round(weak ? 2 + r() * 5 : base * (0.7 + r() * 0.6)),
           ms: Math.round(weak ? 150 + r() * 100 : 20 + r() * 40), at: now - Math.round(r() * 3600_000), standIn: true, source: S });
       }
     }
@@ -183,6 +185,7 @@ function fillStandIns(db, now = Date.now()) {
       for (let i = 0; i < 4; i++) db.comments.push({ id: ++db.seq, space: sp.id, text: GENERIC[Math.floor(r() * GENERIC.length)], at: now - i * 60000, hidden: false, standIn: true, source: S });
     }
   }
+  db.wifi.push(...added);
   const tags = Object.keys(COUNTS);
   for (let i = 1; i <= STAND_IN_USERS; i++) {
     const handle = `stand-in-user-${i}`;
@@ -190,7 +193,7 @@ function fillStandIns(db, now = Date.now()) {
     const interests = [...new Set([tags[Math.floor(r() * r() * tags.length)], tags[Math.floor(r() * tags.length)]])];
     db.users.set(handle, { handle, role: 'attendee', interests, needs: r() < 0.15 ? [NEEDS[Math.floor(r() * NEEDS.length)]] : [], starred: [], standIn: true });
   }
-  return db;
+  return added;
 }
 
 module.exports = { ZONES, SESSIONS, WIFI, COMMENTS, USERS, TAG_LABELS, LOG, TABLES, ALERTS, SOLO, seedInto, fillStandIns };
