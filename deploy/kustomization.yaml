@@ -12,4 +12,4 @@ resources:
 images:
   - name: app
     newName: ghcr.io/varaddjoshi/rightroom
-    newTag: latest
+    newTag: a7dd8c6
