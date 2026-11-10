@@ -24,3 +24,17 @@ test('a signed-in user changes their own password; the old one stops working', a
     assert.equal((await call('PUT', '/api/me/password', { current: '', password: 'changed-pass-123' }, guest)).status, 400);
   } finally { server.closeAllConnections(); server.close(); }
 });
+
+test('ORGANISER_PASSWORD resets the organiser login on boot, and is ignored when too short', () => {
+  const auth = require('../src/auth');
+  const db = { users: new Map() };
+  auth.ensureDemoUsers(db);
+  process.env.ORGANISER_PASSWORD = 'fresh-organiser-pw';
+  try {
+    auth.ensureDemoUsers(db);
+    assert.equal(auth.login(db, 'organiser', 'fresh-organiser-pw').role, 'organiser');
+    process.env.ORGANISER_PASSWORD = 'short';
+    auth.ensureDemoUsers(db);
+    assert.ok(auth.login(db, 'organiser', 'fresh-organiser-pw'));
+  } finally { delete process.env.ORGANISER_PASSWORD; }
+});
