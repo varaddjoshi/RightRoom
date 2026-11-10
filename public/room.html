@@ -325,7 +325,8 @@
     await render();
     let t;
     const soon = () => { clearTimeout(t); t = setTimeout(render, 200); };
-    RR.live(id, { status: soon, position: soon, offer: () => { $('sr').textContent = 'A seat is yours to claim for 60 seconds.'; render(); }, offer_passed: () => { passed = true; render(); } });
+    // A status change can change the heatmap and its Live / Stand-in label too, so drop the 30-second crowd cache.
+    RR.live(id, { status: () => { crowdCache = null; soon(); }, position: soon, offer: () => { $('sr').textContent = 'A seat is yours to claim for 60 seconds.'; render(); }, offer_passed: () => { passed = true; render(); } });
   })();
 </script>
 </body>
